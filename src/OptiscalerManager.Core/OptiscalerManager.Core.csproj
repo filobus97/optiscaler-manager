@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>OptiscalerManager.Core</RootNamespace>
+    <AssemblyName>OptiscalerManager.Core</AssemblyName>
+    <!-- No trimming: matches the source project (WPF/Avalonia + reflection paths). -->
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- OptiScaler.ini template used by ProfileManagementService.WriteOptiScalerIniToFile. -->
+    <EmbeddedResource Include="..\..\assets\OptiScaler_example.ini" Link="assets\OptiScaler_example.ini" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Archive scanning for bring-your-own SDK import (.zip / .7z). -->
+    <PackageReference Include="SharpCompress" Version="0.44.5" />
+    <!-- WMI-based GPU detection on Windows (guarded to Windows at runtime). -->
+    <PackageReference Include="System.Management" Version="10.0.0" />
+  </ItemGroup>
+
+  <!-- Expose internals to the test project so tests can reach the injectable seams. -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>OptiscalerManager.Core.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>
