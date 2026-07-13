@@ -1,0 +1,39 @@
+{
+    "OptiScaler": {
+        "RepoOwner": "optiscaler",
+        "RepoName": "OptiScaler"
+    },
+    "OptiPatcher": {
+        "RepoOwner": "optiscaler",
+        "RepoName": "OptiPatcher"
+    },
+    "OptiScalerBetas": {
+        "RepoOwner": "Agustinm28",
+        "RepoName": "OptiScaler-Betas"
+    },
+    "OptiScalerExtras": {
+        "RepoOwner": "Agustinm28",
+        "RepoName": "OptiScaler-Extras"
+    },
+    "Fakenvapi": {
+        "RepoOwner": "optiscaler",
+        "RepoName": "fakenvapi"
+    },
+    "NukemFG": {
+        "RepoOwner": "Nukem9",
+        "RepoName": "dlssg-to-fsr3"
+    },
+    "ScanExclusions": [
+        { "Name": "Wallpaper Engine", "PathSegment": "wallpaper_engine" },
+        { "Name": "Steamworks Common Redistributables", "PathSegment": "Steamworks Shared" },
+        { "Name": "GameSave", "PathSegment": "GameSave" },
+        { "Name": "SteamVR", "PathSegment": "SteamVR" },
+        { "Name": "Steam Linux Runtime", "PathSegment": "SteamLinuxRuntime" },
+        { "Name": "Proton", "PathSegment": "Proton " },
+        { "PathSegment": "SteamLinuxRuntime" },
+        { "PathSegment": "common/Proton " },
+        { "PathSegment": "Proton Hotfix" },
+        { "PathSegment": "Proton EasyAntiCheat Runtime" },
+        { "PathSegment": "Proton BattlEye Runtime" }
+    ]
+}

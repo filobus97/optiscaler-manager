@@ -54,12 +54,12 @@ public partial class MainWindow : Window
 
     private void RefreshImportSummary()
     {
-        if (_manager.HasCustomFsrSdk)
-            _vm.ImportSummary = $"Custom FSR SDK imported ({_manager.LatestCustomFsrSdk}). 'Enable FSR 4' will install it.";
-        else if (_manager.HasCustomFsr4Dll)
-            _vm.ImportSummary = $"Custom amdxcffx64.dll imported ({_manager.LatestCustomFsr4Dll}). 'Enable FSR 4' will install it.";
-        else
-            _vm.ImportSummary = "No custom FSR components imported. 'Enable FSR 4' will use OptiScaler's built-in FSR path. Import your own DLL/SDK from Settings.";
+        var parts = new System.Collections.Generic.List<string>();
+        parts.Add(_manager.HasCustomFsrSdk ? $"Custom FSR SDK: {_manager.LatestCustomFsrSdk}" : "Custom FSR SDK: none");
+        parts.Add(_manager.HasCustomFsr4Dll ? $"amdxcffx64.dll: {_manager.LatestCustomFsr4Dll}" : "amdxcffx64.dll: none");
+        var iniCount = _manager.GetIniProfiles().Count(p => !p.IsBuiltIn);
+        parts.Add(iniCount > 0 ? $"OptiScaler.ini profiles: {iniCount}" : "OptiScaler.ini profiles: none");
+        _vm.ImportSummary = "Imported — " + string.Join("  •  ", parts) + ".  Pick these per install.";
     }
 
     private async Task RescanAsync()
@@ -98,13 +98,13 @@ public partial class MainWindow : Window
         RefreshImportSummary();
     }
 
-    private async void OnEnableFsr4Click(object? sender, RoutedEventArgs e)
+    private async void OnInstallClick(object? sender, RoutedEventArgs e)
     {
         if (sender is not Control { DataContext: GameRowViewModel row }) return;
 
-        // Transparent preview first — nothing is written until the user confirms.
-        var preview = _manager.BuildEnableFsr4Preview(row.Game);
-        var confirmed = await new PreviewDialog(row.Game.Name, preview).ShowDialogFor(this);
+        // Configuration + transparent preview first — nothing is written until confirm.
+        var dialog = new InstallOptiScalerDialog(_manager, row.Game);
+        var confirmed = await dialog.ShowDialogFor(this);
         if (!confirmed) return;
 
         _vm.IsBusy = true;
@@ -117,15 +117,15 @@ public partial class MainWindow : Window
 
         try
         {
-            await _manager.EnableFsr4Async(row.Game, progress);
+            await _manager.InstallAsync(row.Game, dialog.SelectedBackend, dialog.SelectedProfile, progress);
             row.Game.IsOptiscalerInstalled = true;
             row.RefreshFromGame();
-            _vm.StatusText = $"FSR 4 enabled for {row.Game.Name}.";
+            _vm.StatusText = $"OptiScaler installed for {row.Game.Name}.";
         }
         catch (Exception ex)
         {
             row.StatusText = $"Failed: {ex.Message}";
-            _vm.StatusText = $"Enable FSR 4 failed: {ex.Message}";
+            _vm.StatusText = $"Install failed: {ex.Message}";
         }
         finally
         {

@@ -22,9 +22,25 @@ internal static class Program
         .StartWithClassicDesktopLifetime(args);
 
     // Avalonia configuration, don't remove; also used by the visual designer.
+    // On Linux we prefer the native (experimental) Wayland backend when running under
+    // a Wayland session; otherwise fall back to platform detect (X11 / Windows / macOS).
+    // The Wayland backend is not selected by UsePlatformDetect(), so we opt in explicitly.
     public static AppBuilder BuildAvaloniaApp()
-        => AppBuilder.Configure<App>()
-            .UsePlatformDetect()
+    {
+        var builder = AppBuilder.Configure<App>();
+
+        var underWayland = OperatingSystem.IsLinux()
+            && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"));
+
+        // The experimental Wayland backend is not selected by UsePlatformDetect() and,
+        // unlike it, does not auto-configure rendering/text — so we add Skia and
+        // HarfBuzz explicitly. UsePlatformDetect() wires both itself elsewhere.
+        builder = underWayland
+            ? builder.UseWayland().UseSkia().UseHarfBuzz()
+            : builder.UsePlatformDetect();
+
+        return builder
             .WithInterFont()
             .LogToTrace();
+    }
 }

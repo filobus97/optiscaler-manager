@@ -135,26 +135,59 @@ public static class ComponentRegistry
     }
 
     /// <summary>
-    /// Derives the preview for the Manager's one-click "Enable FSR 4" flow. The
-    /// FSR 4 backend is chosen from what the user has imported: a custom SDK, else
-    /// a custom amdxcffx64.dll, else OptiScaler's own built-in FSR path (no extra
-    /// file, just the ini keys). The result is exactly what will be written, so it
-    /// doubles as the transparent "what will happen" account.
+    /// Maps an <see cref="Fsr4Backend"/> to its registry component id, or null for
+    /// <see cref="Fsr4Backend.None"/>.
     /// </summary>
-    public static InstallPreview BuildFsr4Preview(bool hasCustomSdk, bool hasCustomFsr4Dll, string? injectionDll = null)
+    public static string? ComponentIdFor(Fsr4Backend backend) => backend switch
+    {
+        Fsr4Backend.LatestSdkFromSource => ComponentIds.Fsr4Extras,
+        Fsr4Backend.CustomSdk => ComponentIds.CustomFsrSdk,
+        Fsr4Backend.CustomDll => ComponentIds.CustomFsr4Dll,
+        _ => null,
+    };
+
+    /// <summary>
+    /// Derives the transparent "what will happen" preview for the Manager's
+    /// **Install OptiScaler** flow: always the OptiScaler core, plus the chosen FSR 4
+    /// backend (if any), plus the selected OptiScaler.ini profile's keys merged into
+    /// the ini list. The result is exactly what will be written, so a user can
+    /// reproduce it by hand.
+    /// </summary>
+    /// <param name="backend">The FSR 4 backend the user selected.</param>
+    /// <param name="injectionDll">Injection DLL name (defaults to dxgi.dll).</param>
+    /// <param name="profileKeys">
+    /// Ini keys from the selected OptiScaler.ini profile, or null for OptiScaler's
+    /// default configuration.
+    /// </param>
+    public static InstallPreview BuildInstallPreview(
+        Fsr4Backend backend, string? injectionDll = null, IReadOnlyList<IniKeyChange>? profileKeys = null)
     {
         var ids = new List<string> { ComponentIds.OptiScaler };
-        if (hasCustomSdk) ids.Add(ComponentIds.CustomFsrSdk);
-        else if (hasCustomFsr4Dll) ids.Add(ComponentIds.CustomFsr4Dll);
+        var backendId = ComponentIdFor(backend);
+        if (backendId is not null) ids.Add(backendId);
 
         var preview = BuildPreview(ids, injectionDll);
 
-        // Guarantee the FSR4-enable keys appear even when no bring-your-own
-        // component supplied them (built-in OptiScaler FSR path).
         var iniKeys = preview.IniKeys.ToList();
-        foreach (var k in Fsr4EnableKeys)
-            if (!iniKeys.Any(existing => existing.Section == k.Section && existing.Key == k.Key))
+
+        // Merge the selected ini profile's keys first (the base configuration the
+        // user chose). Same-section+key entries are replaced.
+        if (profileKeys is not null)
+            foreach (var k in profileKeys)
+            {
+                iniKeys.RemoveAll(existing => existing.Section == k.Section && existing.Key == k.Key);
                 iniKeys.Add(k);
+            }
+
+        // A selected FSR 4 backend forces its enable keys LAST, so they win over the
+        // profile — this mirrors install order on disk (the backend install sets
+        // [FSR] UpscalerIndex/Fsr4Update after the profile ini is written).
+        if (backend != Fsr4Backend.None)
+            foreach (var k in Fsr4EnableKeys)
+            {
+                iniKeys.RemoveAll(existing => existing.Section == k.Section && existing.Key == k.Key);
+                iniKeys.Add(k);
+            }
 
         return preview with { IniKeys = iniKeys };
     }

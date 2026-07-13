@@ -27,14 +27,20 @@
 
   <ItemGroup>
     <AvaloniaResource Include="assets\**" />
+    <!-- Repo template read by ComponentManagementService.MergeReposFromTemplate to
+         resolve where OptiScaler / Extras / etc. are downloaded from. Must sit next
+         to the executable (and inside the single-file publish payload). -->
+    <None Include="config.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="11.3.12" />
-    <PackageReference Include="Avalonia.Desktop" Version="11.3.12" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.12" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.12" />
-    <PackageReference Include="Avalonia.Diagnostics" Version="11.3.12" Condition="'$(Configuration)'=='Debug'" />
+    <PackageReference Include="Avalonia" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.0" />
+    <!-- Experimental native Wayland backend (Linux). Enabled explicitly in Program.cs
+         via UseWayland(); not picked up by UsePlatformDetect(). -->
+    <PackageReference Include="Avalonia.Wayland" Version="12.1.0" />
   </ItemGroup>
 
   <ItemGroup>

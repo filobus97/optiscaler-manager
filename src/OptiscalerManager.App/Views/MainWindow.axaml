@@ -15,7 +15,7 @@
       <StackPanel Grid.Column="0" Orientation="Vertical" Spacing="2">
         <TextBlock Text="OptiScaler Manager" FontSize="22" FontWeight="Bold"
                    Foreground="{StaticResource BrTextPrimary}"/>
-        <TextBlock Text="Get FSR 4 working in your games — the simple way."
+        <TextBlock Text="Install OptiScaler and get FSR 4 working in your games — the simple way."
                    FontSize="13" Foreground="{StaticResource BrTextSecondary}"/>
       </StackPanel>
       <Button Grid.Column="1" Name="RescanButton" Content="Rescan"
@@ -45,7 +45,7 @@
             CornerRadius="{StaticResource RadiusMedium}"
             Background="{StaticResource BrBgSurface}"
             BorderThickness="1" BorderBrush="{StaticResource BrBorderSubtle}"
-            ToolTip.Tip="Custom FSR components you have imported. When present, 'Enable FSR 4' installs them instead of OptiScaler's built-in FSR path.">
+            ToolTip.Tip="Custom FSR components and OptiScaler.ini profiles you have imported. Select them per-install in the Install OptiScaler dialog.">
       <TextBlock Text="{Binding ImportSummary}" Foreground="{StaticResource BrTextSecondary}"
                  FontSize="12" TextWrapping="Wrap"/>
     </Border>
@@ -74,10 +74,10 @@
                                  Foreground="{StaticResource BrAccent}"/>
                     </StackPanel>
 
-                    <Button Grid.Column="1" Classes="BtnPrimary" Content="Enable FSR 4"
-                            Margin="0,0,8,0" Click="OnEnableFsr4Click"
+                    <Button Grid.Column="1" Classes="BtnPrimary" Content="Install OptiScaler"
+                            Margin="0,0,8,0" Click="OnInstallClick"
                             IsEnabled="{Binding IsIdle}"
-                            ToolTip.Tip="Install the latest OptiScaler and switch it to the FSR 4 backend ([FSR] UpscalerIndex=0). You'll see exactly what changes before anything is written."/>
+                            ToolTip.Tip="Download and install the latest OptiScaler, choosing the FSR 4 backend and OptiScaler.ini in the next dialog. You'll see exactly what changes before anything is written."/>
                     <Button Grid.Column="2" Classes="BtnDanger" Content="Revert"
                             Click="OnRevertClick"
                             IsEnabled="{Binding IsInstalled}"

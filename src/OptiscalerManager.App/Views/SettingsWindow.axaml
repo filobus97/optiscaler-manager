@@ -46,6 +46,22 @@
           </StackPanel>
         </Border>
 
+        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="8">
+            <TextBlock Text="OptiScaler.ini profiles" FontWeight="SemiBold"
+                       Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
+                       Text="Collect OptiScaler.ini files and tag each with a name, then pick one when installing OptiScaler. Leave the name blank to use the file name."/>
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBox Name="ProfileNameBox" Width="240" PlaceholderText="Profile name (optional)"/>
+              <Button Content="Import .ini…" Click="OnImportIni"
+                      ToolTip.Tip="Pick an OptiScaler.ini file. Its settings are saved under the given name and can be selected at install time."/>
+            </StackPanel>
+            <StackPanel Name="IniProfilesList" Spacing="4"/>
+          </StackPanel>
+        </Border>
+
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgSurface}"
                 BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="6">

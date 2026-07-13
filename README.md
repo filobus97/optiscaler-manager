@@ -2,7 +2,8 @@
 
 A deliberately **simple, AMD-focused** desktop frontend for the
 [OptiScaler](https://github.com/optiscaler/OptiScaler) mod. It does one job well:
-**get FSR 4 working in your games**, with almost no decisions to make.
+**install OptiScaler and get FSR 4 working in your games**, with almost no
+decisions to make.
 
 OptiScaler Manager is a sibling to
 [**OptiScaler Client Next**](https://github.com/filobus97/Optiscaler-Client)
@@ -19,12 +20,16 @@ action per game, advanced options tucked away.
 ## What it is (and what it deliberately isn't)
 
 - **One primary screen.** A detected-GPU banner and your game list. Per game, a
-  single **Enable FSR 4** button that applies AMD-sane defaults (latest
-  OptiScaler + your imported custom DLL/SDK if present).
-- **Transparent — no black boxes.** Before anything is written, a
+  single **Install OptiScaler** button. It downloads and installs the *real latest
+  OptiScaler release from source* (`optiscaler/OptiScaler` on GitHub), and in one
+  dialog lets you choose:
+  - the **FSR 4 backend** — *latest FSR SDK from source* / *your custom FSR SDK* /
+    *your custom `amdxcffx64.dll`* / *none*;
+  - the **`OptiScaler.ini`** — OptiScaler's default, or one of your saved profiles.
+- **Transparent — no black boxes.** Before anything is written, a live
   **"What will happen"** preview lists the *exact files* that will be placed next
-  to your game and the *exact `OptiScaler.ini` keys* that will change, so you can
-  verify it or reproduce it by hand.
+  to your game and the *exact `OptiScaler.ini` keys* that will change (updating as
+  you change the options), so you can verify it or reproduce it by hand.
 - **Tooltip-rich.** Every control explains what it does.
 - **Reversible.** *Revert* restores backed-up files from an external per-game
   backup store and reverts the ini keys.
@@ -98,9 +103,9 @@ dotnet publish src/OptiscalerManager.App/OptiscalerManager.App.csproj \
 
 ---
 
-## Importing your own DLLs
+## Importing your own DLLs and `.ini` profiles
 
-Open **Settings / Import DLLs** and import either:
+Open **Settings** to import:
 
 - **A single `amdxcffx64.dll`** (the FSR 4.x INT8 runtime). It is validated as a
   64-bit Windows PE and copied into the cache.
@@ -109,13 +114,24 @@ Open **Settings / Import DLLs** and import either:
   the upscaler (`amd_fidelityfx_upscaler_dx12.dll`, **required**) plus frame
   generation and companions — **skipping 32-bit copies** and **preferring
   'signed' builds**.
+- **`OptiScaler.ini` profiles.** Import any `OptiScaler.ini`, tag it with a name,
+  and it becomes selectable in the Install dialog. Collect as many as you like;
+  delete them from Settings.
 
-Once imported, **Enable FSR 4** installs your component instead of OptiScaler's
-built-in FSR path. If nothing is imported, Enable FSR 4 installs the latest
-OptiScaler and switches it to the FSR 4 backend (`[FSR] UpscalerIndex = 0`,
-`[FSR] Fsr4Update = true`).
+When you click **Install OptiScaler**, the dialog lets you pick the FSR 4 backend
+(latest SDK from source / your custom SDK / your custom `amdxcffx64.dll` / none)
+and which `.ini` profile to write. Any FSR 4 backend also sets
+`[FSR] UpscalerIndex = 0` and `[FSR] Fsr4Update = true` (these win over the chosen
+profile, matching what is written to disk). You always see the exact file and ini
+changes in the live preview first.
 
-You always see the exact file and ini changes in the preview first.
+## Native Wayland (Linux)
+
+The app targets **Avalonia 12.1** and uses its **native Wayland backend** when run
+under a Wayland session (detected via `WAYLAND_DISPLAY`), falling back to X11
+otherwise. The Wayland backend is officially *experimental* upstream; if you hit a
+rendering issue, force X11 by unsetting `WAYLAND_DISPLAY` (e.g. run through
+XWayland).
 
 ---
 

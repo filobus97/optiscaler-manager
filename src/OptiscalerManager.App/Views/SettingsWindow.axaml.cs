@@ -20,6 +20,7 @@ public partial class SettingsWindow : Window
     {
         _manager = manager;
         RefreshInventory();
+        RefreshIniProfiles();
     }
 
     private void RefreshInventory()
@@ -107,6 +108,81 @@ public partial class SettingsWindow : Window
             var message = await import();
             SetResult(message);
             RefreshInventory();
+        }
+        catch (Exception ex)
+        {
+            SetResult($"Import failed: {ex.Message}", error: true);
+        }
+    }
+
+    private void RefreshIniProfiles()
+    {
+        var list = this.FindControl<StackPanel>("IniProfilesList");
+        if (list is null) return;
+        list.Children.Clear();
+
+        var custom = _manager.GetIniProfiles().Where(p => !p.IsBuiltIn).ToList();
+        if (custom.Count == 0)
+        {
+            list.Children.Add(new TextBlock
+            {
+                Text = "No custom .ini profiles yet.",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.Parse("#8A8AAA")),
+            });
+            return;
+        }
+
+        foreach (var profile in custom)
+        {
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            row.Children.Add(new TextBlock
+            {
+                Text = profile.Name,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                Foreground = new SolidColorBrush(Color.Parse("#E4E4EF")),
+            });
+            var del = new Button { Content = "Delete", Classes = { "BtnDanger" }, FontSize = 11, Padding = new Avalonia.Thickness(10, 4) };
+            Grid.SetColumn(del, 1);
+            var captured = profile;
+            del.Click += (_, _) =>
+            {
+                try { _manager.DeleteIniProfile(captured); SetResult($"Deleted profile '{captured.Name}'."); }
+                catch (Exception ex) { SetResult($"Delete failed: {ex.Message}", error: true); }
+                RefreshIniProfiles();
+            };
+            row.Children.Add(del);
+            list.Children.Add(row);
+        }
+    }
+
+    private async void OnImportIni(object? sender, RoutedEventArgs e)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Select an OptiScaler.ini file",
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType("INI files") { Patterns = new[] { "*.ini" } },
+                new FilePickerFileType("All files") { Patterns = new[] { "*.*" } },
+            }
+        });
+        if (files is null || files.Count == 0) return;
+
+        var path = files[0].Path.LocalPath;
+        var nameBox = this.FindControl<TextBox>("ProfileNameBox");
+        var name = nameBox?.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            name = System.IO.Path.GetFileNameWithoutExtension(path);
+
+        try
+        {
+            SetResult("Importing .ini…");
+            await _manager.ImportIniProfileAsync(path, name!);
+            SetResult($"Imported OptiScaler.ini profile '{name}'.");
+            if (nameBox is not null) nameBox.Text = string.Empty;
+            RefreshIniProfiles();
         }
         catch (Exception ex)
         {

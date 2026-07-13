@@ -1,0 +1,84 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="OptiscalerManager.App.Views.InstallOptiScalerDialog"
+        Width="680" Height="720" MinWidth="560" MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource BrBgBase}"
+        Title="Install OptiScaler">
+
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="20">
+
+    <StackPanel Grid.Row="0" Spacing="4">
+      <TextBlock Name="TitleText" FontSize="18" FontWeight="Bold"
+                 Foreground="{StaticResource BrTextPrimary}"/>
+      <TextBlock Text="Choose the FSR 4 backend and OptiScaler.ini to use. Nothing is written until you confirm — the preview below is exactly what will happen."
+                 FontSize="12" Foreground="{StaticResource BrTextSecondary}" TextWrapping="Wrap"/>
+    </StackPanel>
+
+    <!-- Options -->
+    <StackPanel Grid.Row="1" Spacing="14" Margin="0,14,0,0">
+
+      <StackPanel Spacing="6">
+        <TextBlock Text="FSR 4 backend" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
+        <Border Padding="12" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="6">
+            <RadioButton Name="RbFromSource" GroupName="Fsr4" Content="Latest FSR SDK from source"
+                         Foreground="{StaticResource BrTextPrimary}"
+                         ToolTip.Tip="Download OptiScaler's Extras FSR 4 INT8 package (amd_fidelityfx_upscaler_dx12.dll) from its GitHub releases and install it. No proprietary AMD binary is bundled by this app."/>
+            <RadioButton Name="RbCustomSdk" GroupName="Fsr4" Content="Custom FSR SDK (imported)"
+                         Foreground="{StaticResource BrTextPrimary}"
+                         ToolTip.Tip="Use the FSR SDK you imported in Settings (bring-your-own). Replaces the from-source upscaler."/>
+            <RadioButton Name="RbCustomDll" GroupName="Fsr4" Content="Custom amdxcffx64.dll (imported)"
+                         Foreground="{StaticResource BrTextPrimary}"
+                         ToolTip.Tip="Use the amdxcffx64.dll you imported in Settings (bring-your-own FSR 4.x INT8 runtime)."/>
+            <RadioButton Name="RbNone" GroupName="Fsr4" Content="None — install OptiScaler only"
+                         Foreground="{StaticResource BrTextPrimary}"
+                         ToolTip.Tip="Install OptiScaler without forcing an FSR 4 backend or its ini keys. Configure it yourself later."/>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+
+      <StackPanel Spacing="6">
+        <TextBlock Text="OptiScaler.ini" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
+        <ComboBox Name="ProfileCombo" HorizontalAlignment="Stretch"
+                  ToolTip.Tip="Which OptiScaler.ini to write. 'OptiScaler default' uses the config shipped with OptiScaler. Import your own tagged .ini files in Settings."/>
+      </StackPanel>
+    </StackPanel>
+
+    <!-- Live preview -->
+    <Border Grid.Row="2" Margin="0,14,0,0" CornerRadius="8"
+            Background="{StaticResource BrBgCard}"
+            BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+      <ScrollViewer Margin="12">
+        <StackPanel Spacing="14">
+          <Border Name="ConflictBox" IsVisible="False" Padding="10" CornerRadius="6"
+                  Background="#3D1F1F" BorderBrush="{StaticResource BrError}" BorderThickness="1">
+            <StackPanel Name="ConflictList" Spacing="3"/>
+          </Border>
+
+          <StackPanel Spacing="6">
+            <TextBlock Text="Files written next to the game executable" FontWeight="SemiBold"
+                       Foreground="{StaticResource BrTextPrimary}"/>
+            <StackPanel Name="FilesList" Spacing="3"/>
+          </StackPanel>
+
+          <StackPanel Spacing="6">
+            <TextBlock Text="OptiScaler.ini keys that will be set" FontWeight="SemiBold"
+                       Foreground="{StaticResource BrTextPrimary}"/>
+            <StackPanel Name="IniList" Spacing="3"/>
+          </StackPanel>
+
+          <TextBlock Text="Existing files are backed up to an external per-game store before being overwritten, so Revert can restore them."
+                     FontSize="11" Foreground="{StaticResource BrTextSecondary}" TextWrapping="Wrap"/>
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+
+    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right"
+                Spacing="10" Margin="0,16,0,0">
+      <Button Content="Cancel" Click="OnCancel"/>
+      <Button Name="ConfirmButton" Classes="BtnPrimary" Content="Confirm and install" Click="OnConfirm"/>
+    </StackPanel>
+  </Grid>
+</Window>
