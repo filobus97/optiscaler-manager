@@ -4,5 +4,8 @@
          use (we only read local archives the user explicitly selected). Pinned to
          match the source project; suppressed repo-wide so restore stays clean. -->
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-6c8g-7p36-r338" />
+    <!-- Tmds.DBus.Protocol is a Linux-only transitive dep from Avalonia, never
+         executed on Windows. Suppressed to match the source project. -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-xrw6-gwf8-vvr9" />
   </ItemGroup>
 </Project>
