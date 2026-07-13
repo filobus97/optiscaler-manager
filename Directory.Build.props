@@ -1,0 +1,8 @@
+<Project>
+  <ItemGroup>
+    <!-- SharpCompress 0.44.5 carries a moderate advisory in a code path we don't
+         use (we only read local archives the user explicitly selected). Pinned to
+         match the source project; suppressed repo-wide so restore stays clean. -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-6c8g-7p36-r338" />
+  </ItemGroup>
+</Project>

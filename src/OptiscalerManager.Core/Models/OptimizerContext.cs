@@ -7,7 +7,11 @@ namespace OptiscalerManager.Core.Models
     /// Source generator for JSON serialization to support high-performance trimming.
     /// This allows the compiler to remove unused reflection code, significantly reducing binary size.
     /// </summary>
-    [JsonSourceGenerationOptions(WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
+    // AllowNamedFloatingPointLiterals: WindowLeft/WindowTop default to double.NaN,
+    // which the serializer otherwise refuses to write (breaking config persistence).
+    [JsonSourceGenerationOptions(WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals)]
     [JsonSerializable(typeof(AppConfiguration))]
     [JsonSerializable(typeof(NetworkConfig))]
     [JsonSerializable(typeof(ScanSourcesConfig))]

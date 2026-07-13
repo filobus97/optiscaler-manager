@@ -36,6 +36,18 @@ public static class ComponentRegistry
     /// <summary>Default OptiScaler injection DLL (matches the installer default).</summary>
     public const string DefaultInjectionDll = "dxgi.dll";
 
+    /// <summary>
+    /// The OptiScaler.ini keys that "engage FSR 4" on non-RDNA4 GPUs, applied by
+    /// the Manager's one-click flow exactly as the ported installer does
+    /// (<c>[FSR] UpscalerIndex = 0</c> on current builds, <c>Fsr4Update = true</c>
+    /// on older 0.7.x builds; unknown keys are ignored by OptiScaler's parser).
+    /// </summary>
+    public static readonly IReadOnlyList<IniKeyChange> Fsr4EnableKeys = new[]
+    {
+        new IniKeyChange("FSR", "UpscalerIndex", "0"),
+        new IniKeyChange("FSR", "Fsr4Update", "true"),
+    };
+
     private static readonly IReadOnlyList<ComponentDefinition> _definitions = BuildDefinitions();
 
     private static readonly Dictionary<string, ComponentDefinition> _byId =
@@ -120,6 +132,31 @@ public static class ComponentRegistry
         }
 
         return new InstallPreview(lines, files, iniKeys, conflicts);
+    }
+
+    /// <summary>
+    /// Derives the preview for the Manager's one-click "Enable FSR 4" flow. The
+    /// FSR 4 backend is chosen from what the user has imported: a custom SDK, else
+    /// a custom amdxcffx64.dll, else OptiScaler's own built-in FSR path (no extra
+    /// file, just the ini keys). The result is exactly what will be written, so it
+    /// doubles as the transparent "what will happen" account.
+    /// </summary>
+    public static InstallPreview BuildFsr4Preview(bool hasCustomSdk, bool hasCustomFsr4Dll, string? injectionDll = null)
+    {
+        var ids = new List<string> { ComponentIds.OptiScaler };
+        if (hasCustomSdk) ids.Add(ComponentIds.CustomFsrSdk);
+        else if (hasCustomFsr4Dll) ids.Add(ComponentIds.CustomFsr4Dll);
+
+        var preview = BuildPreview(ids, injectionDll);
+
+        // Guarantee the FSR4-enable keys appear even when no bring-your-own
+        // component supplied them (built-in OptiScaler FSR path).
+        var iniKeys = preview.IniKeys.ToList();
+        foreach (var k in Fsr4EnableKeys)
+            if (!iniKeys.Any(existing => existing.Section == k.Section && existing.Key == k.Key))
+                iniKeys.Add(k);
+
+        return preview with { IniKeys = iniKeys };
     }
 
     private static IReadOnlyList<ComponentDefinition> BuildDefinitions() => new List<ComponentDefinition>

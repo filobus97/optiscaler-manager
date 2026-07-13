@@ -16,7 +16,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Archive scanning for bring-your-own SDK import (.zip / .7z). -->
+    <!-- Archive scanning for bring-your-own SDK import (.zip / .7z).
+         (Advisory GHSA-6c8g-7p36-r338 suppressed in Directory.Build.props.) -->
     <PackageReference Include="SharpCompress" Version="0.44.5" />
     <!-- WMI-based GPU detection on Windows (guarded to Windows at runtime). -->
     <PackageReference Include="System.Management" Version="10.0.0" />

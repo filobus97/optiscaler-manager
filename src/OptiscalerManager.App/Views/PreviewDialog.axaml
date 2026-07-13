@@ -1,0 +1,64 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="OptiscalerManager.App.Views.PreviewDialog"
+        Width="620" Height="600" MinWidth="520" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource BrBgBase}"
+        CanResize="True"
+        Title="What will happen">
+
+  <Grid RowDefinitions="Auto,*,Auto" Margin="20">
+
+    <StackPanel Grid.Row="0" Spacing="4">
+      <TextBlock Name="TitleText" FontSize="18" FontWeight="Bold"
+                 Foreground="{StaticResource BrTextPrimary}"/>
+      <TextBlock Text="Nothing is written until you confirm. Everything below can be reproduced by hand."
+                 FontSize="12" Foreground="{StaticResource BrTextSecondary}" TextWrapping="Wrap"/>
+    </StackPanel>
+
+    <ScrollViewer Grid.Row="1" Margin="0,14,0,0">
+      <StackPanel Spacing="16">
+
+        <Border Name="ConflictBox" IsVisible="False" Padding="12" CornerRadius="8"
+                Background="#3D1F1F" BorderBrush="{StaticResource BrError}" BorderThickness="1">
+          <StackPanel Name="ConflictList" Spacing="4"/>
+        </Border>
+
+        <StackPanel Spacing="6">
+          <TextBlock Text="Files written next to the game executable" FontWeight="SemiBold"
+                     Foreground="{StaticResource BrTextPrimary}"/>
+          <Border Padding="12" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                  BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+            <StackPanel Name="FilesList" Spacing="3"/>
+          </Border>
+        </StackPanel>
+
+        <StackPanel Spacing="6">
+          <TextBlock Text="OptiScaler.ini keys that will be set" FontWeight="SemiBold"
+                     Foreground="{StaticResource BrTextPrimary}"/>
+          <Border Padding="12" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                  BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+            <StackPanel Name="IniList" Spacing="3"/>
+          </Border>
+        </StackPanel>
+
+        <StackPanel Spacing="6">
+          <TextBlock Text="Components" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
+          <Border Padding="12" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                  BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+            <StackPanel Name="ComponentsList" Spacing="8"/>
+          </Border>
+        </StackPanel>
+
+        <TextBlock Text="Existing files are backed up to an external per-game store before being overwritten, so Revert can restore them."
+                   FontSize="11" Foreground="{StaticResource BrTextSecondary}" TextWrapping="Wrap"/>
+      </StackPanel>
+    </ScrollViewer>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right"
+                Spacing="10" Margin="0,16,0,0">
+      <Button Content="Cancel" Click="OnCancel"/>
+      <Button Name="ConfirmButton" Classes="BtnPrimary" Content="Confirm and install" Click="OnConfirm"/>
+    </StackPanel>
+  </Grid>
+</Window>

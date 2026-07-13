@@ -1,0 +1,104 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OptiscalerManager.App.App"
+             RequestedThemeVariant="Dark">
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <!-- Palette reused from OptiScaler Client Next for visual consistency. -->
+            <Color x:Key="BgDeepColor">#0E0E1A</Color>
+            <Color x:Key="BgBaseColor">#13131F</Color>
+            <Color x:Key="BgSurfaceColor">#1C1C2E</Color>
+            <Color x:Key="BgCardColor">#1E1E30</Color>
+            <Color x:Key="BgElevatedColor">#252540</Color>
+            <Color x:Key="BorderSubtleColor">#2A2A42</Color>
+            <Color x:Key="BorderDefaultColor">#363660</Color>
+            <Color x:Key="AccentPrimaryColor">#8B73F8</Color>
+            <Color x:Key="AccentPrimaryHoverColor">#9D88FF</Color>
+            <Color x:Key="AccentPrimaryPressedColor">#7560E0</Color>
+            <Color x:Key="TextPrimaryColor">#E4E4EF</Color>
+            <Color x:Key="TextSecondaryColor">#8A8AAA</Color>
+            <Color x:Key="TextDisabledColor">#4A4A65</Color>
+            <Color x:Key="StatusSuccessColor">#5CB87E</Color>
+            <Color x:Key="StatusErrorColor">#E06060</Color>
+            <Color x:Key="StatusWarningColor">#D4A04A</Color>
+
+            <SolidColorBrush x:Key="BrBgDeep"     Color="{StaticResource BgDeepColor}"/>
+            <SolidColorBrush x:Key="BrBgBase"     Color="{StaticResource BgBaseColor}"/>
+            <SolidColorBrush x:Key="BrBgSurface"  Color="{StaticResource BgSurfaceColor}"/>
+            <SolidColorBrush x:Key="BrBgCard"     Color="{StaticResource BgCardColor}"/>
+            <SolidColorBrush x:Key="BrBgElevated" Color="{StaticResource BgElevatedColor}"/>
+            <SolidColorBrush x:Key="BrBorderSubtle"  Color="{StaticResource BorderSubtleColor}"/>
+            <SolidColorBrush x:Key="BrBorderDefault" Color="{StaticResource BorderDefaultColor}"/>
+            <SolidColorBrush x:Key="BrAccent"        Color="{StaticResource AccentPrimaryColor}"/>
+            <SolidColorBrush x:Key="BrAccentHover"   Color="{StaticResource AccentPrimaryHoverColor}"/>
+            <SolidColorBrush x:Key="BrAccentPressed" Color="{StaticResource AccentPrimaryPressedColor}"/>
+            <SolidColorBrush x:Key="BrTextPrimary"   Color="{StaticResource TextPrimaryColor}"/>
+            <SolidColorBrush x:Key="BrTextSecondary" Color="{StaticResource TextSecondaryColor}"/>
+            <SolidColorBrush x:Key="BrTextDisabled"  Color="{StaticResource TextDisabledColor}"/>
+            <SolidColorBrush x:Key="BrSuccess" Color="{StaticResource StatusSuccessColor}"/>
+            <SolidColorBrush x:Key="BrError"   Color="{StaticResource StatusErrorColor}"/>
+            <SolidColorBrush x:Key="BrWarning" Color="{StaticResource StatusWarningColor}"/>
+
+            <FontFamily x:Key="FontPrimary">Segoe UI Variable, Segoe UI, Inter, sans-serif</FontFamily>
+
+            <CornerRadius x:Key="RadiusSmall">4</CornerRadius>
+            <CornerRadius x:Key="RadiusMedium">8</CornerRadius>
+            <CornerRadius x:Key="RadiusLarge">12</CornerRadius>
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+
+        <Style Selector="Button">
+            <Setter Property="FontFamily"    Value="{StaticResource FontPrimary}"/>
+            <Setter Property="FontWeight"    Value="SemiBold"/>
+            <Setter Property="Foreground"    Value="{StaticResource BrTextPrimary}"/>
+            <Setter Property="Background"    Value="{StaticResource BrBgElevated}"/>
+            <Setter Property="BorderBrush"   Value="{StaticResource BrBorderDefault}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"       Value="16,8"/>
+            <Setter Property="Cursor"        Value="Hand"/>
+            <Setter Property="CornerRadius"  Value="{StaticResource RadiusMedium}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button:pointerover /template/ ContentPresenter">
+            <Setter Property="BorderBrush" Value="{StaticResource BrAccent}"/>
+        </Style>
+        <Style Selector="Button:disabled /template/ ContentPresenter">
+            <Setter Property="Opacity" Value="0.4"/>
+        </Style>
+
+        <Style Selector="Button.BtnPrimary">
+            <Setter Property="Background"   Value="{StaticResource BrAccent}"/>
+            <Setter Property="BorderBrush"  Value="{StaticResource BrAccent}"/>
+            <Setter Property="Foreground"   Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="Button.BtnPrimary:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource BrAccentHover}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrAccentHover}"/>
+        </Style>
+        <Style Selector="Button.BtnPrimary:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource BrAccentPressed}"/>
+        </Style>
+
+        <Style Selector="Button.BtnDanger">
+            <Setter Property="Background"  Value="#3D1F1F"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrError}"/>
+            <Setter Property="Foreground"  Value="{StaticResource BrError}"/>
+        </Style>
+
+        <Style Selector="TextBox">
+            <Setter Property="FontFamily"      Value="{StaticResource FontPrimary}"/>
+            <Setter Property="Foreground"      Value="{StaticResource BrTextPrimary}"/>
+            <Setter Property="Background"      Value="{StaticResource BrBgSurface}"/>
+            <Setter Property="BorderBrush"     Value="{StaticResource BrBorderSubtle}"/>
+            <Setter Property="CornerRadius"    Value="{StaticResource RadiusMedium}"/>
+            <Setter Property="Padding"         Value="10,6"/>
+        </Style>
+    </Application.Styles>
+</Application>

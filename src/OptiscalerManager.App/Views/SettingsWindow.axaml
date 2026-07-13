@@ -1,0 +1,67 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="OptiscalerManager.App.Views.SettingsWindow"
+        Width="620" Height="560" MinWidth="520" MinHeight="440"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource BrBgBase}"
+        Title="Settings — Import your own DLLs">
+
+  <Grid RowDefinitions="Auto,*,Auto" Margin="20">
+
+    <StackPanel Grid.Row="0" Spacing="4">
+      <TextBlock Text="Bring your own components" FontSize="18" FontWeight="Bold"
+                 Foreground="{StaticResource BrTextPrimary}"/>
+      <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
+                 Text="This app never downloads, bundles or links to proprietary AMD binaries. You supply a local file you already possess; it is copied into a private cache and used for installs."/>
+    </StackPanel>
+
+    <ScrollViewer Grid.Row="1" Margin="0,14,0,0">
+      <StackPanel Spacing="16">
+
+        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Custom FSR 4 DLL (amdxcffx64.dll)" FontWeight="SemiBold"
+                       Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
+                       Text="A single amdxcffx64.dll (the FSR 4.x INT8 runtime). Must be a 64-bit Windows DLL."/>
+            <Button Content="Import amdxcffx64.dll…" Click="OnImportDll"
+                    ToolTip.Tip="Pick a local amdxcffx64.dll. It is validated as a 64-bit PE and copied into the cache."/>
+          </StackPanel>
+        </Border>
+
+        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Custom FSR SDK package" FontWeight="SemiBold"
+                       Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
+                       Text="An FSR SDK from a .zip/.7z archive or an extracted folder. The importer recursively collects the DLL set (upscaler is required, plus frame generation and companions), skips 32-bit copies, and prefers 'signed' builds."/>
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <Button Content="Import from archive…" Click="OnImportSdkArchive"
+                      ToolTip.Tip="Pick a .zip or .7z that contains the FSR SDK DLLs."/>
+              <Button Content="Import from folder…" Click="OnImportSdkFolder"
+                      ToolTip.Tip="Pick an already-extracted folder that contains the FSR SDK DLLs."/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgSurface}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="6">
+            <TextBlock Text="Imported so far" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock Name="InventoryText" TextWrapping="Wrap" FontSize="12"
+                       Foreground="{StaticResource BrTextSecondary}"/>
+          </StackPanel>
+        </Border>
+
+        <TextBlock Name="ResultText" TextWrapping="Wrap" FontSize="12"
+                   Foreground="{StaticResource BrAccent}"/>
+      </StackPanel>
+    </ScrollViewer>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+      <Button Content="Close" Click="OnClose"/>
+    </StackPanel>
+  </Grid>
+</Window>

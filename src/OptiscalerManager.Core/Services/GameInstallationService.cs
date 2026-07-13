@@ -2039,7 +2039,7 @@ namespace OptiscalerManager.Core.Services
         /// file, the section, or the key as needed. Unlike ModifyOptiScalerIni (which
         /// only handles [General]), this is section-aware.
         /// </summary>
-        internal static void ModifyOptiScalerIniKey(string gameDir, string section, string key, string value)
+        public static void ModifyOptiScalerIniKey(string gameDir, string section, string key, string value)
         {
             var iniPath = Path.Combine(gameDir, "OptiScaler.ini");
             var sectionHeader = $"[{section}]";
