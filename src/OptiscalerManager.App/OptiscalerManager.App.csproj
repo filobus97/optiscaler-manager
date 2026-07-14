@@ -31,7 +31,20 @@
          resolve where OptiScaler / Extras / etc. are downloaded from. Must sit next
          to the executable (and inside the single-file publish payload). -->
     <None Include="config.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- In-place updater scripts, shipped next to the executable so each release
+         carries its own updater (see scripts/update.sh and scripts/update.ps1). -->
+    <None Include="..\..\scripts\update.sh" Link="update.sh" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\scripts\update.ps1" Link="update.ps1" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <!-- Write a VERSION file next to the app so the updater can tell whether a newer
+       release is available without launching the app. Runs for both build and publish. -->
+  <Target Name="WriteVersionFile" AfterTargets="Build">
+    <WriteLinesToFile File="$(OutDir)VERSION" Lines="$(Version)" Overwrite="true" />
+  </Target>
+  <Target Name="WriteVersionFileOnPublish" AfterTargets="Publish">
+    <WriteLinesToFile File="$(PublishDir)VERSION" Lines="$(Version)" Overwrite="true" />
+  </Target>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.0" />

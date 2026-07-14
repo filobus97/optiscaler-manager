@@ -125,6 +125,30 @@ and which `.ini` profile to write. Any FSR 4 backend also sets
 profile, matching what is written to disk). You always see the exact file and ini
 changes in the live preview first.
 
+## Updating in place
+
+Each release ships a self-contained updater next to the executable that pulls the
+latest GitHub release and replaces the program **without touching your data** — all
+settings, imported DLLs, `.ini` profiles, backups and the download cache live in
+your OS config directory (`%APPDATA%\OptiscalerManager` on Windows,
+`~/.config/OptiscalerManager` on Linux, `~/Library/Application Support/OptiscalerManager`
+on macOS), *outside* the install folder.
+
+Close the app first, then from the install folder run:
+
+```bash
+# Linux / macOS
+sh update.sh                 # --force to reinstall, --dir <path> to target another install
+
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -File update.ps1   # -Force / -Dir <path>
+```
+
+The updater detects your platform, compares the bundled `VERSION` with the latest
+release, downloads the matching `OptiscalerManager-<version>-<rid>.zip`, and swaps
+the files in place. The scripts also live in [`scripts/`](scripts/) if you want to
+run them standalone.
+
 ## Native Wayland (Linux)
 
 The app targets **Avalonia 12.1** and uses its **native Wayland backend** when run
