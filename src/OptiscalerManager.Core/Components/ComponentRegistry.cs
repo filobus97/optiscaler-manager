@@ -198,7 +198,7 @@ public static class ComponentRegistry
         {
             Id = ComponentIds.Fsr4AmdSdk,
             DisplayName = "Latest FSR SDK (AMD)",
-            Description = "AMD's official open-source FidelityFX SDK (GPUOpen): the full prebuilt DLL set — loader, upscaler, frame generation and denoiser — downloaded and installed. This is the FSR upscaler SDK, not the FSR 4 INT8 build.",
+            Description = "AMD's official open-source FidelityFX SDK (GPUOpen): the full prebuilt DLL set — loader, upscaler, frame generation, denoiser — plus the AMD support libraries (amd_ags/amd_acs) the FSR 4 ML upscaler needs. Includes FSR 3.1 and the FSR 4.x ML upscaler.",
             // The split-DLL FSR architecture; only the DLLs the SDK actually ships are
             // installed (collected by ComponentManagementService.ScanFsrSdkSourceAsync).
             TargetFiles = new[]
@@ -208,6 +208,8 @@ public static class ComponentRegistry
                 "amd_fidelityfx_upscaler_dx12.dll",
                 "amd_fidelityfx_framegeneration_dx12.dll",
                 "amd_fidelityfx_denoiser_dx12.dll",
+                "amd_ags_x64.dll",
+                "amd_acs_x64.dll",
             },
             IniKeys = new[]
             {

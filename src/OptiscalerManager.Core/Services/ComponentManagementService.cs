@@ -2589,7 +2589,9 @@ namespace OptiscalerManager.Core.Services
         /// The FSR SDK DLLs an SDK package import looks for. The upscaler is the
         /// required anchor (it provides the version label); the rest are optional
         /// companions imported when present so a full FSR release can be swapped in.
-        /// Matches the DLL names OptiScaler can load/override via [Libraries].
+        /// Includes the AMD support libraries (amd_ags_x64.dll / amd_acs_x64.dll) that
+        /// ship alongside the upscaler in the FidelityFX SDK — the FSR 4 ML upscaler
+        /// needs them, and dropping them makes OptiScaler fall back to FSR 3.1.
         /// </summary>
         public static readonly string[] FsrSdkDllNames =
         {
@@ -2600,6 +2602,8 @@ namespace OptiscalerManager.Core.Services
             "amd_fidelityfx_denoiser_dx12.dll",
             "amd_fidelityfx_radiancecache_dx12.dll",
             "amd_fidelityfx_vk.dll",
+            "amd_ags_x64.dll",
+            "amd_acs_x64.dll",
         };
 
         /// <summary>

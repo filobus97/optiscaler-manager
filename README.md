@@ -25,14 +25,17 @@ action per game, advanced options tucked away.
   dialog then decouples two independent choices:
 
   **Step 1 — Backend (which files to install):**
-    - *Latest FSR SDK from AMD (FSR 3.1 — not FSR 4)* — AMD's official open-source
-      FidelityFX SDK (GPUOpen), full DLL set (loader + upscaler + frame-gen + denoiser);
+    - *Latest FSR SDK from AMD (FSR 3.1 + FSR 4 ML)* — AMD's official open-source
+      FidelityFX SDK (GPUOpen): the full DLL set (loader + upscaler + frame-gen +
+      denoiser) **plus the `amd_ags`/`amd_acs` support libraries the FSR 4 ML upscaler
+      needs**;
     - *FSR 4 INT8 (community build)* — a community INT8 build from the OptiScaler-Extras
-      repo, at a **version you pick** (this is what actually delivers FSR 4);
+      repo, at a **version you pick**;
     - *your custom FSR SDK* (imported);
-    - *your custom `amdxcffx64.dll` + latest AMD SDK* — the proprietary FSR 4 driver
-      runtime never installs alone, so it is paired with AMD's SDK;
-    - *Default — OptiScaler's own files only*.
+    - *your custom `amdxcffx64.dll` + latest AMD SDK* — the FSR 4 ML-model DLL, paired
+      with AMD's SDK;
+    - *Default — OptiScaler's own files only* (OptiScaler already bundles a working
+      FSR 4 upscaler, so this alone enables FSR 4).
 
   **Step 2 — FSR 4 selection:** the Manager **always forces the flags that make FSR 4
   *available*** (`[FSR] Fsr4Update=true`); you then choose whether it also **selects**

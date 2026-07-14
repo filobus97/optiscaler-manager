@@ -23,9 +23,9 @@
         <Border Padding="12" CornerRadius="8" Background="{StaticResource BrBgCard}"
                 BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="6">
-            <RadioButton Name="RbAmdSdk" GroupName="Fsr4" Content="Latest FSR SDK from AMD (FSR 3.1 — not FSR 4)"
+            <RadioButton Name="RbAmdSdk" GroupName="Fsr4" Content="Latest FSR SDK from AMD (FSR 3.1 + FSR 4 ML)"
                          Foreground="{StaticResource BrTextPrimary}"
-                         ToolTip.Tip="Download AMD's official open-source FidelityFX SDK (GPUOpen) and install its full DLL set (loader, upscaler, frame generation, denoiser). The public AMD SDK is FSR 3.1 — it does NOT contain FSR 4."/>
+                         ToolTip.Tip="Download AMD's official open-source FidelityFX SDK (GPUOpen) and install its full DLL set — loader, upscaler, frame generation, denoiser, plus the amd_ags/amd_acs support libraries the FSR 4 ML upscaler needs. Includes FSR 3.1 and the FSR 4.x ML upscaler."/>
 
             <RadioButton Name="RbInt8" GroupName="Fsr4" Content="FSR 4 INT8 (community build)"
                          Foreground="{StaticResource BrTextPrimary}"
