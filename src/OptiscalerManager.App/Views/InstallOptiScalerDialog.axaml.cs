@@ -16,8 +16,11 @@ public partial class InstallOptiScalerDialog : Window
     private readonly Game _game = null!;
     private bool _ready;
 
-    /// <summary>The FSR 4 backend the user confirmed.</summary>
-    public Fsr4Backend SelectedBackend { get; private set; } = Fsr4Backend.LatestAmdSdk;
+    /// <summary>The backend the user confirmed.</summary>
+    public Fsr4Backend SelectedBackend { get; private set; } = Fsr4Backend.Int8Community;
+
+    /// <summary>Whether the Manager should select FSR 4 (UpscalerIndex=0) vs leave it auto.</summary>
+    public bool SelectFsr4 { get; private set; } = true;
 
     /// <summary>The INT8 community build version the user confirmed (null unless INT8 chosen).</summary>
     public string? SelectedInt8Version { get; private set; }
@@ -41,6 +44,10 @@ public partial class InstallOptiScalerDialog : Window
 
         _ready = true;
         UpdatePreview();
+
+        // INT8 is the default backend — reveal and load its version list on open.
+        if (this.FindControl<RadioButton>("RbInt8")!.IsChecked == true)
+            OnInt8CheckedChanged(this, new RoutedEventArgs());
     }
 
     private void SetupBackendOptions()
@@ -48,25 +55,30 @@ public partial class InstallOptiScalerDialog : Window
         var amdSdk = this.FindControl<RadioButton>("RbAmdSdk")!;
         var int8 = this.FindControl<RadioButton>("RbInt8")!;
         var customSdk = this.FindControl<RadioButton>("RbCustomSdk")!;
-        var customDll = this.FindControl<RadioButton>("RbCustomDll")!;
-        var none = this.FindControl<RadioButton>("RbNone")!;
+        var customDllSdk = this.FindControl<RadioButton>("RbCustomDllSdk")!;
+        var def = this.FindControl<RadioButton>("RbDefault")!;
 
         customSdk.IsEnabled = _manager.HasCustomFsrSdk;
-        customDll.IsEnabled = _manager.HasCustomFsr4Dll;
+        customDllSdk.IsEnabled = _manager.HasCustomFsr4Dll;
         if (!customSdk.IsEnabled) customSdk.Content = "Custom FSR SDK — none imported (Settings)";
-        if (!customDll.IsEnabled) customDll.Content = "Custom amdxcffx64.dll — none imported (Settings)";
+        if (!customDllSdk.IsEnabled) customDllSdk.Content = "Custom amdxcffx64.dll + AMD SDK — none imported (Settings)";
 
-        // Default: prefer an imported custom backend, else the AMD SDK.
+        // Default: prefer an imported custom backend, else the INT8 community build
+        // (the option that actually provides FSR 4).
         if (_manager.HasCustomFsrSdk) customSdk.IsChecked = true;
-        else if (_manager.HasCustomFsr4Dll) customDll.IsChecked = true;
-        else amdSdk.IsChecked = true;
+        else if (_manager.HasCustomFsr4Dll) customDllSdk.IsChecked = true;
+        else int8.IsChecked = true;
 
         amdSdk.IsCheckedChanged += OnOptionChanged;
         int8.IsCheckedChanged += OnInt8CheckedChanged;
         int8.IsCheckedChanged += OnOptionChanged;
         customSdk.IsCheckedChanged += OnOptionChanged;
-        customDll.IsCheckedChanged += OnOptionChanged;
-        none.IsCheckedChanged += OnOptionChanged;
+        customDllSdk.IsCheckedChanged += OnOptionChanged;
+        def.IsCheckedChanged += OnOptionChanged;
+
+        // Step 2 radios drive UpscalerIndex in the preview.
+        this.FindControl<RadioButton>("RbSelectNow")!.IsCheckedChanged += OnOptionChanged;
+        this.FindControl<RadioButton>("RbSelectInGame")!.IsCheckedChanged += OnOptionChanged;
     }
 
     // Reveal and lazily populate the INT8 version list when INT8 is selected.
@@ -107,10 +119,13 @@ public partial class InstallOptiScalerDialog : Window
     {
         if (this.FindControl<RadioButton>("RbInt8")!.IsChecked == true) return Fsr4Backend.Int8Community;
         if (this.FindControl<RadioButton>("RbCustomSdk")!.IsChecked == true) return Fsr4Backend.CustomSdk;
-        if (this.FindControl<RadioButton>("RbCustomDll")!.IsChecked == true) return Fsr4Backend.CustomDll;
-        if (this.FindControl<RadioButton>("RbNone")!.IsChecked == true) return Fsr4Backend.None;
+        if (this.FindControl<RadioButton>("RbCustomDllSdk")!.IsChecked == true) return Fsr4Backend.CustomDllPlusAmdSdk;
+        if (this.FindControl<RadioButton>("RbDefault")!.IsChecked == true) return Fsr4Backend.Default;
         return Fsr4Backend.LatestAmdSdk;
     }
+
+    private bool CurrentSelectFsr4()
+        => this.FindControl<RadioButton>("RbSelectInGame")!.IsChecked != true;
 
     private string? CurrentInt8Version()
     {
@@ -132,7 +147,7 @@ public partial class InstallOptiScalerDialog : Window
     private void UpdatePreview()
     {
         if (!_ready) return;
-        var preview = _manager.BuildInstallPreview(_game, CurrentBackend(), CurrentProfile());
+        var preview = _manager.BuildInstallPreview(_game, CurrentBackend(), CurrentSelectFsr4());
 
         var files = this.FindControl<StackPanel>("FilesList")!;
         var ini = this.FindControl<StackPanel>("IniList")!;
@@ -143,6 +158,11 @@ public partial class InstallOptiScalerDialog : Window
         if (preview.IniKeys.Count == 0)
             ini.Children.Add(Mono("(no ini changes)", FontWeight.Normal, "#8A8AAA"));
         foreach (var k in preview.IniKeys) ini.Children.Add(Mono(k.ToString()));
+
+        // Make clear the Manager only overrides these keys; the rest comes from the ini.
+        var profile = CurrentProfile();
+        var iniName = (profile is null || profile.IsBuiltIn) ? "OptiScaler's default .ini" : $"your \"{profile.Name}\" profile";
+        ini.Children.Add(Mono($"…everything else comes from {iniName} (left untouched).", FontWeight.Normal, "#8A8AAA"));
 
         var conflictBox = this.FindControl<Border>("ConflictBox")!;
         var conflictList = this.FindControl<StackPanel>("ConflictList")!;
@@ -166,6 +186,7 @@ public partial class InstallOptiScalerDialog : Window
     private void OnConfirm(object? sender, RoutedEventArgs e)
     {
         SelectedBackend = CurrentBackend();
+        SelectFsr4 = CurrentSelectFsr4();
         SelectedInt8Version = SelectedBackend == Fsr4Backend.Int8Community ? CurrentInt8Version() : null;
         SelectedProfile = CurrentProfile();
         Close(true);

@@ -22,9 +22,9 @@
               Click="OnRescanClick" Margin="0,0,8,0"
               IsEnabled="{Binding IsIdle}"
               ToolTip.Tip="Re-scan your libraries (Steam, Epic, GOG, Xbox, EA, Battle.net, Ubisoft) for installed games."/>
-      <Button Grid.Column="2" Name="SettingsButton" Content="Settings / Import DLLs"
+      <Button Grid.Column="2" Name="SettingsButton" Content="Settings"
               Click="OnSettingsClick"
-              ToolTip.Tip="Import your own amdxcffx64.dll or FSR SDK package (bring-your-own — nothing is downloaded)."/>
+              ToolTip.Tip="Import your own DLLs and .ini profiles, and set the OptiScaler overlay/menu key."/>
     </Grid>
 
     <!-- GPU banner -->

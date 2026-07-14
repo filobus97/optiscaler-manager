@@ -16,11 +16,49 @@ public partial class SettingsWindow : Window
 
     public SettingsWindow() { InitializeComponent(); }
 
+    // Common overlay keys → OptiScaler [Menu] ShortcutKey virtual-key hex.
+    private static readonly (string Label, string? Vk)[] MenuKeys =
+    {
+        ("OptiScaler default (Insert)", null),
+        ("Insert (0x2D)", "0x2D"),
+        ("Home (0x24)", "0x24"),
+        ("End (0x23)", "0x23"),
+        ("Delete (0x2E)", "0x2E"),
+        ("Page Up (0x21)", "0x21"),
+        ("Page Down (0x22)", "0x22"),
+        ("F1 (0x70)", "0x70"), ("F2 (0x71)", "0x71"), ("F3 (0x72)", "0x72"),
+        ("F4 (0x73)", "0x73"), ("F5 (0x74)", "0x74"), ("F6 (0x75)", "0x75"),
+        ("F7 (0x76)", "0x76"), ("F8 (0x77)", "0x77"), ("F9 (0x78)", "0x78"),
+        ("F10 (0x79)", "0x79"), ("F11 (0x7A)", "0x7A"), ("F12 (0x7B)", "0x7B"),
+    };
+
     public SettingsWindow(ManagerService manager) : this()
     {
         _manager = manager;
+        SetupMenuKey();
         RefreshInventory();
         RefreshIniProfiles();
+    }
+
+    private void SetupMenuKey()
+    {
+        var combo = this.FindControl<ComboBox>("MenuKeyCombo");
+        if (combo is null) return;
+
+        combo.ItemsSource = MenuKeys.Select(k => k.Label).ToList();
+        var current = _manager.MenuShortcutKey;
+        var idx = Array.FindIndex(MenuKeys, k => string.Equals(k.Vk, current, StringComparison.OrdinalIgnoreCase));
+        combo.SelectedIndex = idx >= 0 ? idx : 0;
+
+        combo.SelectionChanged += (_, _) =>
+        {
+            var i = combo.SelectedIndex;
+            if (i < 0 || i >= MenuKeys.Length) return;
+            _manager.MenuShortcutKey = MenuKeys[i].Vk;
+            SetResult(MenuKeys[i].Vk is null
+                ? "Menu key reset to OptiScaler's default (Insert)."
+                : $"Menu key set to {MenuKeys[i].Label}. It will be applied on the next install.");
+        };
     }
 
     private void RefreshInventory()

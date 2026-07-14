@@ -20,18 +20,29 @@ action per game, advanced options tucked away.
 ## What it is (and what it deliberately isn't)
 
 - **One primary screen.** A detected-GPU banner and your game list. Per game, a
-  single **Install OptiScaler** button. It downloads and installs the *real latest
-  OptiScaler release from source* (`optiscaler/OptiScaler` on GitHub), and in one
-  dialog lets you choose:
-  - the **FSR 4 backend**:
-    - *Latest FSR SDK from AMD* — AMD's official open-source FidelityFX SDK (GPUOpen),
-      full DLL set (loader + upscaler + frame-gen + denoiser);
+  single **Install OptiScaler** button downloads and installs the *real latest
+  OptiScaler release from source* (`optiscaler/OptiScaler` on GitHub). The install
+  dialog then decouples two independent choices:
+
+  **Step 1 — Backend (which files to install):**
+    - *Latest FSR SDK from AMD (FSR 3.1 — not FSR 4)* — AMD's official open-source
+      FidelityFX SDK (GPUOpen), full DLL set (loader + upscaler + frame-gen + denoiser);
     - *FSR 4 INT8 (community build)* — a community INT8 build from the OptiScaler-Extras
-      repo, at a **version you pick** (newest first);
+      repo, at a **version you pick** (this is what actually delivers FSR 4);
     - *your custom FSR SDK* (imported);
-    - *your custom `amdxcffx64.dll`* (imported);
-    - *None – install OptiScaler default*;
-  - the **`OptiScaler.ini`** — OptiScaler's default, or one of your saved profiles.
+    - *your custom `amdxcffx64.dll` + latest AMD SDK* — the proprietary FSR 4 driver
+      runtime never installs alone, so it is paired with AMD's SDK;
+    - *Default — OptiScaler's own files only*.
+
+  **Step 2 — FSR 4 selection:** the Manager **always forces the flags that make FSR 4
+  *available*** (`[FSR] Fsr4Update=true`); you then choose whether it also **selects**
+  FSR 4 for you (`UpscalerIndex=0`) or leaves it **auto** so you pick it in OptiScaler's
+  in-game overlay.
+
+  Plus the **`OptiScaler.ini`** to use — OptiScaler's default, or one of your saved
+  profiles. When you pick a custom `.ini`, the options above overwrite **only the keys
+  they affect** (`Fsr4Update`, `UpscalerIndex`, and the menu key); the rest of your
+  `.ini` is left exactly as you wrote it.
 - **Transparent — no black boxes.** Before anything is written, a live
   **"What will happen"** preview lists the *exact files* that will be placed next
   to your game and the *exact `OptiScaler.ini` keys* that will change (updating as
@@ -124,6 +135,10 @@ Open **Settings** to import:
 - **`OptiScaler.ini` profiles.** Import any `OptiScaler.ini`, tag it with a name,
   and it becomes selectable in the Install dialog. Collect as many as you like;
   delete them from Settings.
+- **Overlay / menu key.** OptiScaler's in-game overlay opens with **Insert** by
+  default, but not every keyboard has that key. Pick another (Home, End, F1–F12, …)
+  in **Settings** and it is forced as `[Menu] ShortcutKey` on **every** install,
+  including the default `.ini`.
 
 When you click **Install OptiScaler**, the dialog lets you pick the FSR 4 backend
 (latest SDK from source / your custom SDK / your custom `amdxcffx64.dll` / none)

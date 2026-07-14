@@ -74,9 +74,17 @@ public sealed class ManagerService
     public bool IsBackendAvailable(Fsr4Backend backend) => backend switch
     {
         Fsr4Backend.CustomSdk => HasCustomFsrSdk,
-        Fsr4Backend.CustomDll => HasCustomFsr4Dll,
-        _ => true, // None, LatestAmdSdk and Int8Community need no prior import
+        Fsr4Backend.CustomDllPlusAmdSdk => HasCustomFsr4Dll,
+        _ => true, // Default, LatestAmdSdk and Int8Community need no prior import
     };
+
+    // ── Menu / overlay shortcut key (global, persisted) ─────────────────────
+    /// <summary>The configured overlay key (VK hex string, e.g. "0x78"), or null for OptiScaler's default.</summary>
+    public string? MenuShortcutKey
+    {
+        get => _components.Config.MenuShortcutKey;
+        set { _components.Config.MenuShortcutKey = value; _components.SaveConfiguration(); }
+    }
 
     // ── OptiScaler.ini profile library ──────────────────────────────────────
     /// <summary>All saved OptiScaler.ini profiles (built-in default + user-imported).</summary>
@@ -110,11 +118,11 @@ public sealed class ManagerService
     /// with the chosen FSR 4 backend and ini profile. What the preview shows is
     /// precisely what gets installed.
     /// </summary>
-    public InstallPreview BuildInstallPreview(Game game, Fsr4Backend backend, OptiScalerProfile? iniProfile)
-        => ComponentRegistry.BuildInstallPreview(backend, ComponentRegistry.DefaultInjectionDll, ProfileToIniKeys(iniProfile));
+    public InstallPreview BuildInstallPreview(Game game, Fsr4Backend backend, bool selectFsr4)
+        => ComponentRegistry.BuildInstallPreview(backend, selectFsr4, ComponentRegistry.DefaultInjectionDll, MenuShortcutKey);
 
     // ── Install OptiScaler ──────────────────────────────────────────────────
-    public async Task InstallAsync(Game game, Fsr4Backend backend, string? int8Version,
+    public async Task InstallAsync(Game game, Fsr4Backend backend, string? int8Version, bool selectFsr4,
         OptiScalerProfile? iniProfile, IProgress<string>? status = null)
     {
         if (!IsBackendAvailable(backend))
@@ -154,11 +162,13 @@ public sealed class ManagerService
                 _install.InstallCustomFsrSdk(game, _components.GetCustomFsrSdkCachePath(v), v);
                 break;
             }
-            case Fsr4Backend.CustomDll:
+            case Fsr4Backend.CustomDllPlusAmdSdk:
             {
+                // amdxcffx64.dll cannot run alone — install it together with the AMD SDK.
                 var v = _components.GetDownloadedCustomFsr4Versions().First();
-                status?.Report($"Installing your custom FSR 4 DLL ({v})…");
+                status?.Report($"Installing your amdxcffx64.dll ({v})…");
                 _install.InstallCustomFsr4Dll(game, _components.GetCustomFsr4DllPath(v), v);
+                await InstallAmdSdkAsync(game, status);
                 break;
             }
             case Fsr4Backend.LatestAmdSdk:
@@ -171,12 +181,33 @@ public sealed class ManagerService
                 await InstallInt8CommunityAsync(game, gameDir, int8Version, status);
                 break;
             }
-            case Fsr4Backend.None:
+            case Fsr4Backend.Default:
             default:
-                break; // OptiScaler core only.
+                break; // OptiScaler-provided files only.
         }
 
+        // Force ONLY the keys the Manager owns; everything else in the chosen ini
+        // (default or custom) is left untouched. FSR 4 is always made *available*;
+        // whether it is *selected* depends on selectFsr4.
+        ApplyForcedIniKeys(gameDir, selectFsr4);
+
         status?.Report("Done.");
+    }
+
+    /// <summary>
+    /// Writes the (and only the) OptiScaler.ini keys the Manager is responsible for:
+    /// [FSR] Fsr4Update=true always, [FSR] UpscalerIndex = 0 (Manager selects FSR 4) or
+    /// auto (user selects in-game), and [Menu] ShortcutKey when a menu key is configured.
+    /// Applied last, so it overrides anything the backend installers set.
+    /// </summary>
+    private void ApplyForcedIniKeys(string gameDir, bool selectFsr4)
+    {
+        GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4Update", "true");
+        GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "UpscalerIndex", selectFsr4 ? "0" : "auto");
+
+        var menuKey = _components.Config.MenuShortcutKey;
+        if (!string.IsNullOrWhiteSpace(menuKey))
+            GameInstallationService.ModifyOptiScalerIniKey(gameDir, "Menu", "ShortcutKey", menuKey!);
     }
 
     /// <summary>
@@ -209,9 +240,9 @@ public sealed class ManagerService
 
     /// <summary>
     /// Downloads a community FSR 4 INT8 build from the OptiScaler-Extras repo (at the
-    /// chosen version, or latest) and installs its upscaler DLL next to the game exe,
-    /// then engages the FSR path in OptiScaler.ini. Revert removes it via the
-    /// known-artifact list in <see cref="GameInstallationService"/>.
+    /// chosen version, or latest) and installs its upscaler DLL next to the game exe.
+    /// The FSR ini keys are forced centrally by <see cref="ApplyForcedIniKeys"/>.
+    /// Revert removes the DLL via the known-artifact list in <see cref="GameInstallationService"/>.
     /// </summary>
     private async Task InstallInt8CommunityAsync(Game game, string gameDir, string? int8Version, IProgress<string>? status)
     {
@@ -229,9 +260,6 @@ public sealed class ManagerService
         var dest = Path.Combine(gameDir, "amd_fidelityfx_upscaler_dx12.dll");
         File.Copy(extrasDllPath, dest, overwrite: true);
         game.Fsr4ExtraVersion = version;
-
-        foreach (var k in ComponentRegistry.Fsr4EnableKeys)
-            GameInstallationService.ModifyOptiScalerIniKey(gameDir, k.Section, k.Key, k.Value);
     }
 
     // ── Revert support ──────────────────────────────────────────────────────

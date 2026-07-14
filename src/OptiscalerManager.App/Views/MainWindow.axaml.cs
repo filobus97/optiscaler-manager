@@ -117,7 +117,7 @@ public partial class MainWindow : Window
 
         try
         {
-            await _manager.InstallAsync(row.Game, dialog.SelectedBackend, dialog.SelectedInt8Version, dialog.SelectedProfile, progress);
+            await _manager.InstallAsync(row.Game, dialog.SelectedBackend, dialog.SelectedInt8Version, dialog.SelectFsr4, dialog.SelectedProfile, progress);
             row.Game.IsOptiscalerInstalled = true;
             row.RefreshFromGame();
             _vm.StatusText = $"OptiScaler installed for {row.Game.Name}.";

@@ -103,6 +103,14 @@ namespace OptiscalerManager.Core.Models
         public bool HasCompletedInitialScan { get; set; } = false;
         public List<string> ScanDriveRoots { get; set; } = new();
 
+        /// <summary>
+        /// OptiScaler overlay/menu shortcut key as a Windows virtual-key hex string
+        /// (e.g. "0x2D" = Insert, "0x78" = F9). When set, the Manager forces
+        /// [Menu] ShortcutKey to this value on every install. Null = leave OptiScaler's
+        /// own default (Insert).
+        /// </summary>
+        public string? MenuShortcutKey { get; set; } = null;
+
         // Window state persistence
         public double WindowWidth { get; set; } = 1200;
         public double WindowHeight { get; set; } = 720;

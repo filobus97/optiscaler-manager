@@ -135,60 +135,51 @@ public static class ComponentRegistry
     }
 
     /// <summary>
-    /// Maps an <see cref="Fsr4Backend"/> to its registry component id, or null for
-    /// <see cref="Fsr4Backend.None"/>.
+    /// Maps an <see cref="Fsr4Backend"/> to the registry component id(s) it installs.
+    /// Most backends are a single component; <see cref="Fsr4Backend.CustomDllPlusAmdSdk"/>
+    /// installs two (amdxcffx64.dll cannot run without the FSR SDK).
     /// </summary>
-    public static string? ComponentIdFor(Fsr4Backend backend) => backend switch
+    public static IReadOnlyList<string> ComponentIdsFor(Fsr4Backend backend) => backend switch
     {
-        Fsr4Backend.LatestAmdSdk => ComponentIds.Fsr4AmdSdk,
-        Fsr4Backend.Int8Community => ComponentIds.Fsr4Extras,
-        Fsr4Backend.CustomSdk => ComponentIds.CustomFsrSdk,
-        Fsr4Backend.CustomDll => ComponentIds.CustomFsr4Dll,
-        _ => null,
+        Fsr4Backend.LatestAmdSdk => new[] { ComponentIds.Fsr4AmdSdk },
+        Fsr4Backend.Int8Community => new[] { ComponentIds.Fsr4Extras },
+        Fsr4Backend.CustomSdk => new[] { ComponentIds.CustomFsrSdk },
+        Fsr4Backend.CustomDllPlusAmdSdk => new[] { ComponentIds.CustomFsr4Dll, ComponentIds.Fsr4AmdSdk },
+        _ => Array.Empty<string>(),
     };
 
     /// <summary>
-    /// Derives the transparent "what will happen" preview for the Manager's
-    /// **Install OptiScaler** flow: always the OptiScaler core, plus the chosen FSR 4
-    /// backend (if any), plus the selected OptiScaler.ini profile's keys merged into
-    /// the ini list. The result is exactly what will be written, so a user can
-    /// reproduce it by hand.
+    /// The transparent "what will happen" preview for the Manager's **Install OptiScaler**
+    /// flow, under the decoupled model:
+    /// <list type="bullet">
+    /// <item>Files come from the chosen backend component(s).</item>
+    /// <item>The Manager writes ONLY the keys it is responsible for — <c>[FSR] Fsr4Update</c>
+    /// (always, to make FSR 4 available), <c>[FSR] UpscalerIndex</c> (<c>0</c> when the user
+    /// asks the Manager to select FSR 4, else <c>auto</c> to select it in-game), and
+    /// <c>[Menu] ShortcutKey</c> when a menu key is configured. Every other key comes from
+    /// the chosen OptiScaler.ini (default or custom) and is left untouched.</item>
+    /// </list>
     /// </summary>
-    /// <param name="backend">The FSR 4 backend the user selected.</param>
+    /// <param name="backend">The backend/DLL set to install.</param>
+    /// <param name="selectFsr4">True to have the Manager select FSR 4 (UpscalerIndex=0).</param>
     /// <param name="injectionDll">Injection DLL name (defaults to dxgi.dll).</param>
-    /// <param name="profileKeys">
-    /// Ini keys from the selected OptiScaler.ini profile, or null for OptiScaler's
-    /// default configuration.
-    /// </param>
+    /// <param name="menuKeyVk">Configured overlay key (VK hex, e.g. "0x78"), or null to leave OptiScaler's default.</param>
     public static InstallPreview BuildInstallPreview(
-        Fsr4Backend backend, string? injectionDll = null, IReadOnlyList<IniKeyChange>? profileKeys = null)
+        Fsr4Backend backend, bool selectFsr4, string? injectionDll = null, string? menuKeyVk = null)
     {
         var ids = new List<string> { ComponentIds.OptiScaler };
-        var backendId = ComponentIdFor(backend);
-        if (backendId is not null) ids.Add(backendId);
+        ids.AddRange(ComponentIdsFor(backend));
 
         var preview = BuildPreview(ids, injectionDll);
 
-        var iniKeys = preview.IniKeys.ToList();
-
-        // Merge the selected ini profile's keys first (the base configuration the
-        // user chose). Same-section+key entries are replaced.
-        if (profileKeys is not null)
-            foreach (var k in profileKeys)
-            {
-                iniKeys.RemoveAll(existing => existing.Section == k.Section && existing.Key == k.Key);
-                iniKeys.Add(k);
-            }
-
-        // A selected FSR 4 backend forces its enable keys LAST, so they win over the
-        // profile — this mirrors install order on disk (the backend install sets
-        // [FSR] UpscalerIndex/Fsr4Update after the profile ini is written).
-        if (backend != Fsr4Backend.None)
-            foreach (var k in Fsr4EnableKeys)
-            {
-                iniKeys.RemoveAll(existing => existing.Section == k.Section && existing.Key == k.Key);
-                iniKeys.Add(k);
-            }
+        // The forced keys are the ONLY ini keys the Manager writes.
+        var iniKeys = new List<IniKeyChange>
+        {
+            new IniKeyChange("FSR", "Fsr4Update", "true"),
+            new IniKeyChange("FSR", "UpscalerIndex", selectFsr4 ? "0" : "auto"),
+        };
+        if (!string.IsNullOrWhiteSpace(menuKeyVk))
+            iniKeys.Add(new IniKeyChange("Menu", "ShortcutKey", menuKeyVk!));
 
         return preview with { IniKeys = iniKeys };
     }

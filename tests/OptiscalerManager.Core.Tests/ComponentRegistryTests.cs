@@ -86,13 +86,23 @@ namespace OptiscalerManager.Core.Tests
         }
 
         [Theory]
-        [InlineData(Fsr4Backend.None, null)]
-        [InlineData(Fsr4Backend.LatestAmdSdk, ComponentIds.Fsr4AmdSdk)]
-        [InlineData(Fsr4Backend.Int8Community, ComponentIds.Fsr4Extras)]
-        [InlineData(Fsr4Backend.CustomSdk, ComponentIds.CustomFsrSdk)]
-        [InlineData(Fsr4Backend.CustomDll, ComponentIds.CustomFsr4Dll)]
-        public void ComponentIdFor_MapsBackend(Fsr4Backend backend, string? expectedId)
-            => Assert.Equal(expectedId, ComponentRegistry.ComponentIdFor(backend));
+        [InlineData(Fsr4Backend.Default)]
+        public void ComponentIdsFor_Default_IsEmpty(Fsr4Backend backend)
+            => Assert.Empty(ComponentRegistry.ComponentIdsFor(backend));
+
+        [Fact]
+        public void ComponentIdsFor_MapsSingleBackends()
+        {
+            Assert.Equal(new[] { ComponentIds.Fsr4AmdSdk }, ComponentRegistry.ComponentIdsFor(Fsr4Backend.LatestAmdSdk));
+            Assert.Equal(new[] { ComponentIds.Fsr4Extras }, ComponentRegistry.ComponentIdsFor(Fsr4Backend.Int8Community));
+            Assert.Equal(new[] { ComponentIds.CustomFsrSdk }, ComponentRegistry.ComponentIdsFor(Fsr4Backend.CustomSdk));
+        }
+
+        [Fact]
+        public void ComponentIdsFor_CustomDllPlusAmdSdk_InstallsBoth()
+            => Assert.Equal(
+                new[] { ComponentIds.CustomFsr4Dll, ComponentIds.Fsr4AmdSdk },
+                ComponentRegistry.ComponentIdsFor(Fsr4Backend.CustomDllPlusAmdSdk));
 
         [Fact]
         public void AmdSdk_And_Int8_ShareUpscaler_AreMutuallyExclusive()
@@ -102,66 +112,61 @@ namespace OptiscalerManager.Core.Tests
         [Fact]
         public void InstallPreview_AmdSdk_HasFullDllSet()
         {
-            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.LatestAmdSdk);
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.LatestAmdSdk, selectFsr4: true);
             Assert.Contains("amd_fidelityfx_upscaler_dx12.dll", preview.Files);
             Assert.Contains("amd_fidelityfx_framegeneration_dx12.dll", preview.Files);
             Assert.Contains("amd_fidelityfx_dx12.dll", preview.Files);      // loader
             Assert.Contains("amd_fidelityfx_denoiser_dx12.dll", preview.Files);
-            Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "UpscalerIndex" && k.Value == "0");
         }
 
         [Fact]
-        public void InstallPreview_None_IsCoreOnly_NoFsrKeys()
+        public void InstallPreview_Default_IsCoreOnly_ButStillForcesFsrAvailability()
         {
-            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.None);
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selectFsr4: true);
             Assert.Contains("dxgi.dll", preview.Files);
             Assert.DoesNotContain("amd_fidelityfx_upscaler_dx12.dll", preview.Files);
             Assert.DoesNotContain("amdxcffx64.dll", preview.Files);
-            Assert.DoesNotContain(preview.IniKeys, k => k.Section == "FSR" && k.Key == "UpscalerIndex");
-        }
-
-        [Fact]
-        public void InstallPreview_Int8Community_HasUpscalerAndFsrKeys()
-        {
-            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Int8Community);
-            Assert.Contains("amd_fidelityfx_upscaler_dx12.dll", preview.Files);
+            // Availability flags are forced regardless of backend.
+            Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "Fsr4Update" && k.Value == "true");
             Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "UpscalerIndex" && k.Value == "0");
         }
 
         [Fact]
-        public void InstallPreview_CustomDll_HasAmdxcffx64()
+        public void InstallPreview_CustomDllPlusAmdSdk_HasAmdxcAndSdk()
         {
-            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.CustomDll);
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.CustomDllPlusAmdSdk, selectFsr4: true);
             Assert.Contains("amdxcffx64.dll", preview.Files);
+            Assert.Contains("amd_fidelityfx_upscaler_dx12.dll", preview.Files);
         }
 
         [Fact]
-        public void InstallPreview_ProfileKeysMerged_ButFsrEnableKeysWin()
+        public void InstallPreview_Fsr4UpdateAlwaysForced()
         {
-            // A profile that would set UpscalerIndex to something else plus an unrelated key.
-            var profileKeys = new[]
+            foreach (var b in new[] { Fsr4Backend.Default, Fsr4Backend.Int8Community, Fsr4Backend.LatestAmdSdk })
             {
-                new IniKeyChange("FSR", "UpscalerIndex", "7"),
-                new IniKeyChange("Spoofing", "Dxgi", "true"),
-            };
-            var preview = ComponentRegistry.BuildInstallPreview(
-                Fsr4Backend.Int8Community, injectionDll: null, profileKeys: profileKeys);
+                var p = ComponentRegistry.BuildInstallPreview(b, selectFsr4: false);
+                Assert.Contains(p.IniKeys, k => k.Section == "FSR" && k.Key == "Fsr4Update" && k.Value == "true");
+            }
+        }
 
-            // The unrelated profile key survives.
-            Assert.Contains(preview.IniKeys, k => k.Section == "Spoofing" && k.Key == "Dxgi" && k.Value == "true");
-            // The FSR enable key wins over the profile's value (applied last, as on disk).
+        [Theory]
+        [InlineData(true, "0")]
+        [InlineData(false, "auto")]
+        public void InstallPreview_SelectFsr4_DrivesUpscalerIndex(bool select, string expected)
+        {
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Int8Community, selectFsr4: select);
             Assert.Single(preview.IniKeys, k => k.Section == "FSR" && k.Key == "UpscalerIndex");
-            Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "UpscalerIndex" && k.Value == "0");
+            Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "UpscalerIndex" && k.Value == expected);
         }
 
         [Fact]
-        public void InstallPreview_None_KeepsProfileUpscalerIndex()
+        public void InstallPreview_MenuKey_AddsShortcutKey_WhenSet()
         {
-            // With no backend, the profile's own [FSR] value is not overridden.
-            var profileKeys = new[] { new IniKeyChange("FSR", "UpscalerIndex", "7") };
-            var preview = ComponentRegistry.BuildInstallPreview(
-                Fsr4Backend.None, injectionDll: null, profileKeys: profileKeys);
-            Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "UpscalerIndex" && k.Value == "7");
+            var without = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Int8Community, selectFsr4: true);
+            Assert.DoesNotContain(without.IniKeys, k => k.Section == "Menu");
+
+            var with = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Int8Community, selectFsr4: true, menuKeyVk: "0x78");
+            Assert.Contains(with.IniKeys, k => k.Section == "Menu" && k.Key == "ShortcutKey" && k.Value == "0x78");
         }
     }
 }

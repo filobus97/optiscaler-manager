@@ -21,6 +21,21 @@
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
                 BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="8">
+            <TextBlock Text="OptiScaler overlay / menu key" FontWeight="SemiBold"
+                       Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
+                       Text="Key that opens OptiScaler's in-game overlay. Default is Insert, but not all keyboards have it. Once set, this is forced on every OptiScaler.ini the Manager writes (including the default one)."/>
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Text="Menu key:" VerticalAlignment="Center" Foreground="{StaticResource BrTextSecondary}"/>
+              <ComboBox Name="MenuKeyCombo" MinWidth="220"
+                        ToolTip.Tip="Applied as [Menu] ShortcutKey on install. 'OptiScaler default' leaves the key untouched (Insert)."/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="8">
             <TextBlock Text="Custom FSR 4 DLL (amdxcffx64.dll)" FontWeight="SemiBold"
                        Foreground="{StaticResource BrTextPrimary}"/>
             <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
