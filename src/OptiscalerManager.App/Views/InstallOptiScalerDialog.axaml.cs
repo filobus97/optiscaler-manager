@@ -17,7 +17,10 @@ public partial class InstallOptiScalerDialog : Window
     private bool _ready;
 
     /// <summary>The FSR 4 backend the user confirmed.</summary>
-    public Fsr4Backend SelectedBackend { get; private set; } = Fsr4Backend.LatestSdkFromSource;
+    public Fsr4Backend SelectedBackend { get; private set; } = Fsr4Backend.LatestAmdSdk;
+
+    /// <summary>The INT8 community build version the user confirmed (null unless INT8 chosen).</summary>
+    public string? SelectedInt8Version { get; private set; }
 
     /// <summary>The OptiScaler.ini profile the user confirmed (built-in default = OptiScaler's own config).</summary>
     public OptiScalerProfile? SelectedProfile { get; private set; }
@@ -42,7 +45,8 @@ public partial class InstallOptiScalerDialog : Window
 
     private void SetupBackendOptions()
     {
-        var fromSource = this.FindControl<RadioButton>("RbFromSource")!;
+        var amdSdk = this.FindControl<RadioButton>("RbAmdSdk")!;
+        var int8 = this.FindControl<RadioButton>("RbInt8")!;
         var customSdk = this.FindControl<RadioButton>("RbCustomSdk")!;
         var customDll = this.FindControl<RadioButton>("RbCustomDll")!;
         var none = this.FindControl<RadioButton>("RbNone")!;
@@ -52,15 +56,37 @@ public partial class InstallOptiScalerDialog : Window
         if (!customSdk.IsEnabled) customSdk.Content = "Custom FSR SDK — none imported (Settings)";
         if (!customDll.IsEnabled) customDll.Content = "Custom amdxcffx64.dll — none imported (Settings)";
 
-        // Default: prefer an imported custom backend, else the from-source SDK.
+        // Default: prefer an imported custom backend, else the AMD SDK.
         if (_manager.HasCustomFsrSdk) customSdk.IsChecked = true;
         else if (_manager.HasCustomFsr4Dll) customDll.IsChecked = true;
-        else fromSource.IsChecked = true;
+        else amdSdk.IsChecked = true;
 
-        fromSource.IsCheckedChanged += OnOptionChanged;
+        amdSdk.IsCheckedChanged += OnOptionChanged;
+        int8.IsCheckedChanged += OnInt8CheckedChanged;
+        int8.IsCheckedChanged += OnOptionChanged;
         customSdk.IsCheckedChanged += OnOptionChanged;
         customDll.IsCheckedChanged += OnOptionChanged;
         none.IsCheckedChanged += OnOptionChanged;
+    }
+
+    // Reveal and lazily populate the INT8 version list when INT8 is selected.
+    private bool _int8Loaded;
+    private async void OnInt8CheckedChanged(object? sender, RoutedEventArgs e)
+    {
+        var panel = this.FindControl<StackPanel>("Int8VersionPanel")!;
+        var int8 = this.FindControl<RadioButton>("RbInt8")!;
+        panel.IsVisible = int8.IsChecked == true;
+        if (int8.IsChecked != true || _int8Loaded) return;
+
+        _int8Loaded = true;
+        var combo = this.FindControl<ComboBox>("Int8VersionCombo")!;
+        combo.ItemsSource = new[] { "Loading…" };
+        combo.SelectedIndex = 0;
+        var versions = await _manager.GetInt8VersionsAsync();
+        combo.ItemsSource = versions.Count > 0 ? versions : new[] { "(none available)" };
+        combo.SelectedIndex = 0;
+        combo.SelectionChanged += OnOptionChanged;
+        UpdatePreview();
     }
 
     private void SetupProfiles()
@@ -79,10 +105,19 @@ public partial class InstallOptiScalerDialog : Window
 
     private Fsr4Backend CurrentBackend()
     {
+        if (this.FindControl<RadioButton>("RbInt8")!.IsChecked == true) return Fsr4Backend.Int8Community;
         if (this.FindControl<RadioButton>("RbCustomSdk")!.IsChecked == true) return Fsr4Backend.CustomSdk;
         if (this.FindControl<RadioButton>("RbCustomDll")!.IsChecked == true) return Fsr4Backend.CustomDll;
         if (this.FindControl<RadioButton>("RbNone")!.IsChecked == true) return Fsr4Backend.None;
-        return Fsr4Backend.LatestSdkFromSource;
+        return Fsr4Backend.LatestAmdSdk;
+    }
+
+    private string? CurrentInt8Version()
+    {
+        var combo = this.FindControl<ComboBox>("Int8VersionCombo")!;
+        var v = combo.SelectedItem as string;
+        if (string.IsNullOrEmpty(v) || v == "Loading…" || v == "(none available)") return null;
+        return v;
     }
 
     private OptiScalerProfile? CurrentProfile()
@@ -131,6 +166,7 @@ public partial class InstallOptiScalerDialog : Window
     private void OnConfirm(object? sender, RoutedEventArgs e)
     {
         SelectedBackend = CurrentBackend();
+        SelectedInt8Version = SelectedBackend == Fsr4Backend.Int8Community ? CurrentInt8Version() : null;
         SelectedProfile = CurrentProfile();
         Close(true);
     }

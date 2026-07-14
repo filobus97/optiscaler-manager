@@ -1187,6 +1187,88 @@ namespace OptiscalerManager.Core.Services
             return dllPath;
         }
 
+        // ── AMD FidelityFX SDK (official, open-source) ────────────────────────────
+
+        /// <summary>Owner of AMD's open-source FidelityFX SDK on GitHub.</summary>
+        public const string FidelityFxSdkRepoOwner = "GPUOpen-LibrariesAndSDKs";
+        /// <summary>Name of AMD's open-source FidelityFX SDK repository.</summary>
+        public const string FidelityFxSdkRepoName = "FidelityFX-SDK";
+
+        /// <summary>Cache root for downloaded FidelityFX SDK archives.</summary>
+        public string GetFidelityFxSdkCachePath() => Path.Combine(_cacheDir, "FidelityFxSdk");
+
+        /// <summary>
+        /// Downloads AMD's official FidelityFX SDK (latest release) prebuilt/signed
+        /// package archive into the cache and returns (version, archivePath). The caller
+        /// extracts the DLL set from the archive via <see cref="ScanFsrSdkSourceAsync"/>.
+        /// This is AMD's open-source (MIT) SDK — not the proprietary amdxcffx64.dll,
+        /// which remains strictly bring-your-own.
+        /// </summary>
+        public async Task<(string version, string archivePath)> DownloadFidelityFxSdkArchiveAsync(IProgress<double>? progress = null)
+        {
+            var apiUrl = $"https://api.github.com/repos/{FidelityFxSdkRepoOwner}/{FidelityFxSdkRepoName}/releases/latest";
+            Log.Write($"[FidelityFxSdk] Querying latest release: {apiUrl}");
+            var response = await GetWithRetryAsync(() => _httpClient, apiUrl, maxRetries: 2, timeoutSeconds: 20);
+            if (!response.IsSuccessStatusCode)
+                throw new Exception($"Could not query the AMD FidelityFX SDK releases (HTTP {(int)response.StatusCode}). GitHub may be rate-limiting; try again shortly.");
+
+            var json = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            var version = root.TryGetProperty("tag_name", out var tn) ? (tn.GetString() ?? "latest") : "latest";
+            var versionNum = version.TrimStart('v', 'V');
+
+            // Choose the prebuilt/signed DLL package: score name hints, tie-break by size.
+            string? chosenUrl = null;
+            long chosenSize = -1;
+            int chosenScore = int.MinValue;
+            if (root.TryGetProperty("assets", out var assets))
+            {
+                foreach (var asset in assets.EnumerateArray())
+                {
+                    var name = asset.TryGetProperty("name", out var n) ? (n.GetString() ?? "") : "";
+                    if (!(name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ||
+                          name.EndsWith(".7z", StringComparison.OrdinalIgnoreCase)))
+                        continue;
+                    var u = asset.TryGetProperty("browser_download_url", out var up) ? up.GetString() : null;
+                    if (string.IsNullOrEmpty(u)) continue;
+                    var size = asset.TryGetProperty("size", out var sz) ? sz.GetInt64() : 0L;
+
+                    int score = 0;
+                    if (name.Contains("signed", StringComparison.OrdinalIgnoreCase)) score += 3;
+                    if (name.Contains("prebuilt", StringComparison.OrdinalIgnoreCase)) score += 2;
+                    if (name.Contains("dll", StringComparison.OrdinalIgnoreCase) ||
+                        name.Contains("bin", StringComparison.OrdinalIgnoreCase)) score += 1;
+                    // Avoid obvious source-only archives.
+                    if (name.Contains("source", StringComparison.OrdinalIgnoreCase) ||
+                        name.Contains("media", StringComparison.OrdinalIgnoreCase)) score -= 2;
+
+                    if (score > chosenScore || (score == chosenScore && size > chosenSize))
+                    {
+                        chosenScore = score; chosenSize = size; chosenUrl = u;
+                    }
+                }
+            }
+
+            if (string.IsNullOrEmpty(chosenUrl))
+                throw new Exception("No prebuilt DLL package (.zip/.7z) was found in the latest FidelityFX SDK release.");
+
+            var ext = chosenUrl.EndsWith(".7z", StringComparison.OrdinalIgnoreCase) ? ".7z" : ".zip";
+            var destDir = Path.Combine(GetFidelityFxSdkCachePath(), versionNum);
+            Directory.CreateDirectory(destDir);
+            var archivePath = Path.Combine(destDir, $"FidelityFX-SDK-{versionNum}{ext}");
+
+            if (File.Exists(archivePath) && new FileInfo(archivePath).Length > 0)
+            {
+                Log.Write($"[FidelityFxSdk] Archive for {version} already cached at {archivePath}");
+                return (versionNum, archivePath);
+            }
+
+            Log.Write($"[FidelityFxSdk] Downloading {chosenUrl}");
+            await StreamToFileAsync(() => _httpClient, chosenUrl, archivePath, progress, 40 * 1024 * 1024);
+            return (versionNum, archivePath);
+        }
+
         // ── OptiPatcher cache ─────────────────────────────────────────────────────
 
         private void LoadOptiPatcherCache()

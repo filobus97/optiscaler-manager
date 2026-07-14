@@ -23,6 +23,7 @@ public sealed class ManagerService
     private readonly GameInstallationService _install = new();
     private readonly GameScannerService _scanner = new();
     private readonly ProfileManagementService _profiles = new();
+    private readonly BackupStoreService _backupStore = new();
     private readonly IGpuDetectionService? _gpu = PlatformServiceFactory.CreateGpuDetectionService();
 
     public ManagerService(IManualComponentProvider manualProvider)
@@ -48,15 +49,33 @@ public sealed class ManagerService
     public string? LatestCustomFsrSdk => _components.GetDownloadedCustomFsrSdkVersions().FirstOrDefault();
     public string? LatestCustomFsr4Dll => _components.GetDownloadedCustomFsr4Versions().FirstOrDefault();
 
-    /// <summary>Latest FSR 4 Extras version known from source, if a check has run.</summary>
+    /// <summary>Latest FSR 4 INT8 community version known from source, if a check has run.</summary>
     public string? LatestExtrasVersion => _components.LatestExtrasVersion;
+
+    /// <summary>Cached INT8 community build versions (newest first); may be empty until fetched.</summary>
+    public IReadOnlyList<string> Int8CommunityVersions => _components.ExtrasAvailableVersions;
+
+    /// <summary>
+    /// Ensures the INT8 community version list is populated (best-effort network fetch),
+    /// then returns it, falling back to any already-downloaded versions when offline.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> GetInt8VersionsAsync()
+    {
+        if (_components.ExtrasAvailableVersions.Count == 0)
+        {
+            try { await _components.CheckForUpdatesAsync(); } catch { /* offline / rate-limited */ }
+        }
+        var list = _components.ExtrasAvailableVersions;
+        if (list.Count > 0) return list;
+        return _components.ExtrasDownloadedVersions; // fallback to what's on disk
+    }
 
     /// <summary>Whether a given backend can currently be installed (imports present / etc.).</summary>
     public bool IsBackendAvailable(Fsr4Backend backend) => backend switch
     {
         Fsr4Backend.CustomSdk => HasCustomFsrSdk,
         Fsr4Backend.CustomDll => HasCustomFsr4Dll,
-        _ => true, // None and LatestSdkFromSource need no prior import
+        _ => true, // None, LatestAmdSdk and Int8Community need no prior import
     };
 
     // ── OptiScaler.ini profile library ──────────────────────────────────────
@@ -95,7 +114,8 @@ public sealed class ManagerService
         => ComponentRegistry.BuildInstallPreview(backend, ComponentRegistry.DefaultInjectionDll, ProfileToIniKeys(iniProfile));
 
     // ── Install OptiScaler ──────────────────────────────────────────────────
-    public async Task InstallAsync(Game game, Fsr4Backend backend, OptiScalerProfile? iniProfile, IProgress<string>? status = null)
+    public async Task InstallAsync(Game game, Fsr4Backend backend, string? int8Version,
+        OptiScalerProfile? iniProfile, IProgress<string>? status = null)
     {
         if (!IsBackendAvailable(backend))
             throw new InvalidOperationException($"The selected FSR 4 backend ({backend}) is not available. Import it in Settings first.");
@@ -141,10 +161,14 @@ public sealed class ManagerService
                 _install.InstallCustomFsr4Dll(game, _components.GetCustomFsr4DllPath(v), v);
                 break;
             }
-            case Fsr4Backend.LatestSdkFromSource:
+            case Fsr4Backend.LatestAmdSdk:
             {
-                status?.Report("Downloading the latest FSR 4 SDK from source…");
-                await InstallExtrasFromSourceAsync(game, gameDir, status);
+                await InstallAmdSdkAsync(game, status);
+                break;
+            }
+            case Fsr4Backend.Int8Community:
+            {
+                await InstallInt8CommunityAsync(game, gameDir, int8Version, status);
                 break;
             }
             case Fsr4Backend.None:
@@ -156,27 +180,72 @@ public sealed class ManagerService
     }
 
     /// <summary>
-    /// Downloads OptiScaler's Extras FSR 4.x INT8 package and installs its upscaler
-    /// DLL next to the game exe, then engages the FSR path in OptiScaler.ini. Mirrors
-    /// the source project's Extras injection; Revert removes it via the known-artifact
-    /// list in <see cref="GameInstallationService"/>.
+    /// Downloads AMD's official open-source FidelityFX SDK, extracts its full prebuilt
+    /// DLL set (loader + upscaler + frame-gen + denoiser + companions) via the existing
+    /// SDK scanner, imports it as an SDK package, and installs it into the game.
     /// </summary>
-    private async Task InstallExtrasFromSourceAsync(Game game, string gameDir, IProgress<string>? status)
+    private async Task InstallAmdSdkAsync(Game game, IProgress<string>? status)
     {
-        var extrasVersion = _components.LatestExtrasVersion
-            ?? throw new InvalidOperationException("Could not determine the latest FSR 4 SDK version from source.");
+        status?.Report("Downloading AMD's FidelityFX SDK…");
+        var (version, archivePath) = await _components.DownloadFidelityFxSdkArchiveAsync();
 
-        var extrasDllPath = await _components.DownloadExtrasDllAsync(extrasVersion);
+        status?.Report("Extracting the FSR SDK DLLs…");
+        var scan = await _components.ScanFsrSdkSourceAsync(archivePath);
+        try
+        {
+            if (!scan.HasUpscaler)
+                throw new InvalidOperationException(
+                    "The downloaded FidelityFX SDK did not contain amd_fidelityfx_upscaler_dx12.dll.");
+
+            var info = await _components.ImportCustomFsrSdkPackageAsync(scan);
+            status?.Report($"Installing FSR SDK {version} ({info.Files.Count} DLL(s))…");
+            _install.InstallCustomFsrSdk(game, _components.GetCustomFsrSdkCachePath(info.VersionLabel), info.VersionLabel);
+        }
+        finally
+        {
+            scan.Cleanup();
+        }
+    }
+
+    /// <summary>
+    /// Downloads a community FSR 4 INT8 build from the OptiScaler-Extras repo (at the
+    /// chosen version, or latest) and installs its upscaler DLL next to the game exe,
+    /// then engages the FSR path in OptiScaler.ini. Revert removes it via the
+    /// known-artifact list in <see cref="GameInstallationService"/>.
+    /// </summary>
+    private async Task InstallInt8CommunityAsync(Game game, string gameDir, string? int8Version, IProgress<string>? status)
+    {
+        var version = int8Version
+            ?? _components.LatestExtrasVersion
+            ?? (await GetInt8VersionsAsync()).FirstOrDefault()
+            ?? throw new InvalidOperationException("Could not determine an INT8 community build version from source.");
+
+        status?.Report($"Downloading FSR 4 INT8 community build {version}…");
+        var extrasDllPath = await _components.DownloadExtrasDllAsync(version);
         if (!File.Exists(extrasDllPath))
-            throw new FileNotFoundException("The downloaded FSR 4 SDK package is incomplete.", extrasDllPath);
+            throw new FileNotFoundException("The downloaded INT8 build is incomplete.", extrasDllPath);
 
-        status?.Report("Installing the FSR 4 SDK…");
+        status?.Report($"Installing FSR 4 INT8 {version}…");
         var dest = Path.Combine(gameDir, "amd_fidelityfx_upscaler_dx12.dll");
         File.Copy(extrasDllPath, dest, overwrite: true);
-        game.Fsr4ExtraVersion = extrasVersion;
+        game.Fsr4ExtraVersion = version;
 
         foreach (var k in ComponentRegistry.Fsr4EnableKeys)
             GameInstallationService.ModifyOptiScalerIniKey(gameDir, k.Section, k.Key, k.Value);
+    }
+
+    // ── Revert support ──────────────────────────────────────────────────────
+    /// <summary>True when OptiScaler has a tracked install (backup/manifest) for this game.</summary>
+    public bool HasInstall(Game game)
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(game.ExecutablePath) && File.Exists(game.ExecutablePath)
+                && _backupStore.HasValidBackup(Path.GetDirectoryName(game.ExecutablePath)!))
+                return true;
+            return !string.IsNullOrEmpty(game.InstallPath) && _backupStore.HasValidBackup(game.InstallPath);
+        }
+        catch { return false; }
     }
 
     // ── Uninstall / revert ──────────────────────────────────────────────────

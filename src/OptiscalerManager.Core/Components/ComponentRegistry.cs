@@ -140,7 +140,8 @@ public static class ComponentRegistry
     /// </summary>
     public static string? ComponentIdFor(Fsr4Backend backend) => backend switch
     {
-        Fsr4Backend.LatestSdkFromSource => ComponentIds.Fsr4Extras,
+        Fsr4Backend.LatestAmdSdk => ComponentIds.Fsr4AmdSdk,
+        Fsr4Backend.Int8Community => ComponentIds.Fsr4Extras,
         Fsr4Backend.CustomSdk => ComponentIds.CustomFsrSdk,
         Fsr4Backend.CustomDll => ComponentIds.CustomFsr4Dll,
         _ => null,
@@ -204,9 +205,31 @@ public static class ComponentRegistry
         },
         new ComponentDefinition
         {
+            Id = ComponentIds.Fsr4AmdSdk,
+            DisplayName = "Latest FSR SDK (AMD)",
+            Description = "AMD's official open-source FidelityFX SDK (GPUOpen): the full prebuilt DLL set — loader, upscaler, frame generation and denoiser — downloaded and installed. This is the FSR upscaler SDK, not the FSR 4 INT8 build.",
+            // The split-DLL FSR architecture; only the DLLs the SDK actually ships are
+            // installed (collected by ComponentManagementService.ScanFsrSdkSourceAsync).
+            TargetFiles = new[]
+            {
+                "amd_fidelityfx_dx12.dll",
+                "amd_fidelityfx_loader_dx12.dll",
+                "amd_fidelityfx_upscaler_dx12.dll",
+                "amd_fidelityfx_framegeneration_dx12.dll",
+                "amd_fidelityfx_denoiser_dx12.dll",
+            },
+            IniKeys = new[]
+            {
+                new IniKeyChange("FSR", "UpscalerIndex", "0"),
+                new IniKeyChange("FSR", "Fsr4Update", "true"),
+            },
+            Requires = new[] { ComponentIds.OptiScaler },
+        },
+        new ComponentDefinition
+        {
             Id = ComponentIds.Fsr4Extras,
-            DisplayName = "FSR 4 (INT8, OptiScaler Extras)",
-            Description = "OptiScaler's own FSR 4.x INT8 upscaler backend (amd_fidelityfx_upscaler_dx12.dll). No proprietary AMD binary is bundled.",
+            DisplayName = "FSR 4 INT8 (community build)",
+            Description = "A community FSR 4.x INT8 upscaler build (amd_fidelityfx_upscaler_dx12.dll) from the OptiScaler-Extras repo, at a version you pick. No proprietary AMD binary is bundled.",
             TargetFiles = new[] { "amd_fidelityfx_upscaler_dx12.dll" },
             IniKeys = new[]
             {

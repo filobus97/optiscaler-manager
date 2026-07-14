@@ -80,8 +80,8 @@
                             ToolTip.Tip="Download and install the latest OptiScaler, choosing the FSR 4 backend and OptiScaler.ini in the next dialog. You'll see exactly what changes before anything is written."/>
                     <Button Grid.Column="2" Classes="BtnDanger" Content="Revert"
                             Click="OnRevertClick"
-                            IsEnabled="{Binding IsInstalled}"
-                            ToolTip.Tip="Uninstall OptiScaler from this game: restore backed-up files and revert the OptiScaler.ini keys."/>
+                            IsEnabled="{Binding IsIdle}"
+                            ToolTip.Tip="Uninstall OptiScaler from this game: restore backed-up files and revert the OptiScaler.ini keys. Reports if there is nothing to revert."/>
                   </Grid>
                 </Border>
               </DataTemplate>

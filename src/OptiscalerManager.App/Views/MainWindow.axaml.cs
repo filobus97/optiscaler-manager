@@ -117,7 +117,7 @@ public partial class MainWindow : Window
 
         try
         {
-            await _manager.InstallAsync(row.Game, dialog.SelectedBackend, dialog.SelectedProfile, progress);
+            await _manager.InstallAsync(row.Game, dialog.SelectedBackend, dialog.SelectedInt8Version, dialog.SelectedProfile, progress);
             row.Game.IsOptiscalerInstalled = true;
             row.RefreshFromGame();
             _vm.StatusText = $"OptiScaler installed for {row.Game.Name}.";
@@ -138,6 +138,13 @@ public partial class MainWindow : Window
     {
         if (sender is not Control { DataContext: GameRowViewModel row }) return;
 
+        // Give clear feedback instead of silently doing nothing when there is no install.
+        if (!_manager.HasInstall(row.Game))
+        {
+            _vm.StatusText = $"Nothing to revert for {row.Game.Name} (OptiScaler is not installed by this app).";
+            return;
+        }
+
         _vm.IsBusy = true;
         row.IsBusy = true;
         try
@@ -150,6 +157,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            row.StatusText = $"Revert failed: {ex.Message}";
             _vm.StatusText = $"Revert failed: {ex.Message}";
         }
         finally

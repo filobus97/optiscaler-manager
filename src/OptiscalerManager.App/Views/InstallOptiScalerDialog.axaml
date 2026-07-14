@@ -23,18 +23,28 @@
         <Border Padding="12" CornerRadius="8" Background="{StaticResource BrBgCard}"
                 BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="6">
-            <RadioButton Name="RbFromSource" GroupName="Fsr4" Content="Latest FSR SDK from source"
+            <RadioButton Name="RbAmdSdk" GroupName="Fsr4" Content="Latest FSR SDK from AMD"
                          Foreground="{StaticResource BrTextPrimary}"
-                         ToolTip.Tip="Download OptiScaler's Extras FSR 4 INT8 package (amd_fidelityfx_upscaler_dx12.dll) from its GitHub releases and install it. No proprietary AMD binary is bundled by this app."/>
+                         ToolTip.Tip="Download AMD's official open-source FidelityFX SDK (GPUOpen) and install its full DLL set (loader, upscaler, frame generation, denoiser). This is the FSR upscaler SDK, not the FSR 4 INT8 build."/>
+
+            <RadioButton Name="RbInt8" GroupName="Fsr4" Content="FSR 4 INT8 (community build)"
+                         Foreground="{StaticResource BrTextPrimary}"
+                         ToolTip.Tip="Install a community FSR 4 INT8 build (amd_fidelityfx_upscaler_dx12.dll) from the OptiScaler-Extras repo, at the version you pick below."/>
+            <StackPanel Name="Int8VersionPanel" Orientation="Horizontal" Spacing="8" Margin="26,0,0,0" IsVisible="False">
+              <TextBlock Text="Version:" VerticalAlignment="Center" Foreground="{StaticResource BrTextSecondary}"/>
+              <ComboBox Name="Int8VersionCombo" MinWidth="180"
+                        ToolTip.Tip="Which INT8 community build to install (newest first). Populated from the OptiScaler-Extras repo."/>
+            </StackPanel>
+
             <RadioButton Name="RbCustomSdk" GroupName="Fsr4" Content="Custom FSR SDK (imported)"
                          Foreground="{StaticResource BrTextPrimary}"
                          ToolTip.Tip="Use the FSR SDK you imported in Settings (bring-your-own). Replaces the from-source upscaler."/>
             <RadioButton Name="RbCustomDll" GroupName="Fsr4" Content="Custom amdxcffx64.dll (imported)"
                          Foreground="{StaticResource BrTextPrimary}"
                          ToolTip.Tip="Use the amdxcffx64.dll you imported in Settings (bring-your-own FSR 4.x INT8 runtime)."/>
-            <RadioButton Name="RbNone" GroupName="Fsr4" Content="None — install OptiScaler only"
+            <RadioButton Name="RbNone" GroupName="Fsr4" Content="None – install OptiScaler default"
                          Foreground="{StaticResource BrTextPrimary}"
-                         ToolTip.Tip="Install OptiScaler without forcing an FSR 4 backend or its ini keys. Configure it yourself later."/>
+                         ToolTip.Tip="Install OptiScaler without forcing an FSR backend or its ini keys. OptiScaler uses its own default configuration."/>
           </StackPanel>
         </Border>
       </StackPanel>

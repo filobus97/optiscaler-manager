@@ -87,11 +87,28 @@ namespace OptiscalerManager.Core.Tests
 
         [Theory]
         [InlineData(Fsr4Backend.None, null)]
-        [InlineData(Fsr4Backend.LatestSdkFromSource, ComponentIds.Fsr4Extras)]
+        [InlineData(Fsr4Backend.LatestAmdSdk, ComponentIds.Fsr4AmdSdk)]
+        [InlineData(Fsr4Backend.Int8Community, ComponentIds.Fsr4Extras)]
         [InlineData(Fsr4Backend.CustomSdk, ComponentIds.CustomFsrSdk)]
         [InlineData(Fsr4Backend.CustomDll, ComponentIds.CustomFsr4Dll)]
         public void ComponentIdFor_MapsBackend(Fsr4Backend backend, string? expectedId)
             => Assert.Equal(expectedId, ComponentRegistry.ComponentIdFor(backend));
+
+        [Fact]
+        public void AmdSdk_And_Int8_ShareUpscaler_AreMutuallyExclusive()
+            => Assert.True(ComponentRegistry.AreMutuallyExclusive(
+                ComponentIds.Fsr4AmdSdk, ComponentIds.Fsr4Extras));
+
+        [Fact]
+        public void InstallPreview_AmdSdk_HasFullDllSet()
+        {
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.LatestAmdSdk);
+            Assert.Contains("amd_fidelityfx_upscaler_dx12.dll", preview.Files);
+            Assert.Contains("amd_fidelityfx_framegeneration_dx12.dll", preview.Files);
+            Assert.Contains("amd_fidelityfx_dx12.dll", preview.Files);      // loader
+            Assert.Contains("amd_fidelityfx_denoiser_dx12.dll", preview.Files);
+            Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "UpscalerIndex" && k.Value == "0");
+        }
 
         [Fact]
         public void InstallPreview_None_IsCoreOnly_NoFsrKeys()
@@ -104,9 +121,9 @@ namespace OptiscalerManager.Core.Tests
         }
 
         [Fact]
-        public void InstallPreview_LatestSdkFromSource_HasUpscalerAndFsrKeys()
+        public void InstallPreview_Int8Community_HasUpscalerAndFsrKeys()
         {
-            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.LatestSdkFromSource);
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Int8Community);
             Assert.Contains("amd_fidelityfx_upscaler_dx12.dll", preview.Files);
             Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "UpscalerIndex" && k.Value == "0");
         }
@@ -128,7 +145,7 @@ namespace OptiscalerManager.Core.Tests
                 new IniKeyChange("Spoofing", "Dxgi", "true"),
             };
             var preview = ComponentRegistry.BuildInstallPreview(
-                Fsr4Backend.LatestSdkFromSource, injectionDll: null, profileKeys: profileKeys);
+                Fsr4Backend.Int8Community, injectionDll: null, profileKeys: profileKeys);
 
             // The unrelated profile key survives.
             Assert.Contains(preview.IniKeys, k => k.Section == "Spoofing" && k.Key == "Dxgi" && k.Value == "true");

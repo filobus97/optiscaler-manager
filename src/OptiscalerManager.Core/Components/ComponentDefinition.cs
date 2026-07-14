@@ -27,7 +27,9 @@ public static class ComponentIds
     public const string Fakenvapi = "fakenvapi";
     public const string NukemFg = "nukem-fg";
     public const string OptiPatcher = "optipatcher";
-    /// <summary>FSR 4.x INT8 upscaler shipped by OptiScaler's "Extras" package.</summary>
+    /// <summary>Full AMD FidelityFX SDK DLL set (loader + upscaler + frame-gen + denoiser).</summary>
+    public const string Fsr4AmdSdk = "fsr4-amd-sdk";
+    /// <summary>FSR 4.x INT8 community upscaler build from the OptiScaler "Extras" repo.</summary>
     public const string Fsr4Extras = "fsr4-extras";
     /// <summary>User-supplied amdxcffx64.dll (FSR 4.x INT8 runtime).</summary>
     public const string CustomFsr4Dll = "custom-fsr4-dll";

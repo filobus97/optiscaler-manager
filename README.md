@@ -23,8 +23,14 @@ action per game, advanced options tucked away.
   single **Install OptiScaler** button. It downloads and installs the *real latest
   OptiScaler release from source* (`optiscaler/OptiScaler` on GitHub), and in one
   dialog lets you choose:
-  - the **FSR 4 backend** — *latest FSR SDK from source* / *your custom FSR SDK* /
-    *your custom `amdxcffx64.dll`* / *none*;
+  - the **FSR 4 backend**:
+    - *Latest FSR SDK from AMD* — AMD's official open-source FidelityFX SDK (GPUOpen),
+      full DLL set (loader + upscaler + frame-gen + denoiser);
+    - *FSR 4 INT8 (community build)* — a community INT8 build from the OptiScaler-Extras
+      repo, at a **version you pick** (newest first);
+    - *your custom FSR SDK* (imported);
+    - *your custom `amdxcffx64.dll`* (imported);
+    - *None – install OptiScaler default*;
   - the **`OptiScaler.ini`** — OptiScaler's default, or one of your saved profiles.
 - **Transparent — no black boxes.** Before anything is written, a live
   **"What will happen"** preview lists the *exact files* that will be placed next
@@ -34,13 +40,14 @@ action per game, advanced options tucked away.
 - **Reversible.** *Revert* restores backed-up files from an external per-game
   backup store and reverts the ini keys.
 
-### It never ships proprietary AMD binaries
+### On AMD binaries
 
-OptiScaler Manager **never downloads, bundles, or links to** proprietary AMD
-binaries (`amdxcffx64.dll`, `amd_fidelityfx_*.dll`). Custom DLLs are strictly
-**bring-your-own**: you supply a local file/folder/archive you already possess,
-and the app copies it into a private cache for installs. See
-[Importing your own DLLs](#importing-your-own-dlls).
+OptiScaler Manager can download AMD's **open-source (MIT) FidelityFX SDK** from AMD's
+official GPUOpen repository, and community FSR 4 INT8 builds from the OptiScaler-Extras
+repository — both are openly distributed. It **never downloads, bundles, or links to
+the proprietary FSR 4 driver runtime `amdxcffx64.dll`**: that one is strictly
+**bring-your-own**, supplied from a local file/folder/archive you already possess and
+copied into a private cache. See [Importing your own DLLs](#importing-your-own-dlls-and-ini-profiles).
 
 ---
 
