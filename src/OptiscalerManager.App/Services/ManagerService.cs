@@ -158,6 +158,8 @@ public sealed class ManagerService
             case Fsr4Backend.CustomSdk:
             {
                 var v = _components.GetDownloadedCustomFsrSdkVersions().First();
+                var warning = UnsignedSdkWarning(_components.GetCustomFsrSdkDllInfo(v));
+                if (warning is not null) status?.Report(warning);
                 status?.Report($"Installing your custom FSR SDK ({v})…");
                 _install.InstallCustomFsrSdk(game, _components.GetCustomFsrSdkCachePath(v), v);
                 break;
@@ -211,6 +213,25 @@ public sealed class ManagerService
     }
 
     /// <summary>
+    /// OptiScaler bundles AMD's *signed* FFX DLLs and the FFX loader verifies
+    /// signatures (OptiScaler's WinVerifyTrust hook only whitelists
+    /// amd_fidelityfx_dx12/vk) — an unsigned swapped-in upscaler is rejected and the
+    /// FSR 4 entry silently disappears. Warn whenever an SDK package's upscaler has
+    /// no Authenticode signature.
+    /// </summary>
+    private static string? UnsignedSdkWarning(CustomFsr4DllInfo? info)
+    {
+        if (info is null) return null;
+        var upscaler = info.Files.FirstOrDefault(f =>
+            f.Name.Equals(ComponentManagementService.CustomFsrSdkDllName, StringComparison.OrdinalIgnoreCase));
+        var signed = upscaler?.HasAuthenticodeSignature ?? info.HasAuthenticodeSignature;
+        if (signed) return null;
+        return "Warning: this package's upscaler DLL is NOT signed. OptiScaler's FFX loader verifies signatures, " +
+               "so FSR 4 may not appear with it. Use signed DLLs (e.g. from a driver package) — " +
+               "OptiScaler's own Default files are already signed and include FSR 4.1.";
+    }
+
+    /// <summary>
     /// Downloads AMD's official open-source FidelityFX SDK, extracts its full prebuilt
     /// DLL set (loader + upscaler + frame-gen + denoiser + companions) via the existing
     /// SDK scanner, imports it as an SDK package, and installs it into the game.
@@ -229,6 +250,8 @@ public sealed class ManagerService
                     "The downloaded FidelityFX SDK did not contain amd_fidelityfx_upscaler_dx12.dll.");
 
             var info = await _components.ImportCustomFsrSdkPackageAsync(scan);
+            var warning = UnsignedSdkWarning(info);
+            if (warning is not null) status?.Report(warning);
             status?.Report($"Installing FSR SDK {version} ({info.Files.Count} DLL(s))…");
             _install.InstallCustomFsrSdk(game, _components.GetCustomFsrSdkCachePath(info.VersionLabel), info.VersionLabel);
         }
@@ -295,6 +318,9 @@ public sealed class ManagerService
 
         var info = await _components.ImportCustomFsrSdkPackageAsync(scan);
         var names = string.Join(", ", info.Files.Select(f => f.Name));
-        return $"{info.VersionLabel} ({names})";
+        var warning = UnsignedSdkWarning(info);
+        return warning is null
+            ? $"{info.VersionLabel} ({names})"
+            : $"{info.VersionLabel} ({names}). {warning}";
     }
 }
