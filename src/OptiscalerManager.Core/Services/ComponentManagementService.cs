@@ -2705,7 +2705,12 @@ namespace OptiscalerManager.Core.Services
 
         /// <summary>
         /// Finds the best candidate for each known SDK DLL inside a directory tree.
-        /// Prefers 64-bit PEs whose path mentions "signed", then the shallowest path.
+        /// Prefers 64-bit PEs whose path mentions "signed", then the LARGEST file,
+        /// then the shallowest path. Size matters: SDK packages can carry several
+        /// different builds of the same DLL (e.g. the FidelityFX SDK ships a reduced
+        /// upscaler with its denoiser sample and the full ML-capable one with its FSR
+        /// sample) — the ML-model-bearing build is dramatically larger, and picking a
+        /// reduced copy silently loses the FSR 4 provider.
         /// </summary>
         private static void CollectSdkDllsFromDirectory(string root, FsrSdkScanResult result)
         {
@@ -2729,6 +2734,7 @@ namespace OptiscalerManager.Core.Services
                         catch { return false; }
                     })
                     .OrderByDescending(f => f.Contains("signed", StringComparison.OrdinalIgnoreCase))
+                    .ThenByDescending(f => { try { return new FileInfo(f).Length; } catch { return 0L; } })
                     .ThenBy(f => f.Count(c => c == Path.DirectorySeparatorChar || c == '_'))
                     .ToList();
 
@@ -2736,7 +2742,17 @@ namespace OptiscalerManager.Core.Services
                 {
                     result.FoundFiles[dllName] = candidates[0];
                     if (candidates.Count > 1)
-                        Log.Write($"[CustomFsrSdk] Multiple copies of {dllName} found ({candidates.Count}); using '{candidates[0]}'.");
+                    {
+                        Log.Write($"[CustomFsrSdk] Multiple copies of {dllName} found ({candidates.Count}):");
+                        foreach (var c in candidates)
+                        {
+                            long size = 0; string ver = "?";
+                            try { size = new FileInfo(c).Length; } catch { }
+                            try { ver = PeFileInspector.Inspect(c).FileVersion ?? "?"; } catch { }
+                            var mark = c == candidates[0] ? " <= chosen" : "";
+                            Log.Write($"[CustomFsrSdk]   {c} (v{ver}, {size / 1024 / 1024.0:F1} MB){mark}");
+                        }
+                    }
                 }
             }
         }

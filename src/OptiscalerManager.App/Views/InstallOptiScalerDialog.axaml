@@ -25,7 +25,7 @@
           <StackPanel Spacing="6">
             <RadioButton Name="RbAmdSdk" GroupName="Fsr4" Content="Latest FSR SDK from AMD (swap in place)"
                          Foreground="{StaticResource BrTextPrimary}"
-                         ToolTip.Tip="Download AMD's official open-source FidelityFX SDK (GPUOpen) and swap OptiScaler's matching FSR DLLs in place with the SDK's equivalents. Nothing new is added. Note: OptiScaler bundles AMD's SIGNED DLLs and the FFX loader verifies signatures — the sample DLLs in AMD's SDK zip are not signed, so FSR 4 may not appear with them. Default is recommended."/>
+                         ToolTip.Tip="Download AMD's official open-source FidelityFX SDK (GPUOpen) and swap OptiScaler's matching FSR DLLs in place with the SDK's equivalents. Nothing new is added. The SDK zip can carry several different builds of the same DLL; the Manager picks the most capable (largest) copy. OptiScaler's Default files already include FSR 4.1 — Default is recommended."/>
 
             <RadioButton Name="RbInt8" GroupName="Fsr4" Content="FSR 4 INT8 (community build)"
                          Foreground="{StaticResource BrTextPrimary}"

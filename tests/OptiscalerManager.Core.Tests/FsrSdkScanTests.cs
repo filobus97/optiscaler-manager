@@ -74,6 +74,28 @@ namespace OptiscalerManager.Core.Tests
         }
 
         [Fact]
+        public async Task Folder_PrefersLargestCopyForEqualDuplicates()
+        {
+            // The FidelityFX SDK ships several different builds of the same DLL at
+            // equal depth (e.g. a reduced upscaler with the denoiser sample and the
+            // full ML-capable one with the FSR sample). The ML build is much larger —
+            // the scanner must pick the largest, not the first enumerated.
+            Place(Path.Combine("Samples", "Denoisers", "amd_fidelityfx_upscaler_dx12.dll"), PeTestData.MachineAmd64);
+            Place(Path.Combine("Samples", "Upscalers", "amd_fidelityfx_upscaler_dx12.dll"), PeTestData.MachineAmd64);
+
+            // Pad the Upscalers-sample copy so it is clearly the bigger build.
+            var big = Path.Combine(_root, "Samples", "Upscalers", "amd_fidelityfx_upscaler_dx12.dll");
+            using (var fs = new FileStream(big, FileMode.Append))
+                fs.Write(new byte[64 * 1024]);
+
+            var svc = new ComponentManagementService();
+            var scan = await svc.ScanFsrSdkSourceAsync(_root);
+
+            Assert.Contains("Upscalers", scan.FoundFiles["amd_fidelityfx_upscaler_dx12.dll"]);
+            scan.Cleanup();
+        }
+
+        [Fact]
         public async Task Folder_WithoutUpscaler_HasNoUpscaler()
         {
             Place(Path.Combine("bin", "amd_fidelityfx_framegeneration_dx12.dll"), PeTestData.MachineAmd64);
