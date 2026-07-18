@@ -17,7 +17,7 @@ public partial class InstallOptiScalerDialog : Window
     private bool _ready;
 
     /// <summary>The backend the user confirmed.</summary>
-    public Fsr4Backend SelectedBackend { get; private set; } = Fsr4Backend.Int8Community;
+    public Fsr4Backend SelectedBackend { get; private set; } = Fsr4Backend.Default;
 
     /// <summary>Whether the Manager should select FSR 4 (UpscalerIndex=0) vs leave it auto.</summary>
     public bool SelectFsr4 { get; private set; } = true;
@@ -63,11 +63,9 @@ public partial class InstallOptiScalerDialog : Window
         if (!customSdk.IsEnabled) customSdk.Content = "Custom FSR SDK — none imported (Settings)";
         if (!customDllSdk.IsEnabled) customDllSdk.Content = "Custom amdxcffx64.dll + AMD SDK — none imported (Settings)";
 
-        // Default: prefer an imported custom backend, else the INT8 community build
-        // (the option that actually provides FSR 4).
-        if (_manager.HasCustomFsrSdk) customSdk.IsChecked = true;
-        else if (_manager.HasCustomFsr4Dll) customDllSdk.IsChecked = true;
-        else int8.IsChecked = true;
+        // Pre-select Default: OptiScaler's own release already bundles a working
+        // FSR 4.1 upscaler, so the zero-decision path delivers FSR 4 out of the box.
+        def.IsChecked = true;
 
         amdSdk.IsCheckedChanged += OnOptionChanged;
         int8.IsCheckedChanged += OnInt8CheckedChanged;

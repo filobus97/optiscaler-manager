@@ -198,9 +198,9 @@ public static class ComponentRegistry
         {
             Id = ComponentIds.Fsr4AmdSdk,
             DisplayName = "Latest FSR SDK (AMD)",
-            Description = "AMD's official open-source FidelityFX SDK (GPUOpen): the full prebuilt DLL set — loader, upscaler, frame generation, denoiser — plus the AMD support libraries (amd_ags/amd_acs) the FSR 4 ML upscaler needs. Includes FSR 3.1 and the FSR 4.x ML upscaler.",
-            // The split-DLL FSR architecture; only the DLLs the SDK actually ships are
-            // installed (collected by ComponentManagementService.ScanFsrSdkSourceAsync).
+            Description = "AMD's official open-source FidelityFX SDK (GPUOpen). Swaps OptiScaler's matching FSR DLLs IN PLACE with the SDK's equivalents — only files OptiScaler already installed are replaced, nothing new is added. Note: OptiScaler's own bundled files (Default) already include a working FSR 4.1 upscaler; the SDK's DLLs may expose FSR 3.1 only unless paired with amdxcffx64.dll.",
+            // In-place swap: candidates are OptiScaler's FSR set; only those actually
+            // present in the game folder get replaced (enforced by InstallCustomFsrSdk).
             TargetFiles = new[]
             {
                 "amd_fidelityfx_dx12.dll",
@@ -208,8 +208,6 @@ public static class ComponentRegistry
                 "amd_fidelityfx_upscaler_dx12.dll",
                 "amd_fidelityfx_framegeneration_dx12.dll",
                 "amd_fidelityfx_denoiser_dx12.dll",
-                "amd_ags_x64.dll",
-                "amd_acs_x64.dll",
             },
             IniKeys = new[]
             {
@@ -249,7 +247,7 @@ public static class ComponentRegistry
         {
             Id = ComponentIds.CustomFsrSdk,
             DisplayName = "Custom FSR SDK",
-            Description = "Your own FSR SDK DLL set (amd_fidelityfx_upscaler_dx12.dll + frame-generation companion), imported from a local archive or folder. Replaces the Extras upscaler.",
+            Description = "Your own FSR SDK DLL set (amd_fidelityfx_upscaler_dx12.dll + companions), imported from a local archive or folder. Swaps OptiScaler's matching FSR DLLs IN PLACE — only files OptiScaler already installed are replaced, nothing new is added.",
             TargetFiles = new[] { "amd_fidelityfx_upscaler_dx12.dll", "amd_fidelityfx_framegeneration_dx12.dll" },
             IniKeys = new[]
             {

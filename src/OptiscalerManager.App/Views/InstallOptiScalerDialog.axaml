@@ -23,9 +23,9 @@
         <Border Padding="12" CornerRadius="8" Background="{StaticResource BrBgCard}"
                 BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="6">
-            <RadioButton Name="RbAmdSdk" GroupName="Fsr4" Content="Latest FSR SDK from AMD (FSR 3.1 + FSR 4 ML)"
+            <RadioButton Name="RbAmdSdk" GroupName="Fsr4" Content="Latest FSR SDK from AMD (swap in place)"
                          Foreground="{StaticResource BrTextPrimary}"
-                         ToolTip.Tip="Download AMD's official open-source FidelityFX SDK (GPUOpen) and install its full DLL set — loader, upscaler, frame generation, denoiser, plus the amd_ags/amd_acs support libraries the FSR 4 ML upscaler needs. Includes FSR 3.1 and the FSR 4.x ML upscaler."/>
+                         ToolTip.Tip="Download AMD's official open-source FidelityFX SDK (GPUOpen) and swap OptiScaler's matching FSR DLLs in place with the SDK's equivalents. Nothing new is added. Note: OptiScaler's Default files already include FSR 4.1 — the SDK's DLLs may expose FSR 3.1 only unless paired with amdxcffx64.dll."/>
 
             <RadioButton Name="RbInt8" GroupName="Fsr4" Content="FSR 4 INT8 (community build)"
                          Foreground="{StaticResource BrTextPrimary}"
@@ -42,9 +42,9 @@
             <RadioButton Name="RbCustomDllSdk" GroupName="Fsr4" Content="Custom amdxcffx64.dll + latest AMD SDK"
                          Foreground="{StaticResource BrTextPrimary}"
                          ToolTip.Tip="Install your imported amdxcffx64.dll (the proprietary FSR 4 driver runtime) together with AMD's latest FSR SDK — amdxcffx64.dll does not work on its own."/>
-            <RadioButton Name="RbDefault" GroupName="Fsr4" Content="Default — install OptiScaler's own files only"
+            <RadioButton Name="RbDefault" GroupName="Fsr4" Content="Default — OptiScaler's own files (includes FSR 4.1, recommended)"
                          Foreground="{StaticResource BrTextPrimary}"
-                         ToolTip.Tip="Install OptiScaler with no extra upscaler DLLs. FSR 4 flags are still set (see step 2), but a 4.x DLL must be present for FSR 4 to actually run."/>
+                         ToolTip.Tip="Install OptiScaler exactly as its release ships it. OptiScaler already bundles a working FSR 4.1 upscaler, so this alone enables FSR 4 — no extra downloads or swaps."/>
           </StackPanel>
         </Border>
       </StackPanel>

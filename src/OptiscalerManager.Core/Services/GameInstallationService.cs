@@ -1768,12 +1768,48 @@ namespace OptiscalerManager.Core.Services
             if (!Directory.Exists(cacheDir))
                 throw new DirectoryNotFoundException($"The imported FSR SDK package was not found in the local cache: {cacheDir}");
 
-            // Install every DLL of the imported package (upscaler + companions).
-            var files = Directory.GetFiles(cacheDir, "*.dll", SearchOption.TopDirectoryOnly)
+            // Only the canonical FSR swap set is eligible — a cached package may carry
+            // extra DLLs (e.g. amd_ags_x64.dll from older imports) that must never be
+            // installed: games ship their own copies of those support libraries.
+            var packageFiles = Directory.GetFiles(cacheDir, "*.dll", SearchOption.TopDirectoryOnly)
                 .Select(f => (name: Path.GetFileName(f), path: f))
+                .Where(f => ComponentManagementService.FsrSdkDllNames.Contains(f.name, StringComparer.OrdinalIgnoreCase))
                 .ToList();
-            if (files.Count == 0 || !files.Any(f => f.name.Equals("amd_fidelityfx_upscaler_dx12.dll", StringComparison.OrdinalIgnoreCase)))
+            if (packageFiles.Count == 0 || !packageFiles.Any(f => f.name.Equals("amd_fidelityfx_upscaler_dx12.dll", StringComparison.OrdinalIgnoreCase)))
                 throw new FileNotFoundException("The imported FSR SDK package is missing amd_fidelityfx_upscaler_dx12.dll.");
+
+            // Replicate OptiScaler's own architecture: OptiScaler's release ships a
+            // coherent, working FSR DLL set next to the game exe. A custom SDK must only
+            // SWAP those files IN PLACE with same-name equivalents — never introduce DLL
+            // names OptiScaler didn't lay down (e.g. a second loader variant), which can
+            // change which loader OptiScaler picks and silently drop FSR 4 support.
+            var gameDirForFilter = overrideGameDir;
+            if (string.IsNullOrEmpty(gameDirForFilter))
+            {
+                var manifest = _backupStore.LoadManifest(game.InstallPath);
+                gameDirForFilter = !string.IsNullOrEmpty(manifest?.InstalledGameDirectory) && Directory.Exists(manifest!.InstalledGameDirectory)
+                    ? manifest.InstalledGameDirectory
+                    : DetermineInstallDirectory(game);
+            }
+            if (string.IsNullOrEmpty(gameDirForFilter) || !Directory.Exists(gameDirForFilter))
+                throw new Exception("Could not determine the game directory for the custom SDK install.");
+
+            var files = new List<(string name, string path)>();
+            foreach (var f in packageFiles)
+            {
+                if (File.Exists(Path.Combine(gameDirForFilter, f.name)))
+                {
+                    files.Add(f);
+                }
+                else
+                {
+                    Log.Write($"[CustomFsrSdk] Skipping {f.name}: not part of the existing OptiScaler install (in-place swap only).");
+                }
+            }
+
+            if (!files.Any(f => f.name.Equals("amd_fidelityfx_upscaler_dx12.dll", StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException(
+                    "No amd_fidelityfx_upscaler_dx12.dll found in the game folder to swap. Install OptiScaler first — the custom SDK only replaces OptiScaler's own FSR files in place.");
 
             InstallUserDllSet(game, files, versionLabel, overrideGameDir, isSdk: true);
         }
