@@ -1807,6 +1807,33 @@ namespace OptiscalerManager.Core.Services
                 }
             }
 
+            // FFX loader equivalence: OptiScaler's release ships the SDK's
+            // amd_fidelityfx_loader_dx12.dll RENAMED to amd_fidelityfx_dx12.dll (see
+            // OptiScaler v0.9.3 packaging) — the two names are the same component.
+            // When the package carries one name and the game folder has the other,
+            // swap the existing file with the package's equivalent so the loader and
+            // upscaler stay a matched pair. Without this, an SDK loader would be
+            // skipped (or worse, a stale differently-named copy would keep shadowing
+            // the fresh one — OptiScaler tries loader_dx12 before dx12).
+            const string dx12Name = "amd_fidelityfx_dx12.dll";
+            const string loaderName = "amd_fidelityfx_loader_dx12.dll";
+            var pkgDx12 = packageFiles.FirstOrDefault(f => f.name.Equals(dx12Name, StringComparison.OrdinalIgnoreCase)).path;
+            var pkgLoader = packageFiles.FirstOrDefault(f => f.name.Equals(loaderName, StringComparison.OrdinalIgnoreCase)).path;
+
+            void MapLoaderEquivalent(string targetName, string? sourcePath, string sourceName)
+            {
+                if (sourcePath is null) return;
+                if (!File.Exists(Path.Combine(gameDirForFilter!, targetName))) return;
+                if (files.Any(f => f.name.Equals(targetName, StringComparison.OrdinalIgnoreCase))) return;
+                Log.Write($"[CustomFsrSdk] Swapping {targetName} with the package's {sourceName} (same component, renamed by OptiScaler's packaging).");
+                files.Add((targetName, sourcePath));
+            }
+
+            // Game has dx12 (OptiScaler's renamed loader), package only has loader_dx12:
+            if (pkgDx12 is null) MapLoaderEquivalent(dx12Name, pkgLoader, loaderName);
+            // Game has a stray loader_dx12, package only has dx12:
+            if (pkgLoader is null) MapLoaderEquivalent(loaderName, pkgDx12, dx12Name);
+
             if (!files.Any(f => f.name.Equals("amd_fidelityfx_upscaler_dx12.dll", StringComparison.OrdinalIgnoreCase)))
                 throw new InvalidOperationException(
                     "No amd_fidelityfx_upscaler_dx12.dll found in the game folder to swap. Install OptiScaler first — the custom SDK only replaces OptiScaler's own FSR files in place.");
