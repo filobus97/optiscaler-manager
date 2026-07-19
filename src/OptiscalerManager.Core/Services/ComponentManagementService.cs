@@ -1194,79 +1194,88 @@ namespace OptiscalerManager.Core.Services
         /// <summary>Name of AMD's open-source FidelityFX SDK repository.</summary>
         public const string FidelityFxSdkRepoName = "FidelityFX-SDK";
 
-        /// <summary>Cache root for downloaded FidelityFX SDK archives.</summary>
+        /// <summary>Cache root for downloaded FidelityFX SDK files.</summary>
         public string GetFidelityFxSdkCachePath() => Path.Combine(_cacheDir, "FidelityFxSdk");
 
         /// <summary>
-        /// Downloads AMD's official FidelityFX SDK (latest release) prebuilt/signed
-        /// package archive into the cache and returns (version, archivePath). The caller
-        /// extracts the DLL set from the archive via <see cref="ScanFsrSdkSourceAsync"/>.
-        /// This is AMD's open-source (MIT) SDK — not the proprietary amdxcffx64.dll,
-        /// which remains strictly bring-your-own.
+        /// Repo path of AMD's signed prebuilt FFX DLLs. This is the exact directory
+        /// OptiScaler's own release packaging copies from (via its FidelityFX-SDK-v2
+        /// submodule) — the ML-capable, signed builds, unlike the sample binaries
+        /// attached to the SDK's release zips.
         /// </summary>
-        public async Task<(string version, string archivePath)> DownloadFidelityFxSdkArchiveAsync(IProgress<double>? progress = null)
+        public const string FidelityFxSignedBinPath = "Kits/FidelityFX/signedbin";
+
+        /// <summary>
+        /// Known-good fallback ref: the FidelityFX-SDK commit OptiScaler master pins
+        /// for its next release (signedbin of the v2.3.0 / FSR 4.1.1 era).
+        /// </summary>
+        public const string FidelityFxSdkFallbackRef = "60f4ea81909200d8542eca14dccb2628b763a9a3";
+
+        /// <summary>
+        /// Downloads AMD's signed prebuilt FFX DLL set from the official
+        /// FidelityFX-SDK repository tree (signedbin) into the cache and returns
+        /// (versionLabel, dirPath). Tries the repo's current head first so the result
+        /// can be NEWER than the snapshot OptiScaler's release pins, then falls back
+        /// to the known-good commit. Every file is validated as a 64-bit PE (a Git-LFS
+        /// pointer or an error page would fail validation). This is AMD's official
+        /// open-source SDK repo — not the proprietary amdxcffx64.dll, which remains
+        /// strictly bring-your-own.
+        /// </summary>
+        public async Task<(string version, string dirPath)> DownloadFidelityFxSignedBinAsync(IProgress<double>? progress = null)
         {
-            var apiUrl = $"https://api.github.com/repos/{FidelityFxSdkRepoOwner}/{FidelityFxSdkRepoName}/releases/latest";
-            Log.Write($"[FidelityFxSdk] Querying latest release: {apiUrl}");
-            var response = await GetWithRetryAsync(() => _httpClient, apiUrl, maxRetries: 2, timeoutSeconds: 20);
-            if (!response.IsSuccessStatusCode)
-                throw new Exception($"Could not query the AMD FidelityFX SDK releases (HTTP {(int)response.StatusCode}). GitHub may be rate-limiting; try again shortly.");
+            var refsToTry = new[] { "main", "master", FidelityFxSdkFallbackRef };
+            Exception? lastError = null;
 
-            var json = await response.Content.ReadAsStringAsync();
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            var version = root.TryGetProperty("tag_name", out var tn) ? (tn.GetString() ?? "latest") : "latest";
-            var versionNum = version.TrimStart('v', 'V');
-
-            // Choose the prebuilt/signed DLL package: score name hints, tie-break by size.
-            string? chosenUrl = null;
-            long chosenSize = -1;
-            int chosenScore = int.MinValue;
-            if (root.TryGetProperty("assets", out var assets))
+            foreach (var gitRef in refsToTry)
             {
-                foreach (var asset in assets.EnumerateArray())
+                var stageDir = Path.Combine(GetFidelityFxSdkCachePath(), "staging_" + gitRef[..Math.Min(12, gitRef.Length)]);
+                try
                 {
-                    var name = asset.TryGetProperty("name", out var n) ? (n.GetString() ?? "") : "";
-                    if (!(name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ||
-                          name.EndsWith(".7z", StringComparison.OrdinalIgnoreCase)))
-                        continue;
-                    var u = asset.TryGetProperty("browser_download_url", out var up) ? up.GetString() : null;
-                    if (string.IsNullOrEmpty(u)) continue;
-                    var size = asset.TryGetProperty("size", out var sz) ? sz.GetInt64() : 0L;
+                    Directory.CreateDirectory(stageDir);
 
-                    int score = 0;
-                    if (name.Contains("signed", StringComparison.OrdinalIgnoreCase)) score += 3;
-                    if (name.Contains("prebuilt", StringComparison.OrdinalIgnoreCase)) score += 2;
-                    if (name.Contains("dll", StringComparison.OrdinalIgnoreCase) ||
-                        name.Contains("bin", StringComparison.OrdinalIgnoreCase)) score += 1;
-                    // Avoid obvious source-only archives.
-                    if (name.Contains("source", StringComparison.OrdinalIgnoreCase) ||
-                        name.Contains("media", StringComparison.OrdinalIgnoreCase)) score -= 2;
-
-                    if (score > chosenScore || (score == chosenScore && size > chosenSize))
+                    async Task<bool> FetchAsync(string dllName, bool required)
                     {
-                        chosenScore = score; chosenSize = size; chosenUrl = u;
+                        var url = $"https://raw.githubusercontent.com/{FidelityFxSdkRepoOwner}/{FidelityFxSdkRepoName}/{gitRef}/{FidelityFxSignedBinPath}/{dllName}";
+                        var dest = Path.Combine(stageDir, dllName);
+                        try
+                        {
+                            Log.Write($"[FidelityFxSdk] Fetching {url}");
+                            await StreamToFileAsync(() => _httpClient, url, dest, required ? progress : null, 40 * 1024 * 1024);
+                            var pe = PeFileInspector.Inspect(dest);
+                            if (!pe.IsValidPe || !pe.Is64Bit || new FileInfo(dest).Length < 10 * 1024)
+                                throw new InvalidDataException($"{dllName} from ref '{gitRef}' is not a valid 64-bit DLL (LFS pointer or error page?).");
+                            return true;
+                        }
+                        catch (Exception ex) when (!required)
+                        {
+                            Log.Write($"[FidelityFxSdk] Optional {dllName} not available at '{gitRef}': {ex.Message}");
+                            try { if (File.Exists(dest)) File.Delete(dest); } catch { }
+                            return false;
+                        }
                     }
+
+                    // The upscaler is mandatory; companions best-effort.
+                    await FetchAsync(CustomFsrSdkDllName, required: true);
+                    foreach (var name in FsrSdkDllNames)
+                        if (!name.Equals(CustomFsrSdkDllName, StringComparison.OrdinalIgnoreCase))
+                            await FetchAsync(name, required: false);
+
+                    var upscalerPe = PeFileInspector.Inspect(Path.Combine(stageDir, CustomFsrSdkDllName));
+                    var version = upscalerPe.FileVersion ?? $"signedbin-{gitRef[..Math.Min(7, gitRef.Length)]}";
+                    Log.Write($"[FidelityFxSdk] signedbin fetched from '{gitRef}': upscaler v{version}");
+                    return (version, stageDir);
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex;
+                    Log.Write($"[FidelityFxSdk] Ref '{gitRef}' failed: {ex.Message}");
+                    try { if (Directory.Exists(stageDir)) Directory.Delete(stageDir, true); } catch { }
                 }
             }
 
-            if (string.IsNullOrEmpty(chosenUrl))
-                throw new Exception("No prebuilt DLL package (.zip/.7z) was found in the latest FidelityFX SDK release.");
-
-            var ext = chosenUrl.EndsWith(".7z", StringComparison.OrdinalIgnoreCase) ? ".7z" : ".zip";
-            var destDir = Path.Combine(GetFidelityFxSdkCachePath(), versionNum);
-            Directory.CreateDirectory(destDir);
-            var archivePath = Path.Combine(destDir, $"FidelityFX-SDK-{versionNum}{ext}");
-
-            if (File.Exists(archivePath) && new FileInfo(archivePath).Length > 0)
-            {
-                Log.Write($"[FidelityFxSdk] Archive for {version} already cached at {archivePath}");
-                return (versionNum, archivePath);
-            }
-
-            Log.Write($"[FidelityFxSdk] Downloading {chosenUrl}");
-            await StreamToFileAsync(() => _httpClient, chosenUrl, archivePath, progress, 40 * 1024 * 1024);
-            return (versionNum, archivePath);
+            throw new Exception(
+                "Could not download AMD's signed FFX DLLs from the FidelityFX-SDK repository. " +
+                "Check your connection and try again.", lastError);
         }
 
         // ── OptiPatcher cache ─────────────────────────────────────────────────────

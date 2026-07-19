@@ -198,7 +198,7 @@ public static class ComponentRegistry
         {
             Id = ComponentIds.Fsr4AmdSdk,
             DisplayName = "Latest FSR SDK (AMD)",
-            Description = "AMD's official open-source FidelityFX SDK (GPUOpen). Swaps OptiScaler's matching FSR DLLs IN PLACE with the SDK's equivalents — only files OptiScaler already installed are replaced, nothing new is added. Note: OptiScaler's own bundled files (Default) already include a working FSR 4.1 upscaler; the SDK's DLLs may expose FSR 3.1 only unless paired with amdxcffx64.dll.",
+            Description = "AMD's signed prebuilt FSR DLLs from the official FidelityFX-SDK repository (Kits/FidelityFX/signedbin) — the exact artifacts OptiScaler bundles, fetched at AMD's newest revision, which can be newer than the snapshot OptiScaler's release pins. Swapped IN PLACE over OptiScaler's matching files; nothing new is added.",
             // In-place swap: candidates are OptiScaler's FSR set; only those actually
             // present in the game folder get replaced (enforced by InstallCustomFsrSdk).
             TargetFiles = new[]

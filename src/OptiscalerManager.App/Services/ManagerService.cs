@@ -211,17 +211,17 @@ public sealed class ManagerService
     }
 
     /// <summary>
-    /// Downloads AMD's official open-source FidelityFX SDK, extracts its full prebuilt
-    /// DLL set (loader + upscaler + frame-gen + denoiser + companions) via the existing
-    /// SDK scanner, imports it as an SDK package, and installs it into the game.
+    /// Downloads AMD's signed prebuilt FFX DLL set (signedbin) from the official
+    /// FidelityFX-SDK repository — the same artifacts OptiScaler bundles, at AMD's
+    /// newest revision — then imports it as an SDK package and swaps it in place.
     /// </summary>
     private async Task InstallAmdSdkAsync(Game game, IProgress<string>? status)
     {
-        status?.Report("Downloading AMD's FidelityFX SDK…");
-        var (version, archivePath) = await _components.DownloadFidelityFxSdkArchiveAsync();
+        status?.Report("Downloading AMD's signed FSR DLLs (FidelityFX-SDK signedbin)…");
+        var (version, dirPath) = await _components.DownloadFidelityFxSignedBinAsync();
 
-        status?.Report("Extracting the FSR SDK DLLs…");
-        var scan = await _components.ScanFsrSdkSourceAsync(archivePath);
+        status?.Report($"Preparing FSR SDK {version}…");
+        var scan = await _components.ScanFsrSdkSourceAsync(dirPath);
         try
         {
             if (!scan.HasUpscaler)
