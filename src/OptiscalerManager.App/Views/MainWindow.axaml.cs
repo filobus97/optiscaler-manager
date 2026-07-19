@@ -55,8 +55,8 @@ public partial class MainWindow : Window
     private void RefreshImportSummary()
     {
         var parts = new System.Collections.Generic.List<string>();
-        parts.Add(_manager.HasCustomFsrSdk ? $"Custom FSR SDK: {_manager.LatestCustomFsrSdk}" : "Custom FSR SDK: none");
-        parts.Add(_manager.HasCustomFsr4Dll ? $"amdxcffx64.dll: {_manager.LatestCustomFsr4Dll}" : "amdxcffx64.dll: none");
+        var customs = _manager.GetCustomDlls();
+        parts.Add(customs.Count > 0 ? $"Custom DLLs: {customs.Count}" : "Custom DLLs: none");
         var iniCount = _manager.GetIniProfiles().Count(p => !p.IsBuiltIn);
         parts.Add(iniCount > 0 ? $"OptiScaler.ini profiles: {iniCount}" : "OptiScaler.ini profiles: none");
         _vm.ImportSummary = "Imported — " + string.Join("  •  ", parts) + ".  Pick these per install.";

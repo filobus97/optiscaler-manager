@@ -36,12 +36,9 @@
                         ToolTip.Tip="Which INT8 community build to install (newest first). Populated from the OptiScaler-Extras repo."/>
             </StackPanel>
 
-            <RadioButton Name="RbCustomSdk" GroupName="Fsr4" Content="Custom FSR SDK (imported)"
+            <RadioButton Name="RbCustomMerged" GroupName="Fsr4" Content="Custom DLLs + latest AMD SDK (merged)"
                          Foreground="{StaticResource BrTextPrimary}"
-                         ToolTip.Tip="Use the FSR SDK you imported in Settings (bring-your-own)."/>
-            <RadioButton Name="RbCustomDllSdk" GroupName="Fsr4" Content="Custom amdxcffx64.dll + latest AMD SDK"
-                         Foreground="{StaticResource BrTextPrimary}"
-                         ToolTip.Tip="Install your imported amdxcffx64.dll (the proprietary FSR 4 driver runtime) together with AMD's latest FSR SDK — amdxcffx64.dll does not work on its own."/>
+                         ToolTip.Tip="The latest AMD signedbin files as the base, with your imported custom DLLs merged on top: same-name DLLs overwrite AMD's, unknown names (e.g. amdxcffx64.dll) are added alongside. Import your DLLs in Settings; Revert removes everything."/>
             <RadioButton Name="RbDefault" GroupName="Fsr4" Content="Default — OptiScaler's own files (includes FSR 4.1, recommended)"
                          Foreground="{StaticResource BrTextPrimary}"
                          ToolTip.Tip="Install OptiScaler exactly as its release ships it. OptiScaler already bundles a working FSR 4.1 upscaler, so this alone enables FSR 4 — no extra downloads or swaps."/>

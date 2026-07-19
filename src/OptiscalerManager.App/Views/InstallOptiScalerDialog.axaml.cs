@@ -54,14 +54,11 @@ public partial class InstallOptiScalerDialog : Window
     {
         var amdSdk = this.FindControl<RadioButton>("RbAmdSdk")!;
         var int8 = this.FindControl<RadioButton>("RbInt8")!;
-        var customSdk = this.FindControl<RadioButton>("RbCustomSdk")!;
-        var customDllSdk = this.FindControl<RadioButton>("RbCustomDllSdk")!;
+        var customMerged = this.FindControl<RadioButton>("RbCustomMerged")!;
         var def = this.FindControl<RadioButton>("RbDefault")!;
 
-        customSdk.IsEnabled = _manager.HasCustomFsrSdk;
-        customDllSdk.IsEnabled = _manager.HasCustomFsr4Dll;
-        if (!customSdk.IsEnabled) customSdk.Content = "Custom FSR SDK — none imported (Settings)";
-        if (!customDllSdk.IsEnabled) customDllSdk.Content = "Custom amdxcffx64.dll + AMD SDK — none imported (Settings)";
+        customMerged.IsEnabled = _manager.HasCustomDlls;
+        if (!customMerged.IsEnabled) customMerged.Content = "Custom DLLs + latest AMD SDK — none imported (Settings)";
 
         // Pre-select Default: OptiScaler's own release already bundles a working
         // FSR 4.1 upscaler, so the zero-decision path delivers FSR 4 out of the box.
@@ -70,8 +67,7 @@ public partial class InstallOptiScalerDialog : Window
         amdSdk.IsCheckedChanged += OnOptionChanged;
         int8.IsCheckedChanged += OnInt8CheckedChanged;
         int8.IsCheckedChanged += OnOptionChanged;
-        customSdk.IsCheckedChanged += OnOptionChanged;
-        customDllSdk.IsCheckedChanged += OnOptionChanged;
+        customMerged.IsCheckedChanged += OnOptionChanged;
         def.IsCheckedChanged += OnOptionChanged;
 
         // Step 2 radios drive UpscalerIndex in the preview.
@@ -116,8 +112,7 @@ public partial class InstallOptiScalerDialog : Window
     private Fsr4Backend CurrentBackend()
     {
         if (this.FindControl<RadioButton>("RbInt8")!.IsChecked == true) return Fsr4Backend.Int8Community;
-        if (this.FindControl<RadioButton>("RbCustomSdk")!.IsChecked == true) return Fsr4Backend.CustomSdk;
-        if (this.FindControl<RadioButton>("RbCustomDllSdk")!.IsChecked == true) return Fsr4Backend.CustomDllPlusAmdSdk;
+        if (this.FindControl<RadioButton>("RbCustomMerged")!.IsChecked == true) return Fsr4Backend.CustomMerged;
         if (this.FindControl<RadioButton>("RbDefault")!.IsChecked == true) return Fsr4Backend.Default;
         return Fsr4Backend.LatestAmdSdk;
     }

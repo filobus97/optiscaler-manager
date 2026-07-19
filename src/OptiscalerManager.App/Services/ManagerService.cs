@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using OptiscalerManager.Core.Components;
+using OptiscalerManager.Core.Logging;
 using OptiscalerManager.Core.Models;
 using OptiscalerManager.Core.Prompts;
 using OptiscalerManager.Core.Services;
@@ -42,12 +43,15 @@ public sealed class ManagerService
     public Task<List<Game>> ScanGamesAsync() => _scanner.ScanAllGamesAsync();
 
     // ── Bring-your-own inventory ────────────────────────────────────────────
-    public bool HasCustomFsrSdk => _components.GetDownloadedCustomFsrSdkVersions().Count > 0;
-    public bool HasCustomFsr4Dll => _components.GetDownloadedCustomFsr4Versions().Count > 0;
-    public IReadOnlyList<string> CustomFsrSdkVersions => _components.GetDownloadedCustomFsrSdkVersions();
-    public IReadOnlyList<string> CustomFsr4DllVersions => _components.GetDownloadedCustomFsr4Versions();
-    public string? LatestCustomFsrSdk => _components.GetDownloadedCustomFsrSdkVersions().FirstOrDefault();
-    public string? LatestCustomFsr4Dll => _components.GetDownloadedCustomFsr4Versions().FirstOrDefault();
+    /// <summary>The user's custom-DLL library (migrated from any legacy imports on first use).</summary>
+    public List<CustomDllFileEntry> GetCustomDlls() => _components.GetCustomDlls();
+
+    public bool HasCustomDlls => _components.GetCustomDlls().Count > 0;
+
+    /// <summary>Imports one or more custom DLLs (files, a folder, or an archive).</summary>
+    public Task<List<string>> ImportCustomDllsAsync(IEnumerable<string> sources) => _components.ImportCustomDllsAsync(sources);
+
+    public void DeleteCustomDll(string name) => _components.DeleteCustomDll(name);
 
     /// <summary>Latest FSR 4 INT8 community version known from source, if a check has run.</summary>
     public string? LatestExtrasVersion => _components.LatestExtrasVersion;
@@ -73,8 +77,7 @@ public sealed class ManagerService
     /// <summary>Whether a given backend can currently be installed (imports present / etc.).</summary>
     public bool IsBackendAvailable(Fsr4Backend backend) => backend switch
     {
-        Fsr4Backend.CustomSdk => HasCustomFsrSdk,
-        Fsr4Backend.CustomDllPlusAmdSdk => HasCustomFsr4Dll,
+        Fsr4Backend.CustomMerged => HasCustomDlls,
         _ => true, // Default, LatestAmdSdk and Int8Community need no prior import
     };
 
@@ -119,7 +122,8 @@ public sealed class ManagerService
     /// precisely what gets installed.
     /// </summary>
     public InstallPreview BuildInstallPreview(Game game, Fsr4Backend backend, bool selectFsr4)
-        => ComponentRegistry.BuildInstallPreview(backend, selectFsr4, ComponentRegistry.DefaultInjectionDll, MenuShortcutKey);
+        => ComponentRegistry.BuildInstallPreview(backend, selectFsr4, ComponentRegistry.DefaultInjectionDll, MenuShortcutKey,
+            backend == Fsr4Backend.CustomMerged ? _components.GetCustomDlls().Select(d => d.Name).ToList() : null);
 
     // ── Install OptiScaler ──────────────────────────────────────────────────
     public async Task InstallAsync(Game game, Fsr4Backend backend, string? int8Version, bool selectFsr4,
@@ -155,20 +159,9 @@ public sealed class ManagerService
 
         switch (backend)
         {
-            case Fsr4Backend.CustomSdk:
+            case Fsr4Backend.CustomMerged:
             {
-                var v = _components.GetDownloadedCustomFsrSdkVersions().First();
-                status?.Report($"Installing your custom FSR SDK ({v})…");
-                _install.InstallCustomFsrSdk(game, _components.GetCustomFsrSdkCachePath(v), v);
-                break;
-            }
-            case Fsr4Backend.CustomDllPlusAmdSdk:
-            {
-                // amdxcffx64.dll cannot run alone — install it together with the AMD SDK.
-                var v = _components.GetDownloadedCustomFsr4Versions().First();
-                status?.Report($"Installing your amdxcffx64.dll ({v})…");
-                _install.InstallCustomFsr4Dll(game, _components.GetCustomFsr4DllPath(v), v);
-                await InstallAmdSdkAsync(game, status);
+                await InstallCustomMergedAsync(game, status);
                 break;
             }
             case Fsr4Backend.LatestAmdSdk:
@@ -239,6 +232,69 @@ public sealed class ManagerService
     }
 
     /// <summary>
+    /// The unified custom overlay: latest AMD signedbin as the base, with the user's
+    /// imported custom DLLs merged on top — same-name entries overwrite the AMD file,
+    /// unknown names (e.g. amdxcffx64.dll) are added alongside (manifest-tracked, so
+    /// Revert removes them). Falls back to a cached signedbin when offline; installs
+    /// the custom overlay alone if nothing is cached.
+    /// </summary>
+    private async Task InstallCustomMergedAsync(Game game, IProgress<string>? status)
+    {
+        var customs = _components.GetCustomDlls();
+        if (customs.Count == 0)
+            throw new InvalidOperationException("No custom DLLs imported. Add them in Settings first.");
+
+        // 1) Base: latest AMD signedbin (best effort — cached or custom-only fallback).
+        string? baseDir = null;
+        string baseVersion = "custom";
+        try
+        {
+            status?.Report("Downloading AMD's signed FSR DLLs (base set)…");
+            (baseVersion, baseDir) = await _components.DownloadFidelityFxSignedBinAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Write($"[CustomMerged] signedbin download failed, checking cache: {ex.Message}");
+            var cacheRoot = _components.GetFidelityFxSdkCachePath();
+            if (Directory.Exists(cacheRoot))
+                baseDir = Directory.GetDirectories(cacheRoot)
+                    .Where(d => File.Exists(Path.Combine(d, ComponentManagementService.CustomFsrSdkDllName)))
+                    .OrderByDescending(Directory.GetLastWriteTimeUtc)
+                    .FirstOrDefault();
+            status?.Report(baseDir is null
+                ? "AMD base set unavailable (offline?) — installing your custom DLLs only."
+                : "Using the cached AMD base set (offline).");
+        }
+
+        // 2) Merge dir: base files first, then the custom overlay wins on name clashes.
+        var mergeDir = Path.Combine(Path.GetTempPath(), "osm_merge_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(mergeDir);
+        try
+        {
+            if (baseDir is not null)
+                foreach (var f in Directory.GetFiles(baseDir, "*.dll"))
+                    File.Copy(f, Path.Combine(mergeDir, Path.GetFileName(f)), overwrite: true);
+
+            var customNames = new List<string>();
+            foreach (var c in customs)
+            {
+                var src = Path.Combine(_components.GetCustomDllsPath(), c.Name);
+                if (!File.Exists(src)) continue;
+                File.Copy(src, Path.Combine(mergeDir, c.Name), overwrite: true);
+                customNames.Add(c.Name);
+            }
+
+            var label = baseDir is not null ? $"{baseVersion}+custom" : "custom";
+            status?.Report($"Installing merged FSR set ({label}, {Directory.GetFiles(mergeDir, "*.dll").Length} DLL(s))…");
+            _install.InstallCustomFsrSdk(game, mergeDir, label, injectNames: customNames);
+        }
+        finally
+        {
+            try { Directory.Delete(mergeDir, true); } catch { }
+        }
+    }
+
+    /// <summary>
     /// Downloads a community FSR 4 INT8 build from the OptiScaler-Extras repo (at the
     /// chosen version, or latest) and installs its upscaler DLL next to the game exe.
     /// The FSR ini keys are forced centrally by <see cref="ApplyForcedIniKeys"/>.
@@ -279,22 +335,4 @@ public sealed class ManagerService
     // ── Uninstall / revert ──────────────────────────────────────────────────
     public Task UninstallAsync(Game game) => Task.Run(() => _install.UninstallOptiScaler(game));
 
-    // ── Bring-your-own DLL imports ──────────────────────────────────────────
-    public async Task<string> ImportCustomFsr4DllAsync(string sourcePath)
-    {
-        var info = await _components.ImportCustomFsr4DllAsync(sourcePath);
-        return info.VersionLabel;
-    }
-
-    public async Task<string> ImportCustomFsrSdkAsync(string sourcePath)
-    {
-        var scan = await _components.ScanFsrSdkSourceAsync(sourcePath);
-        if (!scan.HasUpscaler)
-            throw new InvalidOperationException(
-                "The selected source does not contain a 64-bit amd_fidelityfx_upscaler_dx12.dll (the required upscaler).");
-
-        var info = await _components.ImportCustomFsrSdkPackageAsync(scan);
-        var names = string.Join(", ", info.Files.Select(f => f.Name));
-        return $"{info.VersionLabel} ({names})";
-    }
 }

@@ -136,15 +136,12 @@ public static class ComponentRegistry
 
     /// <summary>
     /// Maps an <see cref="Fsr4Backend"/> to the registry component id(s) it installs.
-    /// Most backends are a single component; <see cref="Fsr4Backend.CustomDllPlusAmdSdk"/>
-    /// installs two (amdxcffx64.dll cannot run without the FSR SDK).
     /// </summary>
     public static IReadOnlyList<string> ComponentIdsFor(Fsr4Backend backend) => backend switch
     {
         Fsr4Backend.LatestAmdSdk => new[] { ComponentIds.Fsr4AmdSdk },
         Fsr4Backend.Int8Community => new[] { ComponentIds.Fsr4Extras },
-        Fsr4Backend.CustomSdk => new[] { ComponentIds.CustomFsrSdk },
-        Fsr4Backend.CustomDllPlusAmdSdk => new[] { ComponentIds.CustomFsr4Dll, ComponentIds.Fsr4AmdSdk },
+        Fsr4Backend.CustomMerged => new[] { ComponentIds.CustomMerged },
         _ => Array.Empty<string>(),
     };
 
@@ -164,13 +161,32 @@ public static class ComponentRegistry
     /// <param name="selectFsr4">True to have the Manager select FSR 4 (UpscalerIndex=0).</param>
     /// <param name="injectionDll">Injection DLL name (defaults to dxgi.dll).</param>
     /// <param name="menuKeyVk">Configured overlay key (VK hex, e.g. "0x78"), or null to leave OptiScaler's default.</param>
+    /// <param name="customDlls">
+    /// For <see cref="Fsr4Backend.CustomMerged"/>: the user's imported DLL names.
+    /// Each is annotated in the file list — "overwrites" when it collides with a base
+    /// file, "added" otherwise.
+    /// </param>
     public static InstallPreview BuildInstallPreview(
-        Fsr4Backend backend, bool selectFsr4, string? injectionDll = null, string? menuKeyVk = null)
+        Fsr4Backend backend, bool selectFsr4, string? injectionDll = null, string? menuKeyVk = null,
+        IReadOnlyList<string>? customDlls = null)
     {
         var ids = new List<string> { ComponentIds.OptiScaler };
         ids.AddRange(ComponentIdsFor(backend));
 
         var preview = BuildPreview(ids, injectionDll);
+
+        // Merge the custom overlay into the file list with honest annotations.
+        if (backend == Fsr4Backend.CustomMerged && customDlls is { Count: > 0 })
+        {
+            var files = preview.Files.ToList();
+            foreach (var dll in customDlls)
+            {
+                var idx = files.FindIndex(f => f.Equals(dll, StringComparison.OrdinalIgnoreCase));
+                if (idx >= 0) files[idx] = $"{dll}  (your DLL — overwrites AMD's)";
+                else files.Add($"{dll}  (your DLL — added)");
+            }
+            preview = preview with { Files = files };
+        }
 
         // The forced keys are the ONLY ini keys the Manager writes.
         var iniKeys = new List<IniKeyChange>
@@ -231,24 +247,19 @@ public static class ComponentRegistry
         },
         new ComponentDefinition
         {
-            Id = ComponentIds.CustomFsr4Dll,
-            DisplayName = "Custom FSR 4 DLL (amdxcffx64.dll)",
-            Description = "Your own amdxcffx64.dll (FSR 4.x INT8 runtime), imported from a local file you already have. Never downloaded by this app.",
-            TargetFiles = new[] { "amdxcffx64.dll" },
-            IniKeys = new[]
+            Id = ComponentIds.CustomMerged,
+            DisplayName = "Custom DLLs + latest AMD SDK",
+            Description = "The latest AMD signedbin set as the base, with your imported custom DLLs merged on top: same-name DLLs overwrite AMD's, unknown names (e.g. amdxcffx64.dll) are added alongside. Your DLLs are never downloaded — bring your own.",
+            // Base = the AMD signedbin set (the custom overlay is dynamic and gets
+            // annotated into the preview by BuildInstallPreview).
+            TargetFiles = new[]
             {
-                new IniKeyChange("FSR", "UpscalerIndex", "0"),
-                new IniKeyChange("FSR", "Fsr4Update", "true"),
+                "amd_fidelityfx_dx12.dll",
+                "amd_fidelityfx_loader_dx12.dll",
+                "amd_fidelityfx_upscaler_dx12.dll",
+                "amd_fidelityfx_framegeneration_dx12.dll",
+                "amd_fidelityfx_denoiser_dx12.dll",
             },
-            Requires = new[] { ComponentIds.OptiScaler },
-            IsBringYourOwn = true,
-        },
-        new ComponentDefinition
-        {
-            Id = ComponentIds.CustomFsrSdk,
-            DisplayName = "Custom FSR SDK",
-            Description = "Your own FSR SDK DLL set (amd_fidelityfx_upscaler_dx12.dll + companions), imported from a local archive or folder. Swaps OptiScaler's matching FSR DLLs IN PLACE — only files OptiScaler already installed are replaced, nothing new is added.",
-            TargetFiles = new[] { "amd_fidelityfx_upscaler_dx12.dll", "amd_fidelityfx_framegeneration_dx12.dll" },
             IniKeys = new[]
             {
                 new IniKeyChange("FSR", "UpscalerIndex", "0"),

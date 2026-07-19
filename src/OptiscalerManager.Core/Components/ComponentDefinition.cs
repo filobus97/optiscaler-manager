@@ -31,10 +31,8 @@ public static class ComponentIds
     public const string Fsr4AmdSdk = "fsr4-amd-sdk";
     /// <summary>FSR 4.x INT8 community upscaler build from the OptiScaler "Extras" repo.</summary>
     public const string Fsr4Extras = "fsr4-extras";
-    /// <summary>User-supplied amdxcffx64.dll (FSR 4.x INT8 runtime).</summary>
-    public const string CustomFsr4Dll = "custom-fsr4-dll";
-    /// <summary>User-supplied FSR SDK DLL set (amd_fidelityfx_upscaler_dx12.dll + companions).</summary>
-    public const string CustomFsrSdk = "custom-fsr-sdk";
+    /// <summary>User-supplied custom DLLs merged on top of the latest AMD signedbin set.</summary>
+    public const string CustomMerged = "custom-merged";
 }
 
 /// <summary>

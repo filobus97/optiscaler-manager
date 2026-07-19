@@ -1763,17 +1763,23 @@ namespace OptiscalerManager.Core.Services
         /// exclusive with the downloadable "FSR4 INT8 Extras" component, which installs
         /// the same upscaler file (enforced in the UI).
         /// </summary>
-        public void InstallCustomFsrSdk(Game game, string cacheDir, string versionLabel, string? overrideGameDir = null)
+        public void InstallCustomFsrSdk(Game game, string cacheDir, string versionLabel, string? overrideGameDir = null,
+                                       IReadOnlyCollection<string>? injectNames = null)
         {
             if (!Directory.Exists(cacheDir))
                 throw new DirectoryNotFoundException($"The imported FSR SDK package was not found in the local cache: {cacheDir}");
 
-            // Only the canonical FSR swap set is eligible — a cached package may carry
-            // extra DLLs (e.g. amd_ags_x64.dll from older imports) that must never be
-            // installed: games ship their own copies of those support libraries.
+            // Eligible names: the canonical FSR swap set, plus any user-chosen custom
+            // DLLs (injectNames) — those are deliberate bring-your-own additions (e.g.
+            // amdxcffx64.dll) and may introduce new files. Anything else in the cache
+            // dir (stray support libraries from older imports) is never installed.
+            var eligible = new HashSet<string>(ComponentManagementService.FsrSdkDllNames, StringComparer.OrdinalIgnoreCase);
+            var injectable = new HashSet<string>(injectNames ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+            eligible.UnionWith(injectable);
+
             var packageFiles = Directory.GetFiles(cacheDir, "*.dll", SearchOption.TopDirectoryOnly)
                 .Select(f => (name: Path.GetFileName(f), path: f))
-                .Where(f => ComponentManagementService.FsrSdkDllNames.Contains(f.name, StringComparer.OrdinalIgnoreCase))
+                .Where(f => eligible.Contains(f.name))
                 .ToList();
             if (packageFiles.Count == 0 || !packageFiles.Any(f => f.name.Equals("amd_fidelityfx_upscaler_dx12.dll", StringComparison.OrdinalIgnoreCase)))
                 throw new FileNotFoundException("The imported FSR SDK package is missing amd_fidelityfx_upscaler_dx12.dll.");
@@ -1799,6 +1805,14 @@ namespace OptiscalerManager.Core.Services
             {
                 if (File.Exists(Path.Combine(gameDirForFilter, f.name)))
                 {
+                    files.Add(f);
+                }
+                else if (injectable.Contains(f.name))
+                {
+                    // User-chosen custom DLL that doesn't exist yet: deliberately ADD it
+                    // (manifest-tracked, so Revert removes it). This is how amdxcffx64.dll
+                    // works — OptiScaler loads it from the game folder.
+                    Log.Write($"[CustomFsrSdk] Adding {f.name}: your custom DLL (not part of the base install).");
                     files.Add(f);
                 }
                 else

@@ -12,18 +12,19 @@ namespace OptiscalerManager.Core.Components;
 
 /// <summary>
 /// Which upscaler backend / DLL set to install alongside OptiScaler ("what files").
-/// This is decoupled from whether FSR 4 is actually *selected* — see the install flow:
-/// FSR 4 is always made available, but selecting it is a separate choice.
+/// Decoupled from whether FSR 4 is *selected* — FSR 4 availability flags are always
+/// forced; selecting it is a separate choice in the install flow.
 /// </summary>
 public enum Fsr4Backend
 {
-    /// <summary>Install OptiScaler's own provided files only; no extra upscaler DLLs.</summary>
+    /// <summary>Install OptiScaler's own provided files only (they already include a
+    /// working FSR 4.1 upscaler). The zero-decision, recommended path.</summary>
     Default,
 
     /// <summary>
-    /// AMD's official open-source FidelityFX SDK (GPUOpen), full DLL set. This is the
-    /// FSR 3.1 upscaler SDK — it does not contain FSR 4.
-    /// Maps to <see cref="ComponentIds.Fsr4AmdSdk"/>.
+    /// AMD's signed prebuilt FSR DLLs fetched from the official FidelityFX-SDK
+    /// repository tree (signedbin) — the exact artifacts OptiScaler bundles, at AMD's
+    /// newest revision — swapped in place. Maps to <see cref="ComponentIds.Fsr4AmdSdk"/>.
     /// </summary>
     LatestAmdSdk,
 
@@ -34,13 +35,10 @@ public enum Fsr4Backend
     /// </summary>
     Int8Community,
 
-    /// <summary>The user-imported custom FSR SDK. Maps to <see cref="ComponentIds.CustomFsrSdk"/>.</summary>
-    CustomSdk,
-
     /// <summary>
-    /// The user-imported amdxcffx64.dll (proprietary FSR 4 driver runtime) installed
-    /// together with the latest AMD FSR SDK — amdxcffx64.dll does not work on its own.
-    /// Maps to <see cref="ComponentIds.CustomFsr4Dll"/> + <see cref="ComponentIds.Fsr4AmdSdk"/>.
+    /// The user's imported custom DLLs merged on top of the latest AMD signedbin
+    /// set: same-name DLLs overwrite the AMD/OptiScaler files, unknown names (e.g.
+    /// amdxcffx64.dll) are added alongside. Maps to <see cref="ComponentIds.CustomMerged"/>.
     /// </summary>
-    CustomDllPlusAmdSdk,
+    CustomMerged,
 }

@@ -33,9 +33,10 @@ action per game, advanced options tucked away.
       and game-owned files (e.g. the game's own `amd_ags_x64.dll`) are never touched;
     - *FSR 4 INT8 (community build)* — a community INT8 build from the OptiScaler-Extras
       repo, at a **version you pick**;
-    - *your custom FSR SDK* (imported) — same in-place swap semantics;
-    - *your custom `amdxcffx64.dll` + latest AMD SDK* — the FSR 4 ML-model DLL, paired
-      with AMD's SDK.
+    - *Custom DLLs + latest AMD SDK (merged)* — the latest AMD `signedbin` set as the
+      base, with **your imported custom DLLs merged on top**: same-name DLLs overwrite
+      AMD's, unknown names (e.g. `amdxcffx64.dll`) are **added alongside**. Everything
+      is manifest-tracked, so *Revert* removes it all.
 
   **Step 2 — FSR 4 selection:** the Manager **always forces the flags that make FSR 4
   *available*** (`[FSR] Fsr4Update=true`); you then choose whether it also **selects**
@@ -128,13 +129,14 @@ dotnet publish src/OptiscalerManager.App/OptiscalerManager.App.csproj \
 
 Open **Settings** to import:
 
-- **A single `amdxcffx64.dll`** (the FSR 4.x INT8 runtime). It is validated as a
-  64-bit Windows PE and copied into the cache.
-- **An FSR SDK package**, either from a **`.zip`/`.7z` archive** *or* an
-  **already-extracted folder**. The importer recursively collects the DLL set —
-  the upscaler (`amd_fidelityfx_upscaler_dx12.dll`, **required**) plus frame
-  generation and companions — **skipping 32-bit copies** and **preferring
-  'signed' builds**.
+- **Custom DLLs (one or more).** Pick individual `.dll` files (multi-select), a
+  folder (searched recursively), or a `.zip`/`.7z`/`.rar` archive — every valid
+  **64-bit** DLL is imported into a flat library (largest copy wins when a name is
+  duplicated; re-importing a name replaces it; entries are individually deletable).
+  At install time (the *Custom DLLs + latest AMD SDK* backend) they are **merged on
+  top of the latest AMD `signedbin` set**: same names overwrite AMD's file, new
+  names (e.g. `amdxcffx64.dll`) are added alongside. Legacy imports from older
+  versions are migrated automatically.
 - **`OptiScaler.ini` profiles.** Import any `OptiScaler.ini`, tag it with a name,
   and it becomes selectable in the Install dialog. Collect as many as you like;
   delete them from Settings.
@@ -143,12 +145,12 @@ Open **Settings** to import:
   in **Settings** and it is forced as `[Menu] ShortcutKey` on **every** install,
   including the default `.ini`.
 
-When you click **Install OptiScaler**, the dialog lets you pick the FSR 4 backend
-(latest SDK from source / your custom SDK / your custom `amdxcffx64.dll` / none)
-and which `.ini` profile to write. Any FSR 4 backend also sets
-`[FSR] UpscalerIndex = 0` and `[FSR] Fsr4Update = true` (these win over the chosen
-profile, matching what is written to disk). You always see the exact file and ini
-changes in the live preview first.
+When you click **Install OptiScaler**, the dialog lets you pick the backend
+(Default / latest AMD SDK / INT8 community / custom-merged) and which `.ini`
+profile to write. The Manager always sets `[FSR] Fsr4Update = true` and
+`UpscalerIndex` per your Step-2 choice (these win over the chosen profile,
+matching what is written to disk). You always see the exact file and ini changes
+in the live preview first.
 
 ## Updating in place
 

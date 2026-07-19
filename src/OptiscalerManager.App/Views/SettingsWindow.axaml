@@ -36,28 +36,19 @@
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
                 BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="8">
-            <TextBlock Text="Custom FSR 4 DLL (amdxcffx64.dll)" FontWeight="SemiBold"
+            <TextBlock Text="Custom DLLs (bring your own)" FontWeight="SemiBold"
                        Foreground="{StaticResource BrTextPrimary}"/>
             <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                       Text="A single amdxcffx64.dll (the FSR 4.x INT8 runtime). Must be a 64-bit Windows DLL."/>
-            <Button Content="Import amdxcffx64.dll…" Click="OnImportDll"
-                    ToolTip.Tip="Pick a local amdxcffx64.dll. It is validated as a 64-bit PE and copied into the cache."/>
-          </StackPanel>
-        </Border>
-
-        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
-          <StackPanel Spacing="8">
-            <TextBlock Text="Custom FSR SDK package" FontWeight="SemiBold"
-                       Foreground="{StaticResource BrTextPrimary}"/>
-            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                       Text="An FSR SDK from a .zip/.7z archive or an extracted folder. The importer recursively collects the DLL set (upscaler is required, plus frame generation and companions), skips 32-bit copies, and prefers 'signed' builds."/>
+                       Text="Import one or more DLLs you already possess (e.g. amdxcffx64.dll, a custom amd_fidelityfx_upscaler_dx12.dll build). At install time they are merged on top of the latest AMD signedbin set: same names overwrite AMD's file, new names are added alongside. Only 64-bit DLLs are accepted; nothing is ever downloaded for you."/>
             <StackPanel Orientation="Horizontal" Spacing="10">
-              <Button Content="Import from archive…" Click="OnImportSdkArchive"
-                      ToolTip.Tip="Pick a .zip or .7z that contains the FSR SDK DLLs."/>
-              <Button Content="Import from folder…" Click="OnImportSdkFolder"
-                      ToolTip.Tip="Pick an already-extracted folder that contains the FSR SDK DLLs."/>
+              <Button Content="Import DLL(s)…" Click="OnImportDlls"
+                      ToolTip.Tip="Pick one or more local .dll files (multi-select). Each is validated as a 64-bit PE."/>
+              <Button Content="Import folder…" Click="OnImportDllFolder"
+                      ToolTip.Tip="Pick a folder — every 64-bit DLL inside (recursively) is imported; the largest copy of duplicated names wins."/>
+              <Button Content="Import archive…" Click="OnImportDllArchive"
+                      ToolTip.Tip="Pick a .zip/.7z/.rar — every 64-bit DLL inside is imported."/>
             </StackPanel>
+            <StackPanel Name="CustomDllsList" Spacing="4"/>
           </StackPanel>
         </Border>
 

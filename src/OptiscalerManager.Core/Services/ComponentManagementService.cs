@@ -2594,6 +2594,227 @@ namespace OptiscalerManager.Core.Services
                 Directory.Delete(cachePath, true);
         }
 
+        // ── Unified custom-DLL library (bring your own, one or more) ─────────────
+        //
+        // Flat per-file store: Cache/CustomDlls/<name>.dll + <name>.dll.json.
+        // At install time these are overlaid on top of the latest AMD signedbin set:
+        // same-name entries overwrite the AMD/OptiScaler file, unknown names (e.g.
+        // amdxcffx64.dll) are added alongside. Nothing here is ever downloaded — the
+        // user supplies files they already possess.
+
+        /// <summary>Root of the flat custom-DLL library.</summary>
+        public string GetCustomDllsPath() => Path.Combine(_cacheDir, "CustomDlls");
+
+        /// <summary>
+        /// Lists the custom-DLL library (name → metadata), migrating any legacy
+        /// single-file amdxcffx64 / SDK-package imports into it on first use.
+        /// </summary>
+        public List<CustomDllFileEntry> GetCustomDlls()
+        {
+            MigrateLegacyCustomImports();
+            var dir = GetCustomDllsPath();
+            var list = new List<CustomDllFileEntry>();
+            if (!Directory.Exists(dir)) return list;
+
+            foreach (var dll in Directory.GetFiles(dir, "*.dll").OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase))
+            {
+                var meta = ReadCustomDllMeta(dll) ?? BuildCustomDllMeta(dll);
+                list.Add(meta);
+            }
+            return list;
+        }
+
+        /// <summary>Deletes one entry (and its metadata) from the custom-DLL library.</summary>
+        public void DeleteCustomDll(string name)
+        {
+            var dll = Path.Combine(GetCustomDllsPath(), Path.GetFileName(name));
+            try { if (File.Exists(dll)) File.Delete(dll); } catch { }
+            try { if (File.Exists(dll + ".json")) File.Delete(dll + ".json"); } catch { }
+        }
+
+        /// <summary>
+        /// Imports one or more custom DLLs into the library. Each source may be a
+        /// single .dll, a folder (searched recursively), or a .zip/.7z/.rar archive.
+        /// Only valid 64-bit PEs are accepted; when the same DLL name appears in
+        /// several places the largest copy wins (ML-bearing builds are the big ones);
+        /// re-importing a name overwrites the previous entry. Returns the imported names.
+        /// </summary>
+        public async Task<List<string>> ImportCustomDllsAsync(IEnumerable<string> sources)
+        {
+            return await Task.Run(() =>
+            {
+                var destDir = GetCustomDllsPath();
+                Directory.CreateDirectory(destDir);
+                var imported = new List<string>();
+
+                // clean dll name -> best source path found so far (largest wins)
+                var candidates = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var stagingDirs = new List<string>();
+
+                void Consider(string path, string? nameOverride = null)
+                {
+                    try
+                    {
+                        var pe = PeFileInspector.Inspect(path);
+                        if (!pe.IsValidPe || !pe.Is64Bit) return;
+                        var name = nameOverride ?? Path.GetFileName(path);
+                        if (!candidates.TryGetValue(name, out var existing)
+                            || new FileInfo(path).Length > new FileInfo(existing).Length)
+                            candidates[name] = path;
+                    }
+                    catch { /* unreadable file: skip */ }
+                }
+
+                try
+                {
+                    foreach (var source in sources)
+                    {
+                        if (File.Exists(source) && source.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var pe = PeFileInspector.Inspect(source);
+                            if (!pe.IsValidPe)
+                                throw new InvalidDataException($"{Path.GetFileName(source)} is not a valid Windows DLL.");
+                            if (!pe.Is64Bit)
+                                throw new InvalidDataException($"{Path.GetFileName(source)} is not a 64-bit (x64) DLL.");
+                            Consider(source);
+                        }
+                        else if (Directory.Exists(source))
+                        {
+                            foreach (var f in Directory.GetFiles(source, "*.dll", SearchOption.AllDirectories))
+                                Consider(f);
+                        }
+                        else if (File.Exists(source))
+                        {
+                            // Archive: stage every .dll entry, then treat like a folder.
+                            var staging = Path.Combine(Path.GetTempPath(), "osm_dllimport_" + Guid.NewGuid().ToString("N"));
+                            Directory.CreateDirectory(staging);
+                            stagingDirs.Add(staging);
+                            using var archive = SharpCompress.Archives.ArchiveFactory.Open(source);
+                            int i = 0;
+                            foreach (var entry in archive.Entries.Where(e => !e.IsDirectory
+                                && (e.Key ?? "").EndsWith(".dll", StringComparison.OrdinalIgnoreCase)))
+                            {
+                                var name = Path.GetFileName(entry.Key ?? $"entry{i}.dll");
+                                // Index-prefixed on disk to avoid staging collisions; the
+                                // candidate is keyed by the clean dll name.
+                                var stagePath = Path.Combine(staging, $"{i++}_{name}");
+                                using (var es = entry.OpenEntryStream())
+                                using (var os = File.Create(stagePath))
+                                    es.CopyTo(os, 81920);
+                                Consider(stagePath, nameOverride: name);
+                            }
+                        }
+                        else
+                        {
+                            throw new FileNotFoundException($"Source not found: {source}");
+                        }
+                    }
+
+                    foreach (var (name, path) in candidates)
+                    {
+                        var dest = SafeDestinationPath(destDir, name);
+                        File.Copy(path, dest, overwrite: true);
+                        WriteCustomDllMeta(dest);
+                        imported.Add(name);
+                        Log.Write($"[CustomDlls] Imported {name} ({new FileInfo(dest).Length / 1024 / 1024.0:F1} MB)");
+                    }
+                }
+                finally
+                {
+                    foreach (var d in stagingDirs)
+                        try { Directory.Delete(d, true); } catch { }
+                }
+
+                if (imported.Count == 0)
+                    throw new InvalidOperationException("No valid 64-bit DLLs were found in the selected source(s).");
+                return imported;
+            });
+        }
+
+        private CustomDllFileEntry BuildCustomDllMeta(string dllPath)
+        {
+            var pe = PeFileInspector.Inspect(dllPath);
+            string sha;
+            using (var s = System.Security.Cryptography.SHA256.Create())
+            using (var fs = File.OpenRead(dllPath))
+                sha = Convert.ToHexString(s.ComputeHash(fs));
+            return new CustomDllFileEntry
+            {
+                Name = Path.GetFileName(dllPath),
+                FileVersion = pe.FileVersion,
+                Sha256 = sha,
+                HasAuthenticodeSignature = pe.HasAuthenticodeSignature,
+            };
+        }
+
+        private void WriteCustomDllMeta(string dllPath)
+        {
+            try
+            {
+                var meta = BuildCustomDllMeta(dllPath);
+                File.WriteAllText(dllPath + ".json",
+                    JsonSerializer.Serialize(meta, OptimizerContext.Default.CustomDllFileEntry));
+            }
+            catch (Exception ex) { Log.Write($"[CustomDlls] Failed to write metadata for {Path.GetFileName(dllPath)}: {ex.Message}"); }
+        }
+
+        private static CustomDllFileEntry? ReadCustomDllMeta(string dllPath)
+        {
+            try
+            {
+                var json = dllPath + ".json";
+                if (!File.Exists(json)) return null;
+                return JsonSerializer.Deserialize(File.ReadAllText(json), OptimizerContext.Default.CustomDllFileEntry);
+            }
+            catch { return null; }
+        }
+
+        /// <summary>
+        /// One-time migration of the legacy per-version stores (single amdxcffx64
+        /// imports and SDK packages) into the flat custom-DLL library. Legacy caches
+        /// are left untouched; a marker file prevents re-runs.
+        /// </summary>
+        private void MigrateLegacyCustomImports()
+        {
+            var dir = GetCustomDllsPath();
+            var marker = Path.Combine(dir, ".migrated");
+            if (File.Exists(marker)) return;
+
+            try
+            {
+                Directory.CreateDirectory(dir);
+
+                var legacyFsr4 = GetDownloadedCustomFsr4Versions().FirstOrDefault();
+                if (legacyFsr4 != null)
+                {
+                    var src = GetCustomFsr4DllPath(legacyFsr4);
+                    if (File.Exists(src))
+                    {
+                        var dest = Path.Combine(dir, CustomFsr4DllName);
+                        if (!File.Exists(dest)) { File.Copy(src, dest); WriteCustomDllMeta(dest); }
+                        Log.Write($"[CustomDlls] Migrated legacy amdxcffx64.dll ({legacyFsr4}).");
+                    }
+                }
+
+                var legacySdk = GetDownloadedCustomFsrSdkVersions().FirstOrDefault();
+                if (legacySdk != null)
+                {
+                    foreach (var f in Directory.GetFiles(GetCustomFsrSdkCachePath(legacySdk), "*.dll"))
+                    {
+                        var dest = Path.Combine(dir, Path.GetFileName(f));
+                        if (!File.Exists(dest)) { File.Copy(f, dest); WriteCustomDllMeta(dest); }
+                    }
+                    Log.Write($"[CustomDlls] Migrated legacy SDK package ({legacySdk}).");
+                }
+
+                File.WriteAllText(marker, DateTime.UtcNow.ToString("o"));
+            }
+            catch (Exception ex)
+            {
+                Log.Write($"[CustomDlls] Legacy migration failed (will retry next run): {ex.Message}");
+            }
+        }
+
         /// <summary>
         /// The FSR SDK DLLs an SDK package import looks for. The upscaler is the
         /// required anchor (it provides the version label); the rest are optional

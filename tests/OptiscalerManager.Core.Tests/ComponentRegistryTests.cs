@@ -14,27 +14,19 @@ namespace OptiscalerManager.Core.Tests
     public class ComponentRegistryTests
     {
         [Fact]
-        public void CustomSdkAndExtras_ShareUpscalerFile_AreMutuallyExclusive()
+        public void CustomMergedAndExtras_ShareUpscalerFile_AreMutuallyExclusive()
         {
             // Both write amd_fidelityfx_upscaler_dx12.dll — the conflict must be
             // derived from the shared target file, not hard-coded per screen.
             Assert.True(ComponentRegistry.AreMutuallyExclusive(
-                ComponentIds.CustomFsrSdk, ComponentIds.Fsr4Extras));
+                ComponentIds.CustomMerged, ComponentIds.Fsr4Extras));
         }
 
         [Fact]
-        public void CustomFsr4Dll_AndExtras_DoNotShareFiles_NotExclusive()
-        {
-            // amdxcffx64.dll vs amd_fidelityfx_upscaler_dx12.dll — different files.
-            Assert.False(ComponentRegistry.AreMutuallyExclusive(
-                ComponentIds.CustomFsr4Dll, ComponentIds.Fsr4Extras));
-        }
-
-        [Fact]
-        public void ConflictsFor_CustomSdk_IncludesExtras()
+        public void ConflictsFor_CustomMerged_IncludesExtras()
         {
             Assert.Contains(ComponentIds.Fsr4Extras,
-                ComponentRegistry.ConflictsFor(ComponentIds.CustomFsrSdk));
+                ComponentRegistry.ConflictsFor(ComponentIds.CustomMerged));
         }
 
         [Fact]
@@ -64,17 +56,15 @@ namespace OptiscalerManager.Core.Tests
         public void Preview_WithConflictingPair_ReportsConflict()
         {
             var preview = ComponentRegistry.BuildPreview(
-                new[] { ComponentIds.CustomFsrSdk, ComponentIds.Fsr4Extras });
+                new[] { ComponentIds.CustomMerged, ComponentIds.Fsr4Extras });
             Assert.NotEmpty(preview.Conflicts);
         }
 
         [Fact]
         public void Preview_DeduplicatesSharedIniKeys()
         {
-            // Extras and the custom FSR4 DLL both set [FSR] UpscalerIndex — the
-            // preview should list it once.
             var preview = ComponentRegistry.BuildPreview(
-                new[] { ComponentIds.CustomFsr4Dll, ComponentIds.OptiScaler });
+                new[] { ComponentIds.CustomMerged, ComponentIds.OptiScaler });
             Assert.Single(preview.IniKeys, k => k.Section == "FSR" && k.Key == "UpscalerIndex");
         }
 
@@ -95,14 +85,8 @@ namespace OptiscalerManager.Core.Tests
         {
             Assert.Equal(new[] { ComponentIds.Fsr4AmdSdk }, ComponentRegistry.ComponentIdsFor(Fsr4Backend.LatestAmdSdk));
             Assert.Equal(new[] { ComponentIds.Fsr4Extras }, ComponentRegistry.ComponentIdsFor(Fsr4Backend.Int8Community));
-            Assert.Equal(new[] { ComponentIds.CustomFsrSdk }, ComponentRegistry.ComponentIdsFor(Fsr4Backend.CustomSdk));
+            Assert.Equal(new[] { ComponentIds.CustomMerged }, ComponentRegistry.ComponentIdsFor(Fsr4Backend.CustomMerged));
         }
-
-        [Fact]
-        public void ComponentIdsFor_CustomDllPlusAmdSdk_InstallsBoth()
-            => Assert.Equal(
-                new[] { ComponentIds.CustomFsr4Dll, ComponentIds.Fsr4AmdSdk },
-                ComponentRegistry.ComponentIdsFor(Fsr4Backend.CustomDllPlusAmdSdk));
 
         [Fact]
         public void AmdSdk_And_Int8_ShareUpscaler_AreMutuallyExclusive()
@@ -132,11 +116,17 @@ namespace OptiscalerManager.Core.Tests
         }
 
         [Fact]
-        public void InstallPreview_CustomDllPlusAmdSdk_HasAmdxcAndSdk()
+        public void InstallPreview_CustomMerged_AnnotatesOverwritesAndAdds()
         {
-            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.CustomDllPlusAmdSdk, selectFsr4: true);
-            Assert.Contains("amdxcffx64.dll", preview.Files);
-            Assert.Contains("amd_fidelityfx_upscaler_dx12.dll", preview.Files);
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.CustomMerged, selectFsr4: true,
+                customDlls: new[] { "amd_fidelityfx_upscaler_dx12.dll", "amdxcffx64.dll" });
+
+            // A custom DLL colliding with a base file is marked as an overwrite…
+            Assert.Contains(preview.Files, f => f.StartsWith("amd_fidelityfx_upscaler_dx12.dll") && f.Contains("overwrites"));
+            // …and an unknown name is marked as added.
+            Assert.Contains(preview.Files, f => f.StartsWith("amdxcffx64.dll") && f.Contains("added"));
+            // The base loader stays listed unannotated.
+            Assert.Contains("amd_fidelityfx_dx12.dll", preview.Files);
         }
 
         [Fact]

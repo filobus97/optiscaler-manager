@@ -66,12 +66,54 @@ public partial class SettingsWindow : Window
         var inv = this.FindControl<TextBlock>("InventoryText");
         if (inv is null) return;
 
-        var dlls = _manager.CustomFsr4DllVersions;
-        var sdks = _manager.CustomFsrSdkVersions;
-        var lines = new System.Collections.Generic.List<string>();
-        lines.Add(dlls.Count > 0 ? $"amdxcffx64.dll: {string.Join(", ", dlls)}" : "amdxcffx64.dll: none imported");
-        lines.Add(sdks.Count > 0 ? $"FSR SDK: {string.Join(", ", sdks)}" : "FSR SDK: none imported");
-        inv.Text = string.Join("\n", lines);
+        var customs = _manager.GetCustomDlls();
+        inv.Text = customs.Count > 0
+            ? $"Custom DLLs: {customs.Count} ({string.Join(", ", customs.Select(c => c.Name))})"
+            : "Custom DLLs: none imported";
+
+        RefreshCustomDlls();
+    }
+
+    private void RefreshCustomDlls()
+    {
+        var list = this.FindControl<StackPanel>("CustomDllsList");
+        if (list is null) return;
+        list.Children.Clear();
+
+        var customs = _manager.GetCustomDlls();
+        if (customs.Count == 0)
+        {
+            list.Children.Add(new TextBlock
+            {
+                Text = "No custom DLLs yet.",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.Parse("#8A8AAA")),
+            });
+            return;
+        }
+
+        foreach (var entry in customs)
+        {
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            var signed = entry.HasAuthenticodeSignature ? "signed" : "unsigned";
+            row.Children.Add(new TextBlock
+            {
+                Text = $"{entry.Name}   v{entry.FileVersion ?? "?"}   ({signed})",
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                Foreground = new SolidColorBrush(Color.Parse("#E4E4EF")),
+            });
+            var del = new Button { Content = "Delete", Classes = { "BtnDanger" }, FontSize = 11, Padding = new Avalonia.Thickness(10, 4) };
+            Grid.SetColumn(del, 1);
+            var captured = entry.Name;
+            del.Click += (_, _) =>
+            {
+                _manager.DeleteCustomDll(captured);
+                SetResult($"Removed {captured} from the custom-DLL library.");
+                RefreshInventory();
+            };
+            row.Children.Add(del);
+            list.Children.Add(row);
+        }
     }
 
     private void SetResult(string message, bool error = false)
@@ -82,59 +124,59 @@ public partial class SettingsWindow : Window
         result.Foreground = new SolidColorBrush(Color.Parse(error ? "#E06060" : "#8B73F8"));
     }
 
-    private async void OnImportDll(object? sender, RoutedEventArgs e)
+    private async void OnImportDlls(object? sender, RoutedEventArgs e)
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Select amdxcffx64.dll",
-            AllowMultiple = false,
+            Title = "Select custom DLL(s)",
+            AllowMultiple = true,
             FileTypeFilter = new[]
             {
-                new FilePickerFileType("amdxcffx64.dll") { Patterns = new[] { "amdxcffx64.dll", "*.dll" } },
+                new FilePickerFileType("DLL files") { Patterns = new[] { "*.dll" } },
             }
         });
         if (files is null || files.Count == 0) return;
 
         await ImportWrap(async () =>
         {
-            var version = await _manager.ImportCustomFsr4DllAsync(files[0].Path.LocalPath);
-            return $"Imported amdxcffx64.dll (version {version}).";
+            var names = await _manager.ImportCustomDllsAsync(files.Select(f => f.Path.LocalPath));
+            return $"Imported {names.Count} DLL(s): {string.Join(", ", names)}.";
         });
     }
 
-    private async void OnImportSdkArchive(object? sender, RoutedEventArgs e)
+    private async void OnImportDllArchive(object? sender, RoutedEventArgs e)
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Select FSR SDK archive",
+            Title = "Select archive with DLLs",
             AllowMultiple = false,
             FileTypeFilter = new[]
             {
-                new FilePickerFileType("Archive (.zip/.7z)") { Patterns = new[] { "*.zip", "*.7z" } },
+                new FilePickerFileType("Archive (.zip/.7z/.rar)") { Patterns = new[] { "*.zip", "*.7z", "*.rar" } },
             }
         });
         if (files is null || files.Count == 0) return;
 
         await ImportWrap(async () =>
         {
-            var summary = await _manager.ImportCustomFsrSdkAsync(files[0].Path.LocalPath);
-            return $"Imported FSR SDK: {summary}.";
+            var names = await _manager.ImportCustomDllsAsync(new[] { files[0].Path.LocalPath });
+            return $"Imported {names.Count} DLL(s): {string.Join(", ", names)}.";
         });
     }
 
-    private async void OnImportSdkFolder(object? sender, RoutedEventArgs e)
+    private async void OnImportDllFolder(object? sender, RoutedEventArgs e)
     {
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = "Select extracted FSR SDK folder",
+            Title = "Select folder with DLLs",
             AllowMultiple = false,
         });
         if (folders is null || folders.Count == 0) return;
 
         await ImportWrap(async () =>
         {
-            var summary = await _manager.ImportCustomFsrSdkAsync(folders[0].Path.LocalPath);
-            return $"Imported FSR SDK: {summary}.";
+            var names = await _manager.ImportCustomDllsAsync(new[] { folders[0].Path.LocalPath });
+            return $"Imported {names.Count} DLL(s): {string.Join(", ", names)}.";
         });
     }
 
