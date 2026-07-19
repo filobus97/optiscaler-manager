@@ -30,10 +30,6 @@
         <Border Padding="12" CornerRadius="8" Background="{StaticResource BrBgCard}"
                 BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="6">
-            <RadioButton Name="RbAmdSdk" GroupName="Fsr4" Content="Latest FSR from AMD"
-                         Foreground="{StaticResource BrTextPrimary}"
-                         ToolTip.Tip="Download AMD's SIGNED prebuilt FSR DLLs from the official FidelityFX-SDK repository (Kits/FidelityFX/signedbin) and swap OptiScaler's matching files in place. The revision is MATCHED to the OptiScaler version you install: each OptiScaler build can only hook the FSR binaries it knows (e.g. 0.9.3 can hook up to FSR 4.1.0; 4.1.1 needs 0.9.4), so newer files would silently disable FSR 4. Nothing new is added."/>
-
             <RadioButton Name="RbInt8" GroupName="Fsr4" Content="FSR 4 INT8 community build"
                          Foreground="{StaticResource BrTextPrimary}"
                          ToolTip.Tip="Install a community FSR 4 INT8 build (amd_fidelityfx_upscaler_dx12.dll) from the OptiScaler-Extras repo, at the version you pick below. This is the option that provides FSR 4 without a driver."/>
@@ -43,12 +39,12 @@
                         ToolTip.Tip="Which INT8 community build to install (newest first). Populated from the OptiScaler-Extras repo."/>
             </StackPanel>
 
-            <RadioButton Name="RbCustomMerged" GroupName="Fsr4" Content="Custom DLLs over AMD's latest"
+            <RadioButton Name="RbCustomMerged" GroupName="Fsr4" Content="Custom DLLs"
                          Foreground="{StaticResource BrTextPrimary}"
-                         ToolTip.Tip="The latest AMD signedbin files as the base, with your imported custom DLLs merged on top: same-name DLLs overwrite AMD's, unknown names (e.g. amdxcffx64.dll) are added alongside. Import your DLLs in Settings; Revert removes everything."/>
+                         ToolTip.Tip="Your imported custom DLLs overlaid on the OptiScaler install: names OptiScaler ships (e.g. the upscaler) are swapped in place, unknown names (e.g. amdxcffx64.dll) are added alongside. Import your DLLs in Settings; Revert removes everything. Note: OptiScaler can only hook FSR binaries it has patterns for — a mismatched upscaler build silently disables FSR 4."/>
             <RadioButton Name="RbDefault" GroupName="Fsr4" Content="OptiScaler default (recommended)"
                          Foreground="{StaticResource BrTextPrimary}"
-                         ToolTip.Tip="Install OptiScaler exactly as its release ships it. OptiScaler already bundles a working FSR 4.1 upscaler, so this alone enables FSR 4 — no extra downloads or swaps."/>
+                         ToolTip.Tip="Install OptiScaler exactly as its release ships it — it already bundles the newest FSR upscaler that release can hook (4.1.1 since 0.9.4), so this alone enables FSR 4. No extra downloads or swaps."/>
           </StackPanel>
         </Border>
       </StackPanel>

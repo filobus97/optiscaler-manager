@@ -71,19 +71,17 @@ public partial class InstallOptiScalerDialog : Window
 
     private void SetupBackendOptions()
     {
-        var amdSdk = this.FindControl<RadioButton>("RbAmdSdk")!;
         var int8 = this.FindControl<RadioButton>("RbInt8")!;
         var customMerged = this.FindControl<RadioButton>("RbCustomMerged")!;
         var def = this.FindControl<RadioButton>("RbDefault")!;
 
         customMerged.IsEnabled = _manager.HasCustomDlls;
-        if (!customMerged.IsEnabled) customMerged.Content = "Custom DLLs over AMD's latest — none imported (Settings)";
+        if (!customMerged.IsEnabled) customMerged.Content = "Custom DLLs — none imported (Settings)";
 
         // Pre-select Default: OptiScaler's own release already bundles a working
-        // FSR 4.1 upscaler, so the zero-decision path delivers FSR 4 out of the box.
+        // FSR 4.x upscaler, so the zero-decision path delivers FSR 4 out of the box.
         def.IsChecked = true;
 
-        amdSdk.IsCheckedChanged += OnOptionChanged;
         int8.IsCheckedChanged += OnInt8CheckedChanged;
         int8.IsCheckedChanged += OnOptionChanged;
         customMerged.IsCheckedChanged += OnOptionChanged;
@@ -198,8 +196,7 @@ public partial class InstallOptiScalerDialog : Window
     {
         if (this.FindControl<RadioButton>("RbInt8")!.IsChecked == true) return Fsr4Backend.Int8Community;
         if (this.FindControl<RadioButton>("RbCustomMerged")!.IsChecked == true) return Fsr4Backend.CustomMerged;
-        if (this.FindControl<RadioButton>("RbDefault")!.IsChecked == true) return Fsr4Backend.Default;
-        return Fsr4Backend.LatestAmdSdk;
+        return Fsr4Backend.Default;
     }
 
     private bool CurrentSelectFsr4()

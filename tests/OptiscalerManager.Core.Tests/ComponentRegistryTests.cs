@@ -84,24 +84,8 @@ namespace OptiscalerManager.Core.Tests
         [Fact]
         public void ComponentIdsFor_MapsSingleBackends()
         {
-            Assert.Equal(new[] { ComponentIds.Fsr4AmdSdk }, ComponentRegistry.ComponentIdsFor(Fsr4Backend.LatestAmdSdk));
             Assert.Equal(new[] { ComponentIds.Fsr4Extras }, ComponentRegistry.ComponentIdsFor(Fsr4Backend.Int8Community));
             Assert.Equal(new[] { ComponentIds.CustomMerged }, ComponentRegistry.ComponentIdsFor(Fsr4Backend.CustomMerged));
-        }
-
-        [Fact]
-        public void AmdSdk_And_Int8_ShareUpscaler_AreMutuallyExclusive()
-            => Assert.True(ComponentRegistry.AreMutuallyExclusive(
-                ComponentIds.Fsr4AmdSdk, ComponentIds.Fsr4Extras));
-
-        [Fact]
-        public void InstallPreview_AmdSdk_HasFullDllSet()
-        {
-            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.LatestAmdSdk, selectFsr4: true);
-            Assert.Contains("amd_fidelityfx_upscaler_dx12.dll", preview.Files);
-            Assert.Contains("amd_fidelityfx_framegeneration_dx12.dll", preview.Files);
-            Assert.Contains("amd_fidelityfx_dx12.dll", preview.Files);      // loader
-            Assert.Contains("amd_fidelityfx_denoiser_dx12.dll", preview.Files);
         }
 
         [Fact]
@@ -117,23 +101,24 @@ namespace OptiscalerManager.Core.Tests
         }
 
         [Fact]
-        public void InstallPreview_CustomMerged_AnnotatesOverwritesAndAdds()
+        public void InstallPreview_CustomOverlay_ListsOnlyYourDlls_Annotated()
         {
             var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.CustomMerged, selectFsr4: true,
                 customDlls: new[] { "amd_fidelityfx_upscaler_dx12.dll", "amdxcffx64.dll" });
 
-            // A custom DLL colliding with a base file is marked as an overwrite…
-            Assert.Contains(preview.Files, f => f.StartsWith("amd_fidelityfx_upscaler_dx12.dll") && f.Contains("overwrites"));
+            // A custom DLL with an OptiScaler-shipped name swaps the bundled file…
+            Assert.Contains(preview.Files, f => f.StartsWith("amd_fidelityfx_upscaler_dx12.dll") && f.Contains("swaps"));
             // …and an unknown name is marked as added.
             Assert.Contains(preview.Files, f => f.StartsWith("amdxcffx64.dll") && f.Contains("added"));
-            // The base loader stays listed unannotated.
-            Assert.Contains("amd_fidelityfx_dx12.dll", preview.Files);
+            // No phantom base files: only OptiScaler core + the overlay are written.
+            Assert.DoesNotContain("amd_fidelityfx_dx12.dll", preview.Files);
+            Assert.DoesNotContain("amd_fidelityfx_denoiser_dx12.dll", preview.Files);
         }
 
         [Fact]
         public void InstallPreview_Fsr4UpdateAlwaysForced()
         {
-            foreach (var b in new[] { Fsr4Backend.Default, Fsr4Backend.Int8Community, Fsr4Backend.LatestAmdSdk })
+            foreach (var b in new[] { Fsr4Backend.Default, Fsr4Backend.Int8Community, Fsr4Backend.CustomMerged })
             {
                 var p = ComponentRegistry.BuildInstallPreview(b, selectFsr4: false);
                 Assert.Contains(p.IniKeys, k => k.Section == "FSR" && k.Key == "Fsr4Update" && k.Value == "true");
@@ -212,48 +197,11 @@ namespace OptiscalerManager.Core.Tests
             Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "Fsr4EnableWatermark" && k.Value == "true");
         }
 
-        // ── signedbin revision matching ─────────────────────────────────────
-        // OptiScaler hooks the upscaler's model code by byte pattern; 0.9.3 has no
-        // pattern for the 4.1.1 binary (added in 0.9.4), so the AMD files must be
-        // fetched at the revision the installed OptiScaler release actually pins.
-
-        [Theory]
-        [InlineData("0.9.3")]
-        [InlineData("0.9.2")]
-        [InlineData("0.9.3-final")]
-        public void SignedBinRefs_PreFsr411Releases_UseThe410Pin_NeverHead(string version)
-        {
-            var refs = ComponentManagementService.SignedBinRefsFor(version);
-            Assert.Equal(ComponentManagementService.FidelityFxSdk410Ref, refs[0]);
-            Assert.DoesNotContain("main", refs);
-            Assert.DoesNotContain("master", refs);
-        }
-
-        [Theory]
-        [InlineData("0.9.4")]
-        [InlineData("0.9.4-final")]
-        [InlineData("0.10.0")]
-        [InlineData(null)]
-        public void SignedBinRefs_Fsr411CapableReleases_Use411PinThenHead(string? version)
-        {
-            var refs = ComponentManagementService.SignedBinRefsFor(version);
-            Assert.Equal(ComponentManagementService.FidelityFxSdkFallbackRef, refs[0]);
-            Assert.Contains("main", refs);
-        }
-
-        [Fact]
-        public void SignedBinRefs_ResolvedPin_AlwaysWins()
-        {
-            var refs = ComponentManagementService.SignedBinRefsFor("0.9.3", resolvedPin: "abc123");
-            Assert.Equal("abc123", refs[0]);
-            Assert.Contains(ComponentManagementService.FidelityFxSdk410Ref, refs);
-        }
-
         [Fact]
         public void Addons_AreIndependentOfBackends_NoConflicts()
         {
             // Add-ons write disjoint files from every backend, so no pair conflicts.
-            foreach (var backend in new[] { Fsr4Backend.LatestAmdSdk, Fsr4Backend.Int8Community, Fsr4Backend.CustomMerged })
+            foreach (var backend in new[] { Fsr4Backend.Int8Community, Fsr4Backend.CustomMerged })
             {
                 var preview = ComponentRegistry.BuildInstallPreview(backend, selectFsr4: true,
                     addFakenvapi: true, addNukemFg: true);

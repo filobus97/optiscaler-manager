@@ -26,23 +26,18 @@ action per game, advanced options tucked away.
   install dialog then decouples the independent choices:
 
   **Step 1 — Backend (which files to install):**
-    - *OptiScaler default* (**recommended**): OptiScaler's release already bundles a
-      working **FSR 4.1.1** upscaler (INT8-capable since OptiScaler 0.9.4), so this
-      alone enables FSR 4;
-    - *Latest FSR from AMD* — AMD's official open-source FidelityFX SDK (GPUOpen),
-      **swapped in place**: only OptiScaler's own FSR DLLs already present in the game
-      folder are replaced with the SDK's same-name equivalents — nothing new is added,
-      and game-owned files (e.g. the game's own `amd_ags_x64.dll`) are never touched.
-      The revision is **matched to the OptiScaler version being installed** (resolved
-      from the release's own submodule pin): OptiScaler hooks AMD's model-selection
-      code by byte pattern, so e.g. 0.9.3 can only hook FSR ≤ 4.1.0 binaries — giving
-      it 4.1.1 files silently disables FSR 4 (the menu caps at 3.1.5);
+    - *OptiScaler default* (**recommended**): OptiScaler's release already bundles the
+      newest FSR upscaler that release can hook (**FSR 4.1.1** since OptiScaler 0.9.4),
+      so this alone enables FSR 4. There is deliberately **no "download newer FSR from
+      AMD" option**: OptiScaler hooks AMD's model-selection code by byte pattern, so
+      the only compatible AMD binaries are exactly the ones each release bundles —
+      e.g. giving 0.9.3 a 4.1.1 upscaler silently disables FSR 4 (menu caps at 3.1.5);
     - *FSR 4 INT8 community build* — from the OptiScaler-Extras repo, at a **version
       you pick** (upstream still recommends **4.0.2c** for RDNA2 on Windows);
-    - *Custom DLLs over AMD's latest* — the latest AMD `signedbin` set as the base,
-      with **your imported custom DLLs merged on top**: same-name DLLs overwrite
-      AMD's, unknown names (e.g. `amdxcffx64.dll`) are **added alongside**.
-      Everything is manifest-tracked, so *Revert* removes it all.
+    - *Custom DLLs* — **your imported DLLs overlaid on the OptiScaler install**: names
+      OptiScaler ships (e.g. the upscaler) are swapped in place, unknown names (e.g.
+      `amdxcffx64.dll`) are **added alongside**. Fully offline. Everything is
+      manifest-tracked, so *Revert* removes it all.
 
   **Step 2 — FSR 4 selection:** the Manager **always forces the flags that make FSR 4
   *available*** (`[FSR] Fsr4Update=true`); you then choose whether it also **selects**
@@ -81,10 +76,10 @@ action per game, advanced options tucked away.
 
 ### On AMD binaries
 
-OptiScaler Manager can download AMD's **open-source (MIT) FidelityFX SDK** from AMD's
-official GPUOpen repository, and community FSR 4 INT8 builds from the OptiScaler-Extras
-repository — both are openly distributed. It **never downloads, bundles, or links to
-the proprietary FSR 4 driver runtime `amdxcffx64.dll`**: that one is strictly
+OptiScaler Manager downloads OptiScaler releases (which bundle AMD's signed,
+openly-distributed FFX DLLs) and community FSR 4 INT8 builds from the
+OptiScaler-Extras repository. It **never downloads, bundles, or links to the
+proprietary FSR 4 driver runtime `amdxcffx64.dll`**: that one is strictly
 **bring-your-own**, supplied from a local file/folder/archive you already possess and
 copied into a private cache. See [Importing your own DLLs](#importing-your-own-dlls-and-ini-profiles).
 
@@ -94,15 +89,15 @@ copied into a private cache. See [Importing your own DLLs](#importing-your-own-d
 
 The interesting design choice is that **components are modelled as data**, not as
 per-screen glue. Each component (OptiScaler core, the FSR 4 INT8 backend, your
-custom `amdxcffx64.dll`, your custom FSR SDK, fakenvapi, Nukem frame-gen,
-OptiPatcher) declares its **id, target files, ini keys, and conflicts** in a
-small [component registry](src/OptiscalerManager.Core/Components/ComponentRegistry.cs).
+custom DLLs, fakenvapi, Nukem frame-gen, OptiPatcher) declares its **id, target
+files, ini keys, and conflicts** in a small
+[component registry](src/OptiscalerManager.Core/Components/ComponentRegistry.cs).
 
 Both of these are *derived* from that registry, with no bespoke logic:
 
-- **Mutual exclusion** — e.g. the FSR 4 INT8 "Extras" backend and a custom FSR
-  SDK both write `amd_fidelityfx_upscaler_dx12.dll`, so they're automatically
-  recognised as incompatible.
+- **Mutual exclusion** — e.g. the FSR 4 INT8 "Extras" backend and a custom
+  upscaler DLL both write `amd_fidelityfx_upscaler_dx12.dll`, so they're
+  automatically recognised as incompatible.
 - **The "What will happen" preview** — the file and ini-key lists you see are the
   exact data the installer acts on.
 
@@ -157,10 +152,10 @@ Open **Settings** to import:
   folder (searched recursively), or a `.zip`/`.7z`/`.rar` archive — every valid
   **64-bit** DLL is imported into a flat library (largest copy wins when a name is
   duplicated; re-importing a name replaces it; entries are individually deletable).
-  At install time (the *Custom DLLs over AMD's latest* backend) they are **merged on
-  top of the latest AMD `signedbin` set**: same names overwrite AMD's file, new
-  names (e.g. `amdxcffx64.dll`) are added alongside. Legacy imports from older
-  versions are migrated automatically.
+  At install time (the *Custom DLLs* backend) they are **overlaid on the OptiScaler
+  install**: names OptiScaler ships are swapped in place, new names (e.g.
+  `amdxcffx64.dll`) are added alongside. Legacy imports from older versions are
+  migrated automatically.
 - **Nukem's DLSSG-to-FSR3 DLL.** The frame-gen mod cannot be auto-downloaded — import
   `dlssg_to_fsr3_amd_is_better.dll` (or the mod archive) once, then tick the add-on
   per install. fakenvapi needs no import: it is downloaded from the
@@ -174,7 +169,7 @@ Open **Settings** to import:
   including the default `.ini`.
 
 When you click **Install OptiScaler**, the dialog lets you pick the backend
-(OptiScaler default / latest FSR from AMD / INT8 community build / custom DLLs) and which `.ini`
+(OptiScaler default / INT8 community build / custom DLLs) and which `.ini`
 profile to write. The Manager always sets `[FSR] Fsr4Update = true` and
 `UpscalerIndex` per your Step-2 choice (these win over the chosen profile,
 matching what is written to disk). You always see the exact file and ini changes

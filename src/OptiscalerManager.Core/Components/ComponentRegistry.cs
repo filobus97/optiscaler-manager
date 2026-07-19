@@ -139,7 +139,6 @@ public static class ComponentRegistry
     /// </summary>
     public static IReadOnlyList<string> ComponentIdsFor(Fsr4Backend backend) => backend switch
     {
-        Fsr4Backend.LatestAmdSdk => new[] { ComponentIds.Fsr4AmdSdk },
         Fsr4Backend.Int8Community => new[] { ComponentIds.Fsr4Extras },
         Fsr4Backend.CustomMerged => new[] { ComponentIds.CustomMerged },
         _ => Array.Empty<string>(),
@@ -189,15 +188,21 @@ public static class ComponentRegistry
 
         var preview = BuildPreview(ids, injectionDll);
 
-        // Merge the custom overlay into the file list with honest annotations.
-        if (backend == Fsr4Backend.CustomMerged && customDlls is { Count: > 0 })
+        // The custom backend writes ONLY the user's DLLs, overlaid on OptiScaler's
+        // installed files: known names swap the bundled file in place, unknown names
+        // are added. Replace the component's potential-swap list with the actual
+        // overlay, honestly annotated.
+        if (backend == Fsr4Backend.CustomMerged)
         {
-            var files = preview.Files.ToList();
-            foreach (var dll in customDlls)
+            var swappable = Get(ComponentIds.CustomMerged).TargetFiles;
+            var files = preview.Files
+                .Where(f => !swappable.Contains(f, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+            foreach (var dll in customDlls ?? Array.Empty<string>())
             {
-                var idx = files.FindIndex(f => f.Equals(dll, StringComparison.OrdinalIgnoreCase));
-                if (idx >= 0) files[idx] = $"{dll}  (your DLL — overwrites AMD's)";
-                else files.Add($"{dll}  (your DLL — added)");
+                files.Add(swappable.Contains(dll, StringComparer.OrdinalIgnoreCase)
+                    ? $"{dll}  (your DLL — swaps OptiScaler's in place)"
+                    : $"{dll}  (your DLL — added)");
             }
             preview = preview with { Files = files };
         }
@@ -236,28 +241,6 @@ public static class ComponentRegistry
         },
         new ComponentDefinition
         {
-            Id = ComponentIds.Fsr4AmdSdk,
-            DisplayName = "Latest FSR from AMD",
-            Description = "AMD's signed prebuilt FSR DLLs from the official FidelityFX-SDK repository (Kits/FidelityFX/signedbin), fetched at the revision MATCHED to the OptiScaler version being installed — each OptiScaler build can only hook the FSR binaries it has patterns for. Swapped IN PLACE over OptiScaler's matching files; nothing new is added.",
-            // In-place swap: candidates are OptiScaler's FSR set; only those actually
-            // present in the game folder get replaced (enforced by InstallCustomFsrSdk).
-            TargetFiles = new[]
-            {
-                "amd_fidelityfx_dx12.dll",
-                "amd_fidelityfx_loader_dx12.dll",
-                "amd_fidelityfx_upscaler_dx12.dll",
-                "amd_fidelityfx_framegeneration_dx12.dll",
-                "amd_fidelityfx_denoiser_dx12.dll",
-            },
-            IniKeys = new[]
-            {
-                new IniKeyChange("FSR", "UpscalerIndex", "0"),
-                new IniKeyChange("FSR", "Fsr4Update", "true"),
-            },
-            Requires = new[] { ComponentIds.OptiScaler },
-        },
-        new ComponentDefinition
-        {
             Id = ComponentIds.Fsr4Extras,
             DisplayName = "FSR 4 INT8 community build",
             Description = "A community FSR 4.x INT8 upscaler build (amd_fidelityfx_upscaler_dx12.dll) from the OptiScaler-Extras repo, at a version you pick. No proprietary AMD binary is bundled.",
@@ -272,10 +255,11 @@ public static class ComponentRegistry
         new ComponentDefinition
         {
             Id = ComponentIds.CustomMerged,
-            DisplayName = "Custom DLLs over AMD's latest",
-            Description = "The latest AMD signedbin set as the base, with your imported custom DLLs merged on top: same-name DLLs overwrite AMD's, unknown names (e.g. amdxcffx64.dll) are added alongside. Your DLLs are never downloaded — bring your own.",
-            // Base = the AMD signedbin set (the custom overlay is dynamic and gets
-            // annotated into the preview by BuildInstallPreview).
+            DisplayName = "Custom DLLs",
+            Description = "Your imported custom DLLs overlaid on the OptiScaler install: names OptiScaler ships (e.g. amd_fidelityfx_upscaler_dx12.dll) are swapped in place, unknown names (e.g. amdxcffx64.dll) are added alongside. Your DLLs are never downloaded — bring your own.",
+            // These are the OptiScaler-shipped names the overlay MAY swap in place
+            // (drives the derived conflict with the INT8 backend); the actual custom
+            // overlay is dynamic and annotated into the preview by BuildInstallPreview.
             TargetFiles = new[]
             {
                 "amd_fidelityfx_dx12.dll",

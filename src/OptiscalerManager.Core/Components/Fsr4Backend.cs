@@ -17,16 +17,11 @@ namespace OptiscalerManager.Core.Components;
 /// </summary>
 public enum Fsr4Backend
 {
-    /// <summary>Install OptiScaler's own provided files only (they already include a
-    /// working FSR 4.1 upscaler). The zero-decision, recommended path.</summary>
+    /// <summary>Install OptiScaler's own provided files only — they already include
+    /// the newest FSR upscaler each release can hook (a separate "AMD download"
+    /// backend was removed as redundant: only the bundled revisions are hookable).
+    /// The zero-decision, recommended path.</summary>
     Default,
-
-    /// <summary>
-    /// AMD's signed prebuilt FSR DLLs fetched from the official FidelityFX-SDK
-    /// repository tree (signedbin) — the exact artifacts OptiScaler bundles, at AMD's
-    /// newest revision — swapped in place. Maps to <see cref="ComponentIds.Fsr4AmdSdk"/>.
-    /// </summary>
-    LatestAmdSdk,
 
     /// <summary>
     /// A community FSR 4 INT8 build (amd_fidelityfx_upscaler_dx12.dll) from the
@@ -36,8 +31,8 @@ public enum Fsr4Backend
     Int8Community,
 
     /// <summary>
-    /// The user's imported custom DLLs merged on top of the latest AMD signedbin
-    /// set: same-name DLLs overwrite the AMD/OptiScaler files, unknown names (e.g.
+    /// The user's imported custom DLLs overlaid on the OptiScaler install:
+    /// same-name DLLs overwrite OptiScaler's files in place, unknown names (e.g.
     /// amdxcffx64.dll) are added alongside. Maps to <see cref="ComponentIds.CustomMerged"/>.
     /// </summary>
     CustomMerged,

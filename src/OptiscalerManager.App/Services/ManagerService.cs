@@ -78,7 +78,7 @@ public sealed class ManagerService
     public bool IsBackendAvailable(Fsr4Backend backend) => backend switch
     {
         Fsr4Backend.CustomMerged => HasCustomDlls,
-        _ => true, // Default, LatestAmdSdk and Int8Community need no prior import
+        _ => true, // Default and Int8Community need no prior import
     };
 
     // ── Menu / overlay shortcut key (global, persisted) ─────────────────────
@@ -221,12 +221,7 @@ public sealed class ManagerService
         {
             case Fsr4Backend.CustomMerged:
             {
-                await InstallCustomMergedAsync(game, version, status);
-                break;
-            }
-            case Fsr4Backend.LatestAmdSdk:
-            {
-                await InstallAmdSdkAsync(game, version, status);
+                InstallCustomOverlay(game, status);
                 break;
             }
             case Fsr4Backend.Int8Community:
@@ -349,96 +344,40 @@ public sealed class ManagerService
     }
 
     /// <summary>
-    /// Downloads AMD's signed prebuilt FFX DLL set (signedbin) from the official
-    /// FidelityFX-SDK repository — at the revision MATCHED to the OptiScaler release
-    /// being installed, because each OptiScaler build can only hook the upscaler
-    /// binaries it has patterns for — then imports it as an SDK package and swaps it
-    /// in place.
+    /// The custom overlay: the user's imported DLLs applied over the files OptiScaler
+    /// just installed — names OptiScaler ships are swapped in place (with loader-name
+    /// equivalence), unknown names (e.g. amdxcffx64.dll) are added alongside.
+    /// Manifest-tracked, so Revert removes/restores everything. Fully offline: the
+    /// base is the install itself (a separate AMD download was removed as redundant —
+    /// each OptiScaler release can only hook the FSR binaries it already bundles).
     /// </summary>
-    private async Task InstallAmdSdkAsync(Game game, string optiscalerVersion, IProgress<string>? status)
-    {
-        status?.Report($"Downloading AMD's signed FSR DLLs (matched to OptiScaler {optiscalerVersion})…");
-        var (version, dirPath) = await _components.DownloadFidelityFxSignedBinAsync(optiscalerVersion: optiscalerVersion);
-
-        status?.Report($"Preparing FSR SDK {version}…");
-        var scan = await _components.ScanFsrSdkSourceAsync(dirPath);
-        try
-        {
-            if (!scan.HasUpscaler)
-                throw new InvalidOperationException(
-                    "The downloaded FidelityFX SDK did not contain amd_fidelityfx_upscaler_dx12.dll.");
-
-            var info = await _components.ImportCustomFsrSdkPackageAsync(scan);
-            status?.Report($"Installing FSR SDK {version} ({info.Files.Count} DLL(s))…");
-            _install.InstallCustomFsrSdk(game, _components.GetCustomFsrSdkCachePath(info.VersionLabel), info.VersionLabel);
-        }
-        finally
-        {
-            scan.Cleanup();
-        }
-    }
-
-    /// <summary>
-    /// The unified custom overlay: latest AMD signedbin as the base, with the user's
-    /// imported custom DLLs merged on top — same-name entries overwrite the AMD file,
-    /// unknown names (e.g. amdxcffx64.dll) are added alongside (manifest-tracked, so
-    /// Revert removes them). Falls back to a cached signedbin when offline; installs
-    /// the custom overlay alone if nothing is cached.
-    /// </summary>
-    private async Task InstallCustomMergedAsync(Game game, string optiscalerVersion, IProgress<string>? status)
+    private void InstallCustomOverlay(Game game, IProgress<string>? status)
     {
         var customs = _components.GetCustomDlls();
         if (customs.Count == 0)
             throw new InvalidOperationException("No custom DLLs imported. Add them in Settings first.");
 
-        // 1) Base: AMD signedbin matched to the installed OptiScaler version
-        //    (best effort — cached or custom-only fallback).
-        string? baseDir = null;
-        string baseVersion = "custom";
+        var overlayDir = Path.Combine(Path.GetTempPath(), "osm_overlay_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(overlayDir);
         try
         {
-            status?.Report($"Downloading AMD's signed FSR DLLs (matched to OptiScaler {optiscalerVersion})…");
-            (baseVersion, baseDir) = await _components.DownloadFidelityFxSignedBinAsync(optiscalerVersion: optiscalerVersion);
-        }
-        catch (Exception ex)
-        {
-            Log.Write($"[CustomMerged] signedbin download failed, checking cache: {ex.Message}");
-            var cacheRoot = _components.GetFidelityFxSdkCachePath();
-            if (Directory.Exists(cacheRoot))
-                baseDir = Directory.GetDirectories(cacheRoot)
-                    .Where(d => File.Exists(Path.Combine(d, ComponentManagementService.CustomFsrSdkDllName)))
-                    .OrderByDescending(Directory.GetLastWriteTimeUtc)
-                    .FirstOrDefault();
-            status?.Report(baseDir is null
-                ? "AMD base set unavailable (offline?) — installing your custom DLLs only."
-                : "Using the cached AMD base set (offline).");
-        }
-
-        // 2) Merge dir: base files first, then the custom overlay wins on name clashes.
-        var mergeDir = Path.Combine(Path.GetTempPath(), "osm_merge_" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(mergeDir);
-        try
-        {
-            if (baseDir is not null)
-                foreach (var f in Directory.GetFiles(baseDir, "*.dll"))
-                    File.Copy(f, Path.Combine(mergeDir, Path.GetFileName(f)), overwrite: true);
-
             var customNames = new List<string>();
             foreach (var c in customs)
             {
                 var src = Path.Combine(_components.GetCustomDllsPath(), c.Name);
                 if (!File.Exists(src)) continue;
-                File.Copy(src, Path.Combine(mergeDir, c.Name), overwrite: true);
+                File.Copy(src, Path.Combine(overlayDir, c.Name), overwrite: true);
                 customNames.Add(c.Name);
             }
+            if (customNames.Count == 0)
+                throw new InvalidOperationException("The custom-DLL library is empty on disk. Re-import your DLLs in Settings.");
 
-            var label = baseDir is not null ? $"{baseVersion}+custom" : "custom";
-            status?.Report($"Installing merged FSR set ({label}, {Directory.GetFiles(mergeDir, "*.dll").Length} DLL(s))…");
-            _install.InstallCustomFsrSdk(game, mergeDir, label, injectNames: customNames);
+            status?.Report($"Applying {customNames.Count} custom DLL(s) over the install…");
+            _install.InstallCustomFsrSdk(game, overlayDir, "custom", injectNames: customNames);
         }
         finally
         {
-            try { Directory.Delete(mergeDir, true); } catch { }
+            try { Directory.Delete(overlayDir, true); } catch { }
         }
     }
 
