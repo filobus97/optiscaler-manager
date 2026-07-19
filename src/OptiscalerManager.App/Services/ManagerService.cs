@@ -149,16 +149,34 @@ public sealed class ManagerService
     /// </summary>
     public InstallPreview BuildInstallPreview(Game game, Fsr4Backend backend, bool selectFsr4,
         bool addFakenvapi = false, bool addNukemFg = false,
-        bool spoofNvidia = false, bool forceInt8 = false, bool fsr4Watermark = false)
+        SpoofMethod? spoofMethod = null, bool forceInt8 = false, bool fsr4Watermark = false)
         => ComponentRegistry.BuildInstallPreview(backend, selectFsr4, ComponentRegistry.DefaultInjectionDll, MenuShortcutKey,
             backend == Fsr4Backend.CustomMerged ? _components.GetCustomDlls().Select(d => d.Name).ToList() : null,
-            addFakenvapi, addNukemFg, spoofNvidia, forceInt8, fsr4Watermark);
+            addFakenvapi, addNukemFg, spoofMethod, forceInt8, fsr4Watermark);
+
+    // ── OptiScaler version list ─────────────────────────────────────────────
+    /// <summary>
+    /// OptiScaler release versions selectable at install (newest first): the remote
+    /// list when a check has run, merged with anything already downloaded; falls back
+    /// to downloaded-only when offline.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> GetOptiScalerVersionsAsync()
+    {
+        if (_components.OptiScalerAvailableVersions.Count == 0)
+        {
+            try { await _components.CheckForUpdatesAsync(); } catch { /* offline / rate-limited */ }
+        }
+        var list = _components.OptiScalerAvailableVersions;
+        if (list.Count > 0) return list;
+        return _components.GetDownloadedOptiScalerVersions();
+    }
 
     // ── Install OptiScaler ──────────────────────────────────────────────────
     public async Task InstallAsync(Game game, Fsr4Backend backend, string? int8Version, bool selectFsr4,
         OptiScalerProfile? iniProfile, IProgress<string>? status = null,
         bool addFakenvapi = false, bool addNukemFg = false,
-        bool spoofNvidia = false, bool forceInt8 = false, bool fsr4Watermark = false)
+        SpoofMethod? spoofMethod = null, bool forceInt8 = false, bool fsr4Watermark = false,
+        string? optiscalerVersion = null)
     {
         if (!IsBackendAvailable(backend))
             throw new InvalidOperationException($"The selected FSR 4 backend ({backend}) is not available. Import it in Settings first.");
@@ -168,7 +186,9 @@ public sealed class ManagerService
         status?.Report("Checking for the latest OptiScaler release…");
         try { await _components.CheckForUpdatesAsync(); } catch { /* offline: fall back to cache */ }
 
-        var version = _components.LatestStableVersion
+        // A specific version wins; otherwise latest stable, then anything cached.
+        var version = optiscalerVersion
+                      ?? _components.LatestStableVersion
                       ?? _components.GetDownloadedOptiScalerVersions().FirstOrDefault()
                       ?? throw new InvalidOperationException(
                           "No OptiScaler release is available and none is cached. Connect to the internet and try again.");
@@ -219,12 +239,53 @@ public sealed class ManagerService
                 break; // OptiScaler-provided files only.
         }
 
+        // Nvidia override via OptiPatcher: the ASI plugin patches vendor checks in
+        // memory instead of spoofing the adapter. plugins/OptiPatcher.asi is a known
+        // OptiScaler artifact, so Revert removes it with the rest.
+        if (spoofMethod == SpoofMethod.OptiPatcher)
+            await InstallOptiPatcherAsync(gameDir, status);
+
         // Force ONLY the keys the Manager owns; everything else in the chosen ini
         // (default or custom) is left untouched. FSR 4 is always made *available*;
         // whether it is *selected* depends on selectFsr4.
-        ApplyForcedIniKeys(gameDir, selectFsr4, spoofNvidia, forceInt8, fsr4Watermark);
+        ApplyForcedIniKeys(gameDir, selectFsr4, spoofMethod, forceInt8, fsr4Watermark);
 
         status?.Report("Done.");
+    }
+
+    /// <summary>
+    /// Downloads the latest OptiPatcher.asi (cached fallback offline) and places it in
+    /// the game's plugins folder. LoadAsiPlugins=true is forced by ApplyForcedIniKeys.
+    /// </summary>
+    private async Task InstallOptiPatcherAsync(string gameDir, IProgress<string>? status)
+    {
+        string? asiPath = null;
+        var version = _components.LatestOptiPatcherVersion;
+        if (version is not null)
+        {
+            try
+            {
+                status?.Report($"Downloading OptiPatcher {version}…");
+                asiPath = await _components.DownloadOptiPatcherAsync(version);
+            }
+            catch (Exception ex)
+            {
+                Log.Write($"[OptiPatcher] Download of {version} failed, checking cache: {ex.Message}");
+            }
+        }
+        if (asiPath is null)
+        {
+            var cached = _components.GetDownloadedOptiPatcherVersions().FirstOrDefault()
+                ?? throw new InvalidOperationException(
+                    "OptiPatcher could not be downloaded and no version is cached. Connect to the internet and try again.");
+            asiPath = Path.Combine(_components.GetOptiPatcherCachePath(cached), "OptiPatcher.asi");
+            status?.Report($"Using cached OptiPatcher {cached} (offline).");
+        }
+
+        var pluginsDir = Path.Combine(gameDir, "plugins");
+        Directory.CreateDirectory(pluginsDir);
+        File.Copy(asiPath, Path.Combine(pluginsDir, "OptiPatcher.asi"), overwrite: true);
+        status?.Report("Installed OptiPatcher plugin.");
     }
 
     /// <summary>
@@ -267,7 +328,7 @@ public sealed class ManagerService
     /// menu key is configured. Applied last, so it overrides anything the backend
     /// installers set. Off toggles leave the keys untouched (OptiScaler's auto behaviour).
     /// </summary>
-    private void ApplyForcedIniKeys(string gameDir, bool selectFsr4, bool spoofNvidia = false,
+    private void ApplyForcedIniKeys(string gameDir, bool selectFsr4, SpoofMethod? spoofMethod = null,
         bool forceInt8 = false, bool fsr4Watermark = false)
     {
         GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4Update", "true");
@@ -277,8 +338,10 @@ public sealed class ManagerService
             GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4ForceEnableInt8", "true");
         if (fsr4Watermark)
             GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4EnableWatermark", "true");
-        if (spoofNvidia)
+        if (spoofMethod == SpoofMethod.Dxgi)
             GameInstallationService.ModifyOptiScalerIniKey(gameDir, "Spoofing", "Dxgi", "true");
+        if (spoofMethod == SpoofMethod.OptiPatcher)
+            GameInstallationService.ModifyOptiScalerIniKey(gameDir, "Plugins", "LoadAsiPlugins", "true");
 
         var menuKey = _components.Config.MenuShortcutKey;
         if (!string.IsNullOrWhiteSpace(menuKey))

@@ -34,8 +34,11 @@ public partial class InstallOptiScalerDialog : Window
     /// <summary>Install Nukem's DLSSG-to-FSR3 mod (imported DLL + FGInput=nukems).</summary>
     public bool AddNukemFg { get; private set; }
 
-    /// <summary>Force [Spoofing] Dxgi=true for this game.</summary>
-    public bool SpoofNvidia { get; private set; }
+    /// <summary>Nvidia override method for this game (null = no override).</summary>
+    public SpoofMethod? SelectedSpoofMethod { get; private set; }
+
+    /// <summary>The OptiScaler release version to install (null = latest).</summary>
+    public string? SelectedOptiScalerVersion { get; private set; }
 
     /// <summary>Force [FSR] Fsr4ForceEnableInt8=true.</summary>
     public bool ForceInt8 { get; private set; }
@@ -56,6 +59,7 @@ public partial class InstallOptiScalerDialog : Window
 
         SetupBackendOptions();
         SetupProfiles();
+        SetupOptiScalerVersions();
 
         _ready = true;
         UpdatePreview();
@@ -93,7 +97,23 @@ public partial class InstallOptiScalerDialog : Window
         this.FindControl<CheckBox>("ChkForceInt8")!.IsCheckedChanged += OnOptionChanged;
         this.FindControl<CheckBox>("ChkWatermark")!.IsCheckedChanged += OnOptionChanged;
         this.FindControl<CheckBox>("ChkFakenvapi")!.IsCheckedChanged += OnOptionChanged;
-        this.FindControl<CheckBox>("ChkSpoofNvidia")!.IsCheckedChanged += OnOptionChanged;
+
+        // Nvidia override: checkbox reveals the method combo (DXGI spoofing / OptiPatcher).
+        var spoof = this.FindControl<CheckBox>("ChkSpoofNvidia")!;
+        var methodPanel = this.FindControl<StackPanel>("SpoofMethodPanel")!;
+        var methodCombo = this.FindControl<ComboBox>("SpoofMethodCombo")!;
+        methodCombo.ItemsSource = new[]
+        {
+            "Default — DXGI spoofing ([Spoofing] Dxgi=true)",
+            "OptiPatcher plugin (plugins/OptiPatcher.asi)",
+        };
+        methodCombo.SelectedIndex = 0;
+        methodCombo.SelectionChanged += OnOptionChanged;
+        spoof.IsCheckedChanged += (_, e) =>
+        {
+            methodPanel.IsVisible = spoof.IsChecked == true;
+            OnOptionChanged(spoof, e);
+        };
 
         var nukem = this.FindControl<CheckBox>("ChkNukemFg")!;
         if (!_manager.IsNukemFgCached)
@@ -144,6 +164,36 @@ public partial class InstallOptiScalerDialog : Window
         combo.SelectionChanged += OnOptionChanged;
     }
 
+    // Lazily populate the OptiScaler version list; "Latest" stays selected until the
+    // fetch completes so the dialog is usable immediately (and offline).
+    private async void SetupOptiScalerVersions()
+    {
+        var combo = this.FindControl<ComboBox>("OptiScalerVersionCombo")!;
+        combo.ItemsSource = new[] { "Latest (recommended)" };
+        combo.SelectedIndex = 0;
+
+        var versions = await _manager.GetOptiScalerVersionsAsync();
+        var items = new System.Collections.Generic.List<string> { "Latest (recommended)" };
+        items.AddRange(versions);
+        combo.ItemsSource = items;
+        combo.SelectedIndex = 0;
+        combo.SelectionChanged += OnOptionChanged;
+    }
+
+    private string? CurrentOptiScalerVersion()
+    {
+        var combo = this.FindControl<ComboBox>("OptiScalerVersionCombo")!;
+        var v = combo.SelectedItem as string;
+        return (combo.SelectedIndex <= 0 || string.IsNullOrEmpty(v)) ? null : v;
+    }
+
+    private SpoofMethod? CurrentSpoofMethod()
+    {
+        if (!IsChecked("ChkSpoofNvidia")) return null;
+        var combo = this.FindControl<ComboBox>("SpoofMethodCombo")!;
+        return combo.SelectedIndex == 1 ? SpoofMethod.OptiPatcher : SpoofMethod.Dxgi;
+    }
+
     private Fsr4Backend CurrentBackend()
     {
         if (this.FindControl<RadioButton>("RbInt8")!.IsChecked == true) return Fsr4Backend.Int8Community;
@@ -179,7 +229,7 @@ public partial class InstallOptiScalerDialog : Window
         if (!_ready) return;
         var preview = _manager.BuildInstallPreview(_game, CurrentBackend(), CurrentSelectFsr4(),
             addFakenvapi: IsChecked("ChkFakenvapi"), addNukemFg: IsChecked("ChkNukemFg"),
-            spoofNvidia: IsChecked("ChkSpoofNvidia"), forceInt8: IsChecked("ChkForceInt8"),
+            spoofMethod: CurrentSpoofMethod(), forceInt8: IsChecked("ChkForceInt8"),
             fsr4Watermark: IsChecked("ChkWatermark"));
 
         var files = this.FindControl<StackPanel>("FilesList")!;
@@ -224,9 +274,10 @@ public partial class InstallOptiScalerDialog : Window
         SelectedProfile = CurrentProfile();
         AddFakenvapi = IsChecked("ChkFakenvapi");
         AddNukemFg = IsChecked("ChkNukemFg");
-        SpoofNvidia = IsChecked("ChkSpoofNvidia");
+        SelectedSpoofMethod = CurrentSpoofMethod();
         ForceInt8 = IsChecked("ChkForceInt8");
         Fsr4Watermark = IsChecked("ChkWatermark");
+        SelectedOptiScalerVersion = CurrentOptiScalerVersion();
         Close(true);
     }
 

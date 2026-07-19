@@ -162,7 +162,8 @@ public partial class MainWindow : Window
         {
             await _manager.InstallAsync(row.Game, dialog.SelectedBackend, dialog.SelectedInt8Version, dialog.SelectFsr4, dialog.SelectedProfile, progress,
                 addFakenvapi: dialog.AddFakenvapi, addNukemFg: dialog.AddNukemFg,
-                spoofNvidia: dialog.SpoofNvidia, forceInt8: dialog.ForceInt8, fsr4Watermark: dialog.Fsr4Watermark);
+                spoofMethod: dialog.SelectedSpoofMethod, forceInt8: dialog.ForceInt8, fsr4Watermark: dialog.Fsr4Watermark,
+                optiscalerVersion: dialog.SelectedOptiScalerVersion);
             row.Game.IsOptiscalerInstalled = true;
             row.RefreshFromGame();
             _vm.StatusText = $"OptiScaler installed for {row.Game.Name}.";

@@ -20,9 +20,10 @@ action per game, advanced options tucked away.
 ## What it is (and what it deliberately isn't)
 
 - **One primary screen.** A detected-GPU banner and your game list. Per game, a
-  single **Install OptiScaler** button downloads and installs the *real latest
-  OptiScaler release from source* (`optiscaler/OptiScaler` on GitHub). The install
-  dialog then decouples two independent choices:
+  single **Install OptiScaler** button downloads and installs the *real OptiScaler
+  release from source* (`optiscaler/OptiScaler` on GitHub) — **latest by default,
+  or any older release from the version selector** at the top of the dialog. The
+  install dialog then decouples the independent choices:
 
   **Step 1 — Backend (which files to install):**
     - *Default — OptiScaler's own files* (**recommended**): OptiScaler's release already
@@ -59,9 +60,12 @@ action per game, advanced options tucked away.
     - *Nukem DLSSG-to-FSR3* — frame generation for games with DLSS-G
       (`dlssg_to_fsr3_amd_is_better.dll`, **bring-your-own** — import it once in
       Settings). Selecting it sets `[FrameGen] FGInput=nukems` and pulls fakenvapi in;
-    - *Nvidia override* — forces `[Spoofing] Dxgi=true` so the game sees an Nvidia GPU
-      (for games that hide DLSS options on AMD/Intel). **Per game only** — you choose
-      it in this dialog on each install; there is no global setting.
+    - *Nvidia override* — for games that hide DLSS options on AMD/Intel. **Per game
+      only** (chosen in this dialog on each install; no global setting), with a
+      **method selector**: *Default* uses OptiScaler's built-in DXGI spoofing
+      (`[Spoofing] Dxgi=true`, adapter reports as an RTX 4090); *OptiPatcher*
+      installs the `plugins/OptiPatcher.asi` plugin (`[Plugins] LoadAsiPlugins=true`),
+      which patches the game's vendor checks in memory instead.
 
   Plus the **`OptiScaler.ini`** to use — OptiScaler's default, or one of your saved
   profiles. When you pick a custom `.ini`, the options above overwrite **only the keys

@@ -168,19 +168,24 @@ public static class ComponentRegistry
     /// </param>
     /// <param name="addFakenvapi">Include the fakenvapi add-on (nvapi64.dll + fakenvapi.ini).</param>
     /// <param name="addNukemFg">Include Nukem's DLSSG-to-FSR3 mod (adds [FrameGen] FGInput=nukems).</param>
-    /// <param name="spoofNvidia">Force [Spoofing] Dxgi=true (present an Nvidia GPU to the game).</param>
+    /// <param name="spoofMethod">
+    /// Nvidia override method for this game, or null for none. Dxgi forces
+    /// [Spoofing] Dxgi=true; OptiPatcher installs plugins/OptiPatcher.asi and forces
+    /// [Plugins] LoadAsiPlugins=true.
+    /// </param>
     /// <param name="forceInt8">Force [FSR] Fsr4ForceEnableInt8=true (INT8 model on unsupported GPUs).</param>
     /// <param name="fsr4Watermark">Force [FSR] Fsr4EnableWatermark=true (on-screen FSR4/FSR4-i8/FSR3 verification).</param>
     public static InstallPreview BuildInstallPreview(
         Fsr4Backend backend, bool selectFsr4, string? injectionDll = null, string? menuKeyVk = null,
         IReadOnlyList<string>? customDlls = null,
         bool addFakenvapi = false, bool addNukemFg = false,
-        bool spoofNvidia = false, bool forceInt8 = false, bool fsr4Watermark = false)
+        SpoofMethod? spoofMethod = null, bool forceInt8 = false, bool fsr4Watermark = false)
     {
         var ids = new List<string> { ComponentIds.OptiScaler };
         ids.AddRange(ComponentIdsFor(backend));
         if (addFakenvapi) ids.Add(ComponentIds.Fakenvapi);
         if (addNukemFg) ids.Add(ComponentIds.NukemFg);
+        if (spoofMethod == SpoofMethod.OptiPatcher) ids.Add(ComponentIds.OptiPatcher);
 
         var preview = BuildPreview(ids, injectionDll);
 
@@ -209,8 +214,10 @@ public static class ComponentRegistry
             iniKeys.Add(new IniKeyChange("FSR", "Fsr4EnableWatermark", "true"));
         if (addNukemFg)
             iniKeys.Add(new IniKeyChange("FrameGen", "FGInput", "nukems"));
-        if (spoofNvidia)
+        if (spoofMethod == SpoofMethod.Dxgi)
             iniKeys.Add(new IniKeyChange("Spoofing", "Dxgi", "true"));
+        if (spoofMethod == SpoofMethod.OptiPatcher)
+            iniKeys.Add(new IniKeyChange("Plugins", "LoadAsiPlugins", "true"));
         if (!string.IsNullOrWhiteSpace(menuKeyVk))
             iniKeys.Add(new IniKeyChange("Menu", "ShortcutKey", menuKeyVk!));
 
@@ -311,8 +318,9 @@ public static class ComponentRegistry
         {
             Id = ComponentIds.OptiPatcher,
             DisplayName = "OptiPatcher",
-            Description = "Optional ASI plugin that patches certain games so OptiScaler can hook them.",
+            Description = "ASI plugin that patches games' GPU vendor checks in memory — the alternative Nvidia-override method to DXGI spoofing. Downloaded from the optiscaler/OptiPatcher releases.",
             TargetFiles = new[] { @"plugins\OptiPatcher.asi" },
+            IniKeys = new[] { new IniKeyChange("Plugins", "LoadAsiPlugins", "true") },
             Requires = new[] { ComponentIds.OptiScaler },
         },
     };

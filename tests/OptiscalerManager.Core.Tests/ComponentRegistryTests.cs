@@ -183,10 +183,23 @@ namespace OptiscalerManager.Core.Tests
         }
 
         [Fact]
-        public void InstallPreview_SpoofNvidia_ForcesDxgiKey()
+        public void InstallPreview_SpoofDxgi_ForcesDxgiKey_NoPluginBits()
         {
-            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selectFsr4: true, spoofNvidia: true);
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selectFsr4: true,
+                spoofMethod: SpoofMethod.Dxgi);
             Assert.Contains(preview.IniKeys, k => k.Section == "Spoofing" && k.Key == "Dxgi" && k.Value == "true");
+            Assert.DoesNotContain(preview.IniKeys, k => k.Section == "Plugins");
+            Assert.DoesNotContain(preview.Files, f => f.Contains("OptiPatcher"));
+        }
+
+        [Fact]
+        public void InstallPreview_SpoofOptiPatcher_AddsPluginAndKey_NoDxgiSpoof()
+        {
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selectFsr4: true,
+                spoofMethod: SpoofMethod.OptiPatcher);
+            Assert.Contains(preview.Files, f => f.Contains("OptiPatcher.asi"));
+            Assert.Contains(preview.IniKeys, k => k.Section == "Plugins" && k.Key == "LoadAsiPlugins" && k.Value == "true");
+            Assert.DoesNotContain(preview.IniKeys, k => k.Section == "Spoofing");
         }
 
         [Fact]
