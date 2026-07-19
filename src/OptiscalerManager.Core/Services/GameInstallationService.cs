@@ -457,9 +457,10 @@ namespace OptiscalerManager.Core.Services
                         nukemFileCount++;
                         Log.Write($"[Install] Installed NukemFG file: {fileName}");
 
-                        // Modify OptiScaler.ini to set FGType=nukems
-                        ModifyOptiScalerIni(gameDir, "FGType", "nukems");
-                        Log.Write($"[Install] Modified OptiScaler.ini for NukemFG");
+                        // Select Nukem's mod as the FG input. OptiScaler 0.9.x reads
+                        // [FrameGen] FGInput; the legacy sectionless FGType key is dead.
+                        ModifyOptiScalerIniKey(gameDir, "FrameGen", "FGInput", "nukems");
+                        Log.Write($"[Install] Set [FrameGen] FGInput=nukems for NukemFG");
                     }
                 }
 

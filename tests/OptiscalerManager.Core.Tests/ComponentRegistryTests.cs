@@ -158,5 +158,56 @@ namespace OptiscalerManager.Core.Tests
             var with = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Int8Community, selectFsr4: true, menuKeyVk: "0x78");
             Assert.Contains(with.IniKeys, k => k.Section == "Menu" && k.Key == "ShortcutKey" && k.Value == "0x78");
         }
+
+        [Fact]
+        public void InstallPreview_Addons_ListFilesAndFgInputKey()
+        {
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selectFsr4: true,
+                addFakenvapi: true, addNukemFg: true);
+
+            Assert.Contains("nvapi64.dll", preview.Files);
+            Assert.Contains("fakenvapi.ini", preview.Files);
+            Assert.Contains("dlssg_to_fsr3_amd_is_better.dll", preview.Files);
+            // OptiScaler 0.9.x reads [FrameGen] FGInput (legacy FGType is dead).
+            Assert.Contains(preview.IniKeys, k => k.Section == "FrameGen" && k.Key == "FGInput" && k.Value == "nukems");
+        }
+
+        [Fact]
+        public void InstallPreview_NoAddons_OmitsAddonFilesAndKeys()
+        {
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selectFsr4: true);
+            Assert.DoesNotContain("nvapi64.dll", preview.Files);
+            Assert.DoesNotContain("dlssg_to_fsr3_amd_is_better.dll", preview.Files);
+            Assert.DoesNotContain(preview.IniKeys, k => k.Section == "FrameGen");
+            Assert.DoesNotContain(preview.IniKeys, k => k.Section == "Spoofing");
+        }
+
+        [Fact]
+        public void InstallPreview_SpoofNvidia_ForcesDxgiKey()
+        {
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selectFsr4: true, spoofNvidia: true);
+            Assert.Contains(preview.IniKeys, k => k.Section == "Spoofing" && k.Key == "Dxgi" && k.Value == "true");
+        }
+
+        [Fact]
+        public void InstallPreview_Fsr4Toggles_ForceIniKeys()
+        {
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selectFsr4: true,
+                forceInt8: true, fsr4Watermark: true);
+            Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "Fsr4ForceEnableInt8" && k.Value == "true");
+            Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "Fsr4EnableWatermark" && k.Value == "true");
+        }
+
+        [Fact]
+        public void Addons_AreIndependentOfBackends_NoConflicts()
+        {
+            // Add-ons write disjoint files from every backend, so no pair conflicts.
+            foreach (var backend in new[] { Fsr4Backend.LatestAmdSdk, Fsr4Backend.Int8Community, Fsr4Backend.CustomMerged })
+            {
+                var preview = ComponentRegistry.BuildInstallPreview(backend, selectFsr4: true,
+                    addFakenvapi: true, addNukemFg: true);
+                Assert.Empty(preview.Conflicts);
+            }
+        }
     }
 }

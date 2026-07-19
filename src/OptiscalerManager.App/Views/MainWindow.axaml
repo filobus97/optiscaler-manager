@@ -8,7 +8,7 @@
         Background="{StaticResource BrBgBase}"
         Title="OptiScaler Manager">
 
-  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Margin="20">
+  <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" Margin="20">
 
     <!-- Header -->
     <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto">
@@ -40,8 +40,24 @@
       </StackPanel>
     </Border>
 
+    <!-- Update-available banner (hidden unless a newer release exists) -->
+    <Border Grid.Row="2" Name="UpdateBanner" IsVisible="False" Margin="0,10,0,0" Padding="12,8"
+            CornerRadius="{StaticResource RadiusMedium}"
+            Background="#2A2440"
+            BorderThickness="1" BorderBrush="{StaticResource BrAccent}">
+      <Grid ColumnDefinitions="*,Auto,Auto">
+        <TextBlock Name="UpdateBannerText" Grid.Column="0" VerticalAlignment="Center"
+                   Foreground="{StaticResource BrTextPrimary}" FontSize="12" TextWrapping="Wrap"/>
+        <Button Grid.Column="1" Content="Open releases page" FontSize="11" Margin="8,0"
+                Click="OnOpenReleasesClick"
+                ToolTip.Tip="Opens this app's GitHub releases page in your browser. To update in place, close the app and run update.sh (Linux/macOS) or update.ps1 (Windows) from the install folder — your imports and settings are kept."/>
+        <Button Grid.Column="2" Content="✕" FontSize="11" Padding="8,4"
+                Click="OnDismissUpdateBanner" ToolTip.Tip="Hide until next launch."/>
+      </Grid>
+    </Border>
+
     <!-- Bring-your-own summary -->
-    <Border Grid.Row="2" Margin="0,10,0,0" Padding="12,8"
+    <Border Grid.Row="3" Margin="0,10,0,0" Padding="12,8"
             CornerRadius="{StaticResource RadiusMedium}"
             Background="{StaticResource BrBgSurface}"
             BorderThickness="1" BorderBrush="{StaticResource BrBorderSubtle}"
@@ -51,7 +67,7 @@
     </Border>
 
     <!-- Game list -->
-    <Border Grid.Row="3" Margin="0,12,0,0"
+    <Border Grid.Row="4" Margin="0,12,0,0"
             CornerRadius="{StaticResource RadiusMedium}"
             Background="{StaticResource BrBgCard}"
             BorderThickness="1" BorderBrush="{StaticResource BrBorderSubtle}">
@@ -96,7 +112,7 @@
     </Border>
 
     <!-- Status bar -->
-    <Border Grid.Row="4" Margin="0,12,0,0" Padding="12,8"
+    <Border Grid.Row="5" Margin="0,12,0,0" Padding="12,8"
             CornerRadius="{StaticResource RadiusMedium}"
             Background="{StaticResource BrBgSurface}">
       <StackPanel Orientation="Horizontal" Spacing="10">

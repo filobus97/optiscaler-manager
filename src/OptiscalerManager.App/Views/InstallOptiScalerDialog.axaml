@@ -1,7 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="OptiscalerManager.App.Views.InstallOptiScalerDialog"
-        Width="680" Height="720" MinWidth="560" MinHeight="520"
+        Width="680" Height="860" MinWidth="560" MinHeight="600"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource BrBgBase}"
         Title="Install OptiScaler">
@@ -59,6 +59,30 @@
             <RadioButton Name="RbSelectInGame" GroupName="Fsr4Select" Content="I'll select it in-game (UpscalerIndex=auto)"
                          Foreground="{StaticResource BrTextPrimary}"
                          ToolTip.Tip="Leaves [FSR] UpscalerIndex=auto so you can choose the upscaler from OptiScaler's in-game overlay."/>
+            <CheckBox Name="ChkForceInt8" Content="Force INT8 model on unsupported GPUs (Fsr4ForceEnableInt8)"
+                      Foreground="{StaticResource BrTextPrimary}" FontSize="12"
+                      ToolTip.Tip="FSR 4.1.1 officially supports only RDNA4 (FP8) and desktop RDNA3 (INT8); other GPUs silently fall back to FSR 3. This forces the SDK upscaler's INT8 capability check to pass on RDNA2 / mobile RDNA3 / Intel / Nvidia. It cannot make GPUs without INT8 support work, and RDNA2 Windows users are still recommended the INT8 community 4.0.2c build."/>
+            <CheckBox Name="ChkWatermark" Content="Show FSR4 watermark to verify (Fsr4EnableWatermark)"
+                      Foreground="{StaticResource BrTextPrimary}" FontSize="12"
+                      ToolTip.Tip="Shows an on-screen watermark reporting FSR4, FSR4-i8 or FSR3 — the reliable way to check whether FSR 4 is genuinely running or silently fell back to FSR 3 on unsupported hardware. Turn it off once verified."/>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+
+      <StackPanel Spacing="6">
+        <TextBlock Text="3. Add-ons &amp; extras" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
+        <Border Padding="12" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="6">
+            <CheckBox Name="ChkFakenvapi" Content="fakenvapi — Reflex → Anti-Lag 2 / LatencyFlex"
+                      Foreground="{StaticResource BrTextPrimary}" FontSize="12"
+                      ToolTip.Tip="Installs nvapi64.dll + fakenvapi.ini (downloaded from the optiscaler/fakenvapi releases). Translates Nvidia Reflex calls into AMD Anti-Lag 2 or LatencyFlex, and is required for Nukem's frame-gen mod on AMD/Intel GPUs."/>
+            <CheckBox Name="ChkNukemFg" Content="Nukem DLSSG-to-FSR3 (frame generation)"
+                      Foreground="{StaticResource BrTextPrimary}" FontSize="12"
+                      ToolTip.Tip="Installs dlssg_to_fsr3_amd_is_better.dll (your imported copy) and sets [FrameGen] FGInput=nukems. For games with DLSS Frame Generation; needs fakenvapi on AMD/Intel, so selecting this also selects fakenvapi."/>
+            <CheckBox Name="ChkSpoofNvidia" Content="Nvidia override — spoof an Nvidia GPU for this game"
+                      Foreground="{StaticResource BrTextPrimary}" FontSize="12"
+                      ToolTip.Tip="Forces [Spoofing] Dxgi=true so the game sees an Nvidia GPU (RTX 4090 by default). Use for games that hide DLSS/DLSS-G options on AMD/Intel. The default state of this checkbox can be set globally in Settings."/>
           </StackPanel>
         </Border>
       </StackPanel>

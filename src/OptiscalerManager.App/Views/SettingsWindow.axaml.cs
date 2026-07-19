@@ -36,8 +36,71 @@ public partial class SettingsWindow : Window
     {
         _manager = manager;
         SetupMenuKey();
+        SetupSpoofDefault();
+        SetupAboutCard();
+        RefreshNukemStatus();
         RefreshInventory();
         RefreshIniProfiles();
+    }
+
+    private void SetupSpoofDefault()
+    {
+        var check = this.FindControl<CheckBox>("SpoofDefaultCheck");
+        if (check is null) return;
+        check.IsChecked = _manager.SpoofNvidiaDefault;
+        check.IsCheckedChanged += (_, _) =>
+        {
+            _manager.SpoofNvidiaDefault = check.IsChecked == true;
+            SetResult(check.IsChecked == true
+                ? "Nvidia override will be pre-selected on new installs ([Spoofing] Dxgi=true)."
+                : "Nvidia override off by default (you can still enable it per install).");
+        };
+    }
+
+    private void SetupAboutCard()
+    {
+        var text = this.FindControl<TextBlock>("AppVersionText");
+        if (text is not null)
+            text.Text = $"OptiScaler Manager v{_manager.AppVersion}";
+    }
+
+    private void RefreshNukemStatus()
+    {
+        var text = this.FindControl<TextBlock>("NukemStatusText");
+        if (text is null) return;
+        text.Text = _manager.IsNukemFgCached
+            ? $"Imported ✓ (version tag: {_manager.NukemFgVersion ?? "manual"})"
+            : "Not imported yet";
+    }
+
+    private async void OnImportNukemFg(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var ok = await _manager.ImportNukemFgAsync();
+            SetResult(ok
+                ? "Nukem's DLSSG-to-FSR3 DLL imported — select the add-on when installing OptiScaler."
+                : "Import cancelled or the file did not contain dlssg_to_fsr3_amd_is_better.dll.", error: !ok);
+        }
+        catch (Exception ex)
+        {
+            SetResult($"Import failed: {ex.Message}", error: true);
+        }
+        RefreshNukemStatus();
+        RefreshInventory();
+    }
+
+    private async void OnCheckAppUpdate(object? sender, RoutedEventArgs e)
+    {
+        var result = this.FindControl<TextBlock>("AppUpdateResultText");
+        if (result is null) return;
+        result.Text = "Checking…";
+        var check = await _manager.CheckForAppUpdateAsync();
+        result.Text = check.LatestVersion is null
+            ? "Could not reach GitHub (offline or rate-limited)."
+            : check.UpdateAvailable
+                ? $"v{check.LatestVersion} is available — close the app and run update.sh / update.ps1."
+                : $"Up to date (latest is v{check.LatestVersion}).";
     }
 
     private void SetupMenuKey()

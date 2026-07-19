@@ -1,7 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="OptiscalerManager.App.Views.SettingsWindow"
-        Width="620" Height="560" MinWidth="520" MinHeight="440"
+        Width="620" Height="640" MinWidth="520" MinHeight="440"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource BrBgBase}"
         Title="Settings — Import your own DLLs">
@@ -55,6 +55,35 @@
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
                 BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="8">
+            <TextBlock Text="Add-ons" FontWeight="SemiBold"
+                       Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
+                       Text="fakenvapi (Reflex → Anti-Lag 2 / LatencyFlex) is downloaded automatically when you select it at install time. Nukem's DLSSG-to-FSR3 frame-gen mod cannot be auto-downloaded — import its dlssg_to_fsr3_amd_is_better.dll (or the mod archive) here once, then select it per install."/>
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <Button Content="Import Nukem FG DLL…" Click="OnImportNukemFg"
+                      ToolTip.Tip="Pick dlssg_to_fsr3_amd_is_better.dll or the downloaded mod archive (.zip/.7z). Stored in the cache for future installs."/>
+              <TextBlock Name="NukemStatusText" VerticalAlignment="Center" FontSize="12"
+                         Foreground="{StaticResource BrTextSecondary}"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Nvidia override (GPU spoofing)" FontWeight="SemiBold"
+                       Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
+                       Text="Some games hide DLSS / DLSS Frame Generation options unless they see an Nvidia GPU. When enabled, installs force [Spoofing] Dxgi=true so the game sees an Nvidia GPU (RTX 4090). This sets the DEFAULT for the per-game checkbox in the Install dialog — you can still flip it per install."/>
+            <CheckBox Name="SpoofDefaultCheck" Content="Spoof an Nvidia GPU by default on new installs"
+                      Foreground="{StaticResource BrTextPrimary}" FontSize="12"
+                      ToolTip.Tip="Pre-checks the 'Nvidia override' box in the Install dialog. Pairs well with the fakenvapi add-on so Reflex calls become Anti-Lag 2 / LatencyFlex."/>
+          </StackPanel>
+        </Border>
+
+        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="8">
             <TextBlock Text="OptiScaler.ini profiles" FontWeight="SemiBold"
                        Foreground="{StaticResource BrTextPrimary}"/>
             <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
@@ -74,6 +103,21 @@
             <TextBlock Text="Imported so far" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
             <TextBlock Name="InventoryText" TextWrapping="Wrap" FontSize="12"
                        Foreground="{StaticResource BrTextSecondary}"/>
+          </StackPanel>
+        </Border>
+
+        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgSurface}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="8">
+            <TextBlock Text="About &amp; updates" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock Name="AppVersionText" TextWrapping="Wrap" FontSize="12"
+                       Foreground="{StaticResource BrTextSecondary}"/>
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <Button Content="Check for updates" Click="OnCheckAppUpdate"
+                      ToolTip.Tip="Queries this app's GitHub releases for a newer version. To update in place, close the app and run update.sh / update.ps1 from the install folder — your imports and settings are kept."/>
+              <TextBlock Name="AppUpdateResultText" VerticalAlignment="Center" FontSize="12"
+                         Foreground="{StaticResource BrTextSecondary}"/>
+            </StackPanel>
           </StackPanel>
         </Border>
 

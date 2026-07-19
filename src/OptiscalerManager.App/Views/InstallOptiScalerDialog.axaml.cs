@@ -28,6 +28,21 @@ public partial class InstallOptiScalerDialog : Window
     /// <summary>The OptiScaler.ini profile the user confirmed (built-in default = OptiScaler's own config).</summary>
     public OptiScalerProfile? SelectedProfile { get; private set; }
 
+    /// <summary>Install the fakenvapi add-on (nvapi64.dll + fakenvapi.ini).</summary>
+    public bool AddFakenvapi { get; private set; }
+
+    /// <summary>Install Nukem's DLSSG-to-FSR3 mod (imported DLL + FGInput=nukems).</summary>
+    public bool AddNukemFg { get; private set; }
+
+    /// <summary>Force [Spoofing] Dxgi=true for this game.</summary>
+    public bool SpoofNvidia { get; private set; }
+
+    /// <summary>Force [FSR] Fsr4ForceEnableInt8=true.</summary>
+    public bool ForceInt8 { get; private set; }
+
+    /// <summary>Force [FSR] Fsr4EnableWatermark=true.</summary>
+    public bool Fsr4Watermark { get; private set; }
+
     // Parameterless ctor for the XAML previewer only.
     public InstallOptiScalerDialog() { InitializeComponent(); }
 
@@ -73,6 +88,29 @@ public partial class InstallOptiScalerDialog : Window
         // Step 2 radios drive UpscalerIndex in the preview.
         this.FindControl<RadioButton>("RbSelectNow")!.IsCheckedChanged += OnOptionChanged;
         this.FindControl<RadioButton>("RbSelectInGame")!.IsCheckedChanged += OnOptionChanged;
+
+        // Step 2 toggles + Step 3 add-ons all feed the live preview.
+        this.FindControl<CheckBox>("ChkForceInt8")!.IsCheckedChanged += OnOptionChanged;
+        this.FindControl<CheckBox>("ChkWatermark")!.IsCheckedChanged += OnOptionChanged;
+        this.FindControl<CheckBox>("ChkFakenvapi")!.IsCheckedChanged += OnOptionChanged;
+        this.FindControl<CheckBox>("ChkSpoofNvidia")!.IsCheckedChanged += OnOptionChanged;
+
+        var nukem = this.FindControl<CheckBox>("ChkNukemFg")!;
+        if (!_manager.IsNukemFgCached)
+        {
+            nukem.IsEnabled = false;
+            nukem.Content = "Nukem DLSSG-to-FSR3 — DLL not imported (Settings)";
+        }
+        nukem.IsCheckedChanged += (_, e) =>
+        {
+            // Nukem's mod needs fakenvapi on AMD/Intel — selecting it pulls fakenvapi in.
+            if (nukem.IsChecked == true)
+                this.FindControl<CheckBox>("ChkFakenvapi")!.IsChecked = true;
+            OnOptionChanged(nukem, e);
+        };
+
+        // Per-install spoof checkbox starts from the global Settings default.
+        this.FindControl<CheckBox>("ChkSpoofNvidia")!.IsChecked = _manager.SpoofNvidiaDefault;
     }
 
     // Reveal and lazily populate the INT8 version list when INT8 is selected.
@@ -137,10 +175,15 @@ public partial class InstallOptiScalerDialog : Window
     private void OnOptionChanged(object? sender, RoutedEventArgs e) => UpdatePreview();
     private void OnOptionChanged(object? sender, SelectionChangedEventArgs e) => UpdatePreview();
 
+    private bool IsChecked(string name) => this.FindControl<CheckBox>(name)!.IsChecked == true;
+
     private void UpdatePreview()
     {
         if (!_ready) return;
-        var preview = _manager.BuildInstallPreview(_game, CurrentBackend(), CurrentSelectFsr4());
+        var preview = _manager.BuildInstallPreview(_game, CurrentBackend(), CurrentSelectFsr4(),
+            addFakenvapi: IsChecked("ChkFakenvapi"), addNukemFg: IsChecked("ChkNukemFg"),
+            spoofNvidia: IsChecked("ChkSpoofNvidia"), forceInt8: IsChecked("ChkForceInt8"),
+            fsr4Watermark: IsChecked("ChkWatermark"));
 
         var files = this.FindControl<StackPanel>("FilesList")!;
         var ini = this.FindControl<StackPanel>("IniList")!;
@@ -182,6 +225,11 @@ public partial class InstallOptiScalerDialog : Window
         SelectFsr4 = CurrentSelectFsr4();
         SelectedInt8Version = SelectedBackend == Fsr4Backend.Int8Community ? CurrentInt8Version() : null;
         SelectedProfile = CurrentProfile();
+        AddFakenvapi = IsChecked("ChkFakenvapi");
+        AddNukemFg = IsChecked("ChkNukemFg");
+        SpoofNvidia = IsChecked("ChkSpoofNvidia");
+        ForceInt8 = IsChecked("ChkForceInt8");
+        Fsr4Watermark = IsChecked("ChkWatermark");
         Close(true);
     }
 

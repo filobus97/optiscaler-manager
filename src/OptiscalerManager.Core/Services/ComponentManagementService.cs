@@ -217,18 +217,21 @@ namespace OptiscalerManager.Core.Services
                         }
                     }
 
-                    // Fork migration: upstream's template pointed the in-app updater at
-                    // the original repository. This fork ("OptiScaler Client Next")
-                    // publishes its own releases, so retarget once for existing configs.
-                    if (_config.App.RepoOwner == "Agustinm28" &&
-                        _config.App.RepoName == "Optiscaler-Client")
+                    // Migration: configs inherited from OptiScaler Client (or written by
+                    // older Manager versions) either leave the App repo empty or point it
+                    // at the Client repos. This app's own releases live in
+                    // filobus97/optiscaler-manager — retarget once so the in-app update
+                    // check queries the right repository.
+                    if (string.IsNullOrWhiteSpace(_config.App.RepoOwner) ||
+                        string.IsNullOrWhiteSpace(_config.App.RepoName) ||
+                        _config.App.RepoName.Equals("Optiscaler-Client", StringComparison.OrdinalIgnoreCase))
                     {
-                        _config.App = new RepositoryConfig { RepoOwner = "filobus97", RepoName = "Optiscaler-Client" };
+                        _config.App = new RepositoryConfig { RepoOwner = "filobus97", RepoName = "optiscaler-manager" };
                         try
                         {
                             var json = JsonSerializer.Serialize(_config, OptimizerContext.Default.AppConfiguration);
                             File.WriteAllText(_configFile, json);
-                            Log.Write("[Config] Retargeted App update repo to the fork (filobus97/Optiscaler-Client).");
+                            Log.Write("[Config] Retargeted App update repo to filobus97/optiscaler-manager.");
                         }
                         catch (Exception ex)
                         {

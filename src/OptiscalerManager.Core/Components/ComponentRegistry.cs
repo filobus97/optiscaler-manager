@@ -166,12 +166,21 @@ public static class ComponentRegistry
     /// Each is annotated in the file list — "overwrites" when it collides with a base
     /// file, "added" otherwise.
     /// </param>
+    /// <param name="addFakenvapi">Include the fakenvapi add-on (nvapi64.dll + fakenvapi.ini).</param>
+    /// <param name="addNukemFg">Include Nukem's DLSSG-to-FSR3 mod (adds [FrameGen] FGInput=nukems).</param>
+    /// <param name="spoofNvidia">Force [Spoofing] Dxgi=true (present an Nvidia GPU to the game).</param>
+    /// <param name="forceInt8">Force [FSR] Fsr4ForceEnableInt8=true (INT8 model on unsupported GPUs).</param>
+    /// <param name="fsr4Watermark">Force [FSR] Fsr4EnableWatermark=true (on-screen FSR4/FSR4-i8/FSR3 verification).</param>
     public static InstallPreview BuildInstallPreview(
         Fsr4Backend backend, bool selectFsr4, string? injectionDll = null, string? menuKeyVk = null,
-        IReadOnlyList<string>? customDlls = null)
+        IReadOnlyList<string>? customDlls = null,
+        bool addFakenvapi = false, bool addNukemFg = false,
+        bool spoofNvidia = false, bool forceInt8 = false, bool fsr4Watermark = false)
     {
         var ids = new List<string> { ComponentIds.OptiScaler };
         ids.AddRange(ComponentIdsFor(backend));
+        if (addFakenvapi) ids.Add(ComponentIds.Fakenvapi);
+        if (addNukemFg) ids.Add(ComponentIds.NukemFg);
 
         var preview = BuildPreview(ids, injectionDll);
 
@@ -194,6 +203,14 @@ public static class ComponentRegistry
             new IniKeyChange("FSR", "Fsr4Update", "true"),
             new IniKeyChange("FSR", "UpscalerIndex", selectFsr4 ? "0" : "auto"),
         };
+        if (forceInt8)
+            iniKeys.Add(new IniKeyChange("FSR", "Fsr4ForceEnableInt8", "true"));
+        if (fsr4Watermark)
+            iniKeys.Add(new IniKeyChange("FSR", "Fsr4EnableWatermark", "true"));
+        if (addNukemFg)
+            iniKeys.Add(new IniKeyChange("FrameGen", "FGInput", "nukems"));
+        if (spoofNvidia)
+            iniKeys.Add(new IniKeyChange("Spoofing", "Dxgi", "true"));
         if (!string.IsNullOrWhiteSpace(menuKeyVk))
             iniKeys.Add(new IniKeyChange("Menu", "ShortcutKey", menuKeyVk!));
 
@@ -274,7 +291,7 @@ public static class ComponentRegistry
         {
             Id = ComponentIds.Fakenvapi,
             DisplayName = "fakenvapi",
-            Description = "Optional NVAPI shim that lets OptiScaler expose Reflex/anti-lag paths to more games.",
+            Description = "Optional NVAPI shim (nvapi64.dll) that translates Reflex calls to AMD Anti-Lag 2 / LatencyFlex, and is required for Nukem's frame-gen mod on AMD/Intel GPUs. Downloaded from the optiscaler/fakenvapi releases.",
             TargetFiles = new[] { "nvapi64.dll", "fakenvapi.ini" },
             Requires = new[] { ComponentIds.OptiScaler },
         },
@@ -282,8 +299,11 @@ public static class ComponentRegistry
         {
             Id = ComponentIds.NukemFg,
             DisplayName = "Nukem DLSSG-to-FSR3 (frame gen)",
-            Description = "Optional frame-generation mod. Cannot be downloaded automatically — you supply the DLL from a local file (Nexus Mods).",
+            Description = "Optional frame-generation mod for games with DLSS-G. Cannot be downloaded automatically — you supply the DLL from a local file (Nexus Mods).",
             TargetFiles = new[] { "dlssg_to_fsr3_amd_is_better.dll" },
+            // OptiScaler 0.9.x selects Nukem's mod via [FrameGen] FGInput (the legacy
+            // sectionless FGType key is no longer read).
+            IniKeys = new[] { new IniKeyChange("FrameGen", "FGInput", "nukems") },
             Requires = new[] { ComponentIds.OptiScaler },
             IsBringYourOwn = true,
         },

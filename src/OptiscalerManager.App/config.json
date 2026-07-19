@@ -1,4 +1,8 @@
 {
+    "App": {
+        "RepoOwner": "filobus97",
+        "RepoName": "optiscaler-manager"
+    },
     "OptiScaler": {
         "RepoOwner": "optiscaler",
         "RepoName": "OptiScaler"

@@ -29,7 +29,49 @@ public partial class MainWindow : Window
     {
         DetectGpu();
         RefreshImportSummary();
+        _ = CheckForAppUpdateAsync(); // fire-and-forget; silent unless a newer release exists
         await RescanAsync();
+    }
+
+    private async Task CheckForAppUpdateAsync()
+    {
+        try
+        {
+            var check = await _manager.CheckForAppUpdateAsync();
+            if (!check.UpdateAvailable) return;
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var banner = this.FindControl<Border>("UpdateBanner");
+                var text = this.FindControl<TextBlock>("UpdateBannerText");
+                if (banner is null || text is null) return;
+                text.Text = $"OptiScaler Manager v{check.LatestVersion} is available (you have v{check.CurrentVersion}). " +
+                            "Close the app and run update.sh / update.ps1 from the install folder to update in place.";
+                banner.IsVisible = true;
+            });
+        }
+        catch { /* best-effort — never bother the user over a failed check */ }
+    }
+
+    private void OnOpenReleasesClick(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = _manager.ReleasesPageUrl,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            _vm.StatusText = $"Could not open the browser: {ex.Message} — {_manager.ReleasesPageUrl}";
+        }
+    }
+
+    private void OnDismissUpdateBanner(object? sender, RoutedEventArgs e)
+    {
+        var banner = this.FindControl<Border>("UpdateBanner");
+        if (banner is not null) banner.IsVisible = false;
     }
 
     private void DetectGpu()
@@ -59,6 +101,7 @@ public partial class MainWindow : Window
         parts.Add(customs.Count > 0 ? $"Custom DLLs: {customs.Count}" : "Custom DLLs: none");
         var iniCount = _manager.GetIniProfiles().Count(p => !p.IsBuiltIn);
         parts.Add(iniCount > 0 ? $"OptiScaler.ini profiles: {iniCount}" : "OptiScaler.ini profiles: none");
+        parts.Add(_manager.IsNukemFgCached ? "Nukem FG: imported" : "Nukem FG: not imported");
         _vm.ImportSummary = "Imported — " + string.Join("  •  ", parts) + ".  Pick these per install.";
     }
 
@@ -117,7 +160,9 @@ public partial class MainWindow : Window
 
         try
         {
-            await _manager.InstallAsync(row.Game, dialog.SelectedBackend, dialog.SelectedInt8Version, dialog.SelectFsr4, dialog.SelectedProfile, progress);
+            await _manager.InstallAsync(row.Game, dialog.SelectedBackend, dialog.SelectedInt8Version, dialog.SelectFsr4, dialog.SelectedProfile, progress,
+                addFakenvapi: dialog.AddFakenvapi, addNukemFg: dialog.AddNukemFg,
+                spoofNvidia: dialog.SpoofNvidia, forceInt8: dialog.ForceInt8, fsr4Watermark: dialog.Fsr4Watermark);
             row.Game.IsOptiscalerInstalled = true;
             row.RefreshFromGame();
             _vm.StatusText = $"OptiScaler installed for {row.Game.Name}.";

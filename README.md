@@ -26,13 +26,18 @@ action per game, advanced options tucked away.
 
   **Step 1 — Backend (which files to install):**
     - *Default — OptiScaler's own files* (**recommended**): OptiScaler's release already
-      bundles a working **FSR 4.1** upscaler, so this alone enables FSR 4;
+      bundles a working **FSR 4.1.1** upscaler (INT8-capable since OptiScaler 0.9.4),
+      so this alone enables FSR 4;
     - *Latest FSR SDK from AMD* — AMD's official open-source FidelityFX SDK (GPUOpen),
       **swapped in place**: only OptiScaler's own FSR DLLs already present in the game
       folder are replaced with the SDK's same-name equivalents — nothing new is added,
-      and game-owned files (e.g. the game's own `amd_ags_x64.dll`) are never touched;
+      and game-owned files (e.g. the game's own `amd_ags_x64.dll`) are never touched.
+      Right after an OptiScaler release this is usually identical to *Default*; its
+      value is picking up AMD's **newer** signedbin revisions before OptiScaler bundles
+      them;
     - *FSR 4 INT8 (community build)* — a community INT8 build from the OptiScaler-Extras
-      repo, at a **version you pick**;
+      repo, at a **version you pick** (upstream still recommends **4.0.2c** for RDNA2
+      on Windows);
     - *Custom DLLs + latest AMD SDK (merged)* — the latest AMD `signedbin` set as the
       base, with **your imported custom DLLs merged on top**: same-name DLLs overwrite
       AMD's, unknown names (e.g. `amdxcffx64.dll`) are **added alongside**. Everything
@@ -41,12 +46,27 @@ action per game, advanced options tucked away.
   **Step 2 — FSR 4 selection:** the Manager **always forces the flags that make FSR 4
   *available*** (`[FSR] Fsr4Update=true`); you then choose whether it also **selects**
   FSR 4 for you (`UpscalerIndex=0`) or leaves it **auto** so you pick it in OptiScaler's
-  in-game overlay.
+  in-game overlay. Two optional toggles cover FSR 4.1.1's new GPU validation:
+  **Force INT8 on unsupported GPUs** (`Fsr4ForceEnableInt8=true`, for RDNA2 / mobile
+  RDNA3 / Intel / Nvidia — it can't help GPUs without INT8 support) and **Show the FSR4
+  watermark** (`Fsr4EnableWatermark=true`) to verify on screen whether you're really
+  getting FSR4 / FSR4-i8 or the silent FSR3 fallback.
+
+  **Step 3 — Add-ons & extras:**
+    - *fakenvapi* — `nvapi64.dll` + `fakenvapi.ini` from the
+      [optiscaler/fakenvapi](https://github.com/optiscaler/fakenvapi) releases
+      (auto-downloaded). Translates Nvidia Reflex into **AMD Anti-Lag 2 / LatencyFlex**;
+    - *Nukem DLSSG-to-FSR3* — frame generation for games with DLSS-G
+      (`dlssg_to_fsr3_amd_is_better.dll`, **bring-your-own** — import it once in
+      Settings). Selecting it sets `[FrameGen] FGInput=nukems` and pulls fakenvapi in;
+    - *Nvidia override* — forces `[Spoofing] Dxgi=true` so the game sees an Nvidia GPU
+      (for games that hide DLSS options on AMD/Intel). Its default state is a global
+      Settings option; the checkbox decides per game.
 
   Plus the **`OptiScaler.ini`** to use — OptiScaler's default, or one of your saved
   profiles. When you pick a custom `.ini`, the options above overwrite **only the keys
-  they affect** (`Fsr4Update`, `UpscalerIndex`, and the menu key); the rest of your
-  `.ini` is left exactly as you wrote it.
+  they affect** (`Fsr4Update`, `UpscalerIndex`, the optional toggles above, and the menu
+  key); the rest of your `.ini` is left exactly as you wrote it.
 - **Transparent — no black boxes.** Before anything is written, a live
   **"What will happen"** preview lists the *exact files* that will be placed next
   to your game and the *exact `OptiScaler.ini` keys* that will change (updating as
@@ -137,6 +157,12 @@ Open **Settings** to import:
   top of the latest AMD `signedbin` set**: same names overwrite AMD's file, new
   names (e.g. `amdxcffx64.dll`) are added alongside. Legacy imports from older
   versions are migrated automatically.
+- **Nukem's DLSSG-to-FSR3 DLL.** The frame-gen mod cannot be auto-downloaded — import
+  `dlssg_to_fsr3_amd_is_better.dll` (or the mod archive) once, then tick the add-on
+  per install. fakenvapi needs no import: it is downloaded from the
+  optiscaler/fakenvapi releases when selected.
+- **Nvidia override default.** Choose whether new installs pre-select GPU spoofing
+  (`[Spoofing] Dxgi=true`); you can still flip it per game in the Install dialog.
 - **`OptiScaler.ini` profiles.** Import any `OptiScaler.ini`, tag it with a name,
   and it becomes selectable in the Install dialog. Collect as many as you like;
   delete them from Settings.
@@ -153,6 +179,11 @@ matching what is written to disk). You always see the exact file and ini changes
 in the live preview first.
 
 ## Updating in place
+
+The app **checks for new releases at launch** (and on demand from *Settings → About &
+updates*): when a newer version exists, a dismissable banner offers the releases page
+and reminds you of the in-place updater. The check is best-effort — offline it stays
+silent.
 
 Each release ships a self-contained updater next to the executable that pulls the
 latest GitHub release and replaces the program **without touching your data** — all

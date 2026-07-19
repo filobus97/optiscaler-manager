@@ -89,6 +89,44 @@ public sealed class ManagerService
         set { _components.Config.MenuShortcutKey = value; _components.SaveConfiguration(); }
     }
 
+    // ── Nvidia override (GPU spoofing) global default ───────────────────────
+    /// <summary>
+    /// Global default for the per-install "Nvidia override" checkbox. When on, the
+    /// install forces [Spoofing] Dxgi=true so the game sees an Nvidia GPU (needed by
+    /// games that hide DLSS/DLSS-G options on AMD/Intel; pairs with the fakenvapi add-on).
+    /// </summary>
+    public bool SpoofNvidiaDefault
+    {
+        get => _components.Config.SpoofNvidiaDefault == true;
+        set { _components.Config.SpoofNvidiaDefault = value; _components.SaveConfiguration(); }
+    }
+
+    // ── Add-ons: fakenvapi + Nukem DLSSG-to-FSR3 ────────────────────────────
+    /// <summary>True when Nukem's DLL has been imported into the cache (it cannot be auto-downloaded).</summary>
+    public bool IsNukemFgCached => _components.IsNukemFGInstalled;
+
+    /// <summary>The cached Nukem DLL's version tag, if known.</summary>
+    public string? NukemFgVersion => _components.NukemFGVersion;
+
+    /// <summary>
+    /// Opens the manual-import flow (file picker / archive) for Nukem's
+    /// dlssg_to_fsr3_amd_is_better.dll and stores it in the cache.
+    /// </summary>
+    public Task<bool> ImportNukemFgAsync() => _components.ProvideNukemFGManuallyAsync(isUpdate: _components.IsNukemFGInstalled);
+
+    // ── App self-update check ───────────────────────────────────────────────
+    private AppUpdateService? _appUpdate;
+    private AppUpdateService AppUpdate => _appUpdate ??= new AppUpdateService(_components.Config.App);
+
+    /// <summary>The running app version (from the assembly).</summary>
+    public string AppVersion => AppUpdateService.GetCurrentVersion();
+
+    /// <summary>URL of this app's GitHub releases page.</summary>
+    public string ReleasesPageUrl => AppUpdate.ReleasesPageUrl;
+
+    /// <summary>Best-effort check of this app's own repo for a newer release; never throws.</summary>
+    public Task<AppUpdateCheck> CheckForAppUpdateAsync() => AppUpdate.CheckAsync();
+
     // ── OptiScaler.ini profile library ──────────────────────────────────────
     /// <summary>All saved OptiScaler.ini profiles (built-in default + user-imported).</summary>
     public List<OptiScalerProfile> GetIniProfiles() => _profiles.GetAllProfiles(forceRefresh: true);
@@ -121,16 +159,23 @@ public sealed class ManagerService
     /// with the chosen FSR 4 backend and ini profile. What the preview shows is
     /// precisely what gets installed.
     /// </summary>
-    public InstallPreview BuildInstallPreview(Game game, Fsr4Backend backend, bool selectFsr4)
+    public InstallPreview BuildInstallPreview(Game game, Fsr4Backend backend, bool selectFsr4,
+        bool addFakenvapi = false, bool addNukemFg = false,
+        bool spoofNvidia = false, bool forceInt8 = false, bool fsr4Watermark = false)
         => ComponentRegistry.BuildInstallPreview(backend, selectFsr4, ComponentRegistry.DefaultInjectionDll, MenuShortcutKey,
-            backend == Fsr4Backend.CustomMerged ? _components.GetCustomDlls().Select(d => d.Name).ToList() : null);
+            backend == Fsr4Backend.CustomMerged ? _components.GetCustomDlls().Select(d => d.Name).ToList() : null,
+            addFakenvapi, addNukemFg, spoofNvidia, forceInt8, fsr4Watermark);
 
     // ── Install OptiScaler ──────────────────────────────────────────────────
     public async Task InstallAsync(Game game, Fsr4Backend backend, string? int8Version, bool selectFsr4,
-        OptiScalerProfile? iniProfile, IProgress<string>? status = null)
+        OptiScalerProfile? iniProfile, IProgress<string>? status = null,
+        bool addFakenvapi = false, bool addNukemFg = false,
+        bool spoofNvidia = false, bool forceInt8 = false, bool fsr4Watermark = false)
     {
         if (!IsBackendAvailable(backend))
             throw new InvalidOperationException($"The selected FSR 4 backend ({backend}) is not available. Import it in Settings first.");
+        if (addNukemFg && !IsNukemFgCached)
+            throw new InvalidOperationException("Nukem's DLSSG-to-FSR3 DLL has not been imported. Add it in Settings first.");
 
         status?.Report("Checking for the latest OptiScaler release…");
         try { await _components.CheckForUpdatesAsync(); } catch { /* offline: fall back to cache */ }
@@ -147,10 +192,17 @@ public sealed class ManagerService
             await _components.DownloadOptiScalerAsync(version);
         }
 
+        // Resolve add-on caches up front so the single InstallOptiScaler call places
+        // everything under one manifest (Revert then removes add-ons too).
+        var fakenvapiCache = addFakenvapi ? await EnsureFakenvapiCacheAsync(status) : "";
+        var nukemCache = addNukemFg ? _components.GetNukemFGCachePath() : "";
+
         status?.Report($"Installing OptiScaler {version}…");
         // Pass the chosen ini profile (null → OptiScaler's own default config).
         var profileToApply = (iniProfile is null || iniProfile.IsBuiltIn || iniProfile.IniSettings.Count == 0) ? null : iniProfile;
         _install.InstallOptiScaler(game, cachePath, ComponentRegistry.DefaultInjectionDll,
+            installFakenvapi: addFakenvapi, fakenvapiCachePath: fakenvapiCache,
+            installNukemFG: addNukemFg, nukemFGCachePath: nukemCache,
             optiscalerVersion: version, profile: profileToApply);
 
         var gameDir = _install.DetermineInstallDirectory(game);
@@ -182,21 +234,63 @@ public sealed class ManagerService
         // Force ONLY the keys the Manager owns; everything else in the chosen ini
         // (default or custom) is left untouched. FSR 4 is always made *available*;
         // whether it is *selected* depends on selectFsr4.
-        ApplyForcedIniKeys(gameDir, selectFsr4);
+        ApplyForcedIniKeys(gameDir, selectFsr4, spoofNvidia, forceInt8, fsr4Watermark);
 
         status?.Report("Done.");
     }
 
     /// <summary>
+    /// Downloads the latest fakenvapi release into the versioned cache (reusing an
+    /// existing download), falling back to the newest cached version when offline.
+    /// Returns the cache directory to install from.
+    /// </summary>
+    private async Task<string> EnsureFakenvapiCacheAsync(IProgress<string>? status)
+    {
+        var version = _components.LatestFakenvapiVersion;
+        if (version is not null)
+        {
+            try
+            {
+                if (!_components.IsFakenvapiCached(version))
+                {
+                    status?.Report($"Downloading fakenvapi {version}…");
+                    await _components.DownloadFakenvapiAsync(version);
+                }
+                return _components.GetFakenvapiCachePath(version);
+            }
+            catch (Exception ex)
+            {
+                Log.Write($"[Fakenvapi] Download of {version} failed, checking cache: {ex.Message}");
+            }
+        }
+
+        var cached = _components.GetDownloadedFakenvapiVersions().FirstOrDefault()
+            ?? throw new InvalidOperationException(
+                "fakenvapi could not be downloaded and no version is cached. Connect to the internet and try again.");
+        status?.Report($"Using cached fakenvapi {cached} (offline).");
+        return _components.GetFakenvapiCachePath(cached);
+    }
+
+    /// <summary>
     /// Writes the (and only the) OptiScaler.ini keys the Manager is responsible for:
     /// [FSR] Fsr4Update=true always, [FSR] UpscalerIndex = 0 (Manager selects FSR 4) or
-    /// auto (user selects in-game), and [Menu] ShortcutKey when a menu key is configured.
-    /// Applied last, so it overrides anything the backend installers set.
+    /// auto (user selects in-game), the opt-in [FSR] Fsr4ForceEnableInt8 /
+    /// Fsr4EnableWatermark and [Spoofing] Dxgi toggles, and [Menu] ShortcutKey when a
+    /// menu key is configured. Applied last, so it overrides anything the backend
+    /// installers set. Off toggles leave the keys untouched (OptiScaler's auto behaviour).
     /// </summary>
-    private void ApplyForcedIniKeys(string gameDir, bool selectFsr4)
+    private void ApplyForcedIniKeys(string gameDir, bool selectFsr4, bool spoofNvidia = false,
+        bool forceInt8 = false, bool fsr4Watermark = false)
     {
         GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4Update", "true");
         GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "UpscalerIndex", selectFsr4 ? "0" : "auto");
+
+        if (forceInt8)
+            GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4ForceEnableInt8", "true");
+        if (fsr4Watermark)
+            GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4EnableWatermark", "true");
+        if (spoofNvidia)
+            GameInstallationService.ModifyOptiScalerIniKey(gameDir, "Spoofing", "Dxgi", "true");
 
         var menuKey = _components.Config.MenuShortcutKey;
         if (!string.IsNullOrWhiteSpace(menuKey))
