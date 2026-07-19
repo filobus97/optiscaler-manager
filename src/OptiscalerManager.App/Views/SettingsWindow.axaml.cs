@@ -84,8 +84,31 @@ public partial class SettingsWindow : Window
         result.Text = check.LatestVersion is null
             ? "Could not reach GitHub (offline or rate-limited)."
             : check.UpdateAvailable
-                ? $"v{check.LatestVersion} is available — close the app and run update.sh / update.ps1."
+                ? $"v{check.LatestVersion} is available."
                 : $"Up to date (latest is v{check.LatestVersion}).";
+
+        var updateNow = this.FindControl<Button>("UpdateNowButton");
+        if (updateNow is not null)
+            updateNow.IsEnabled = check.UpdateAvailable && _manager.CanSelfUpdate;
+    }
+
+    private void OnUpdateNow(object? sender, RoutedEventArgs e)
+    {
+        var result = this.FindControl<TextBlock>("AppUpdateResultText");
+        if (result is not null) result.Text = "Updating — the app will close and reopen…";
+
+        var error = _manager.StartSelfUpdate();
+        if (error is not null)
+        {
+            SetResult($"Update failed to start: {error}", error: true);
+            return;
+        }
+
+        if (Avalonia.Application.Current?.ApplicationLifetime
+            is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+            desktop.Shutdown();
+        else
+            Close();
     }
 
     private void SetupMenuKey()

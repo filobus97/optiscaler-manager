@@ -64,6 +64,9 @@ public partial class InstallOptiScalerDialog : Window
         _ready = true;
         UpdatePreview();
 
+        // Start keyboard/controller focus on the recommended backend.
+        Opened += (_, _) => this.FindControl<RadioButton>("RbDefault")?.Focus();
+
         // INT8 is the default backend — reveal and load its version list on open.
         if (this.FindControl<RadioButton>("RbInt8")!.IsChecked == true)
             OnInt8CheckedChanged(this, new RoutedEventArgs());

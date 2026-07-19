@@ -44,8 +44,11 @@ public partial class MainWindow : Window
                 var banner = this.FindControl<Border>("UpdateBanner");
                 var text = this.FindControl<TextBlock>("UpdateBannerText");
                 if (banner is null || text is null) return;
-                text.Text = $"OptiScaler Manager v{check.LatestVersion} is available (you have v{check.CurrentVersion}). " +
-                            "Close the app and run update.sh / update.ps1 from the install folder to update in place.";
+                var canSelf = _manager.CanSelfUpdate;
+                text.Text = $"OptiScaler Manager v{check.LatestVersion} is available (you have v{check.CurrentVersion})." +
+                            (canSelf ? "" : " Close the app and run update.sh / update.ps1 from the install folder.");
+                var updateNow = this.FindControl<Button>("UpdateNowButton");
+                if (updateNow is not null) updateNow.IsVisible = canSelf;
                 banner.IsVisible = true;
             });
         }
@@ -72,6 +75,25 @@ public partial class MainWindow : Window
     {
         var banner = this.FindControl<Border>("UpdateBanner");
         if (banner is not null) banner.IsVisible = false;
+    }
+
+    private void OnUpdateNowClick(object? sender, RoutedEventArgs e)
+    {
+        // The updater waits for this process, swaps the files, and relaunches the
+        // app — so the correct sequence is: spawn it detached, then quit.
+        _vm.StatusText = "Updating — the app will close and reopen automatically…";
+        var error = _manager.StartSelfUpdate();
+        if (error is not null)
+        {
+            _vm.StatusText = $"Update failed to start: {error}";
+            return;
+        }
+
+        if (Avalonia.Application.Current?.ApplicationLifetime
+            is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+            desktop.Shutdown();
+        else
+            Close();
     }
 
     private void DetectGpu()
@@ -121,6 +143,19 @@ public partial class MainWindow : Window
             }
             _vm.HasNoGames = _vm.Games.Count == 0;
             _vm.StatusText = $"Found {_vm.Games.Count} game(s).";
+
+            // Land keyboard/controller focus on the game list so Up/Down works
+            // immediately; fall back to Settings when the list is empty.
+            var list = this.FindControl<ListBox>("GamesList");
+            if (_vm.Games.Count > 0 && list is not null)
+            {
+                list.SelectedIndex = 0;
+                list.Focus();
+            }
+            else
+            {
+                this.FindControl<Button>("SettingsButton")?.Focus();
+            }
         }
         catch (Exception ex)
         {

@@ -6,7 +6,18 @@
         Width="880" Height="640" MinWidth="720" MinHeight="480"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BrBgBase}"
+        XYFocus.NavigationModes="Keyboard,Gamepad"
         Title="OptiScaler Manager">
+
+  <Window.Styles>
+    <!-- The focused/selected game row lights up its card border. -->
+    <Style Selector="ListBoxItem:selected Border.GameCard">
+      <Setter Property="BorderBrush" Value="{StaticResource BrAccent}"/>
+    </Style>
+    <Style Selector="ListBoxItem:focus-visible Border.GameCard">
+      <Setter Property="BorderBrush" Value="{StaticResource BrAccent}"/>
+    </Style>
+  </Window.Styles>
 
   <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" Margin="20">
 
@@ -45,13 +56,16 @@
             CornerRadius="{StaticResource RadiusMedium}"
             Background="#2A2440"
             BorderThickness="1" BorderBrush="{StaticResource BrAccent}">
-      <Grid ColumnDefinitions="*,Auto,Auto">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto">
         <TextBlock Name="UpdateBannerText" Grid.Column="0" VerticalAlignment="Center"
                    Foreground="{StaticResource BrTextPrimary}" FontSize="12" TextWrapping="Wrap"/>
-        <Button Grid.Column="1" Content="Open releases page" FontSize="11" Margin="8,0"
+        <Button Grid.Column="1" Name="UpdateNowButton" Classes="BtnPrimary" Content="Update now" FontSize="11" Margin="8,0,0,0"
+                Click="OnUpdateNowClick"
+                ToolTip.Tip="Closes the app, updates it in place, and reopens it automatically. Your settings, imports, profiles and backups are kept."/>
+        <Button Grid.Column="2" Content="Open releases page" FontSize="11" Margin="8,0"
                 Click="OnOpenReleasesClick"
-                ToolTip.Tip="Opens this app's GitHub releases page in your browser. To update in place, close the app and run update.sh (Linux/macOS) or update.ps1 (Windows) from the install folder — your imports and settings are kept."/>
-        <Button Grid.Column="2" Content="✕" FontSize="11" Padding="8,4"
+                ToolTip.Tip="Opens this app's GitHub releases page in your browser to read what changed."/>
+        <Button Grid.Column="3" Content="✕" FontSize="11" Padding="8,4"
                 Click="OnDismissUpdateBanner" ToolTip.Tip="Hide until next launch."/>
       </Grid>
     </Border>
@@ -72,38 +86,39 @@
             Background="{StaticResource BrBgCard}"
             BorderThickness="1" BorderBrush="{StaticResource BrBorderSubtle}">
       <Grid>
-        <ScrollViewer>
-          <ItemsControl ItemsSource="{Binding Games}" Margin="8">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:GameRowViewModel">
-                <Border Margin="4" Padding="14,12"
-                        CornerRadius="{StaticResource RadiusMedium}"
-                        Background="{StaticResource BrBgSurface}"
-                        BorderThickness="1" BorderBrush="{StaticResource BrBorderSubtle}">
-                  <Grid ColumnDefinitions="*,Auto,Auto">
-                    <StackPanel Grid.Column="0" Orientation="Vertical" Spacing="3" VerticalAlignment="Center">
-                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="15"
-                                 Foreground="{StaticResource BrTextPrimary}" TextTrimming="CharacterEllipsis"/>
-                      <TextBlock Text="{Binding SubTitle}" FontSize="11"
-                                 Foreground="{StaticResource BrTextSecondary}" TextTrimming="CharacterEllipsis"/>
-                      <TextBlock Text="{Binding StatusText}" FontSize="12"
-                                 Foreground="{StaticResource BrAccent}"/>
-                    </StackPanel>
+        <!-- ListBox (not ItemsControl) so Up/Down walks the game rows with the
+             keyboard/controller; the focused row's buttons are one Right away. -->
+        <ListBox Name="GamesList" ItemsSource="{Binding Games}" Margin="8"
+                 Background="Transparent" SelectionMode="Single">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:GameRowViewModel">
+              <Border Classes="GameCard" Padding="14,12"
+                      CornerRadius="{StaticResource RadiusMedium}"
+                      Background="{StaticResource BrBgSurface}"
+                      BorderThickness="1" BorderBrush="{StaticResource BrBorderSubtle}">
+                <Grid ColumnDefinitions="*,Auto,Auto">
+                  <StackPanel Grid.Column="0" Orientation="Vertical" Spacing="3" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="15"
+                               Foreground="{StaticResource BrTextPrimary}" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding SubTitle}" FontSize="11"
+                               Foreground="{StaticResource BrTextSecondary}" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding StatusText}" FontSize="12"
+                               Foreground="{StaticResource BrAccent}"/>
+                  </StackPanel>
 
-                    <Button Grid.Column="1" Classes="BtnPrimary" Content="Install OptiScaler"
-                            Margin="0,0,8,0" Click="OnInstallClick"
-                            IsEnabled="{Binding IsIdle}"
-                            ToolTip.Tip="Download and install the latest OptiScaler, choosing the FSR 4 backend and OptiScaler.ini in the next dialog. You'll see exactly what changes before anything is written."/>
-                    <Button Grid.Column="2" Classes="BtnDanger" Content="Revert"
-                            Click="OnRevertClick"
-                            IsEnabled="{Binding IsIdle}"
-                            ToolTip.Tip="Uninstall OptiScaler from this game: restore backed-up files and revert the OptiScaler.ini keys. Reports if there is nothing to revert."/>
-                  </Grid>
-                </Border>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </ScrollViewer>
+                  <Button Grid.Column="1" Classes="BtnPrimary" Content="Install OptiScaler"
+                          Margin="0,0,8,0" Click="OnInstallClick"
+                          IsEnabled="{Binding IsIdle}"
+                          ToolTip.Tip="Download and install OptiScaler for this game. The next dialog lets you choose the version, backend, add-ons and OptiScaler.ini — and shows exactly what will change before anything is written."/>
+                  <Button Grid.Column="2" Classes="BtnDanger" Content="Revert"
+                          Click="OnRevertClick"
+                          IsEnabled="{Binding IsIdle}"
+                          ToolTip.Tip="Uninstall OptiScaler from this game: restore backed-up files and remove everything the install added. Reports if there is nothing to revert."/>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
 
         <TextBlock IsVisible="{Binding HasNoGames}" HorizontalAlignment="Center" VerticalAlignment="Center"
                    Foreground="{StaticResource BrTextSecondary}" TextAlignment="Center"

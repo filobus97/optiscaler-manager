@@ -4,6 +4,7 @@
         Width="680" Height="860" MinWidth="560" MinHeight="600"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource BrBgBase}"
+        XYFocus.NavigationModes="Keyboard,Gamepad"
         Title="Install OptiScaler">
 
   <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="20">
@@ -133,8 +134,10 @@
 
     <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right"
                 Spacing="10" Margin="0,16,0,0">
-      <Button Content="Cancel" Click="OnCancel"/>
-      <Button Name="ConfirmButton" Classes="BtnPrimary" Content="Confirm and install" Click="OnConfirm"/>
+      <Button Content="Cancel" Click="OnCancel" IsCancel="True"
+              ToolTip.Tip="Close without changing anything (Esc)."/>
+      <Button Name="ConfirmButton" Classes="BtnPrimary" Content="Confirm and install" Click="OnConfirm" IsDefault="True"
+              ToolTip.Tip="Install exactly what the preview shows (Enter)."/>
     </StackPanel>
   </Grid>
 </Window>

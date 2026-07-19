@@ -47,5 +47,26 @@ namespace OptiscalerManager.Core.Tests
             Assert.True(AppUpdateService.IsNewer("nightly-a", "nightly-b"));
             Assert.False(AppUpdateService.IsNewer("nightly-a", "nightly-a"));
         }
+
+        [Fact]
+        public void SelfUpdateCommand_Linux_RunsShellScriptWithWaitAndRelaunch()
+        {
+            var (file, args) = AppUpdateService.BuildSelfUpdateCommand("/opt/osm", 1234, isWindows: false);
+            Assert.Equal("/bin/sh", file);
+            Assert.Contains("update.sh", args);
+            Assert.Contains("--wait-pid 1234", args);
+            Assert.Contains("--relaunch", args);
+        }
+
+        [Fact]
+        public void SelfUpdateCommand_Windows_RunsPowerShellWithWaitAndRelaunch()
+        {
+            var (file, args) = AppUpdateService.BuildSelfUpdateCommand(@"C:\osm", 4321, isWindows: true);
+            Assert.Equal("powershell", file);
+            Assert.Contains("update.ps1", args);
+            Assert.Contains("-WaitPid 4321", args);
+            Assert.Contains("-Relaunch", args);
+            Assert.Contains("-ExecutionPolicy Bypass", args);
+        }
     }
 }

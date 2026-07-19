@@ -115,6 +115,16 @@ public sealed class ManagerService
     /// <summary>Best-effort check of this app's own repo for a newer release; never throws.</summary>
     public Task<AppUpdateCheck> CheckForAppUpdateAsync() => AppUpdate.CheckAsync();
 
+    /// <summary>True when the bundled updater script sits next to the executable.</summary>
+    public bool CanSelfUpdate => AppUpdateService.CanSelfUpdate;
+
+    /// <summary>
+    /// Launches the detached updater (which waits for this process, updates in place,
+    /// and relaunches the app). Returns null on success — the caller should then shut
+    /// the app down — or a human-readable error to show while staying open.
+    /// </summary>
+    public string? StartSelfUpdate() => AppUpdateService.StartSelfUpdate();
+
     // ── OptiScaler.ini profile library ──────────────────────────────────────
     /// <summary>All saved OptiScaler.ini profiles (built-in default + user-imported).</summary>
     public List<OptiScalerProfile> GetIniProfiles() => _profiles.GetAllProfiles(forceRefresh: true);

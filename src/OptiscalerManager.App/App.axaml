@@ -100,5 +100,35 @@
             <Setter Property="CornerRadius"    Value="{StaticResource RadiusMedium}"/>
             <Setter Property="Padding"         Value="10,6"/>
         </Style>
+
+        <!-- Couch/keyboard navigation: an unmistakable focus ring on the dark
+             theme. Keyboard (or Steam Input mapped to keyboard) moves focus;
+             these make it obvious where it is. -->
+        <Style Selector="Button:focus-visible">
+            <Setter Property="BorderBrush" Value="{StaticResource BrAccent}"/>
+            <Setter Property="BorderThickness" Value="2"/>
+        </Style>
+        <Style Selector="Button.BtnPrimary:focus-visible">
+            <Setter Property="BorderBrush" Value="White"/>
+            <Setter Property="BorderThickness" Value="2"/>
+        </Style>
+        <Style Selector="RadioButton:focus-visible, CheckBox:focus-visible">
+            <Setter Property="Background" Value="#2E2A4A"/>
+        </Style>
+        <Style Selector="ComboBox:focus-visible, TextBox:focus">
+            <Setter Property="BorderBrush" Value="{StaticResource BrAccent}"/>
+            <Setter Property="BorderThickness" Value="2"/>
+        </Style>
+        <Style Selector="ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMedium}"/>
+        </Style>
+        <Style Selector="ListBoxItem:focus-visible, ListBoxItem:selected">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
     </Application.Styles>
 </Application>

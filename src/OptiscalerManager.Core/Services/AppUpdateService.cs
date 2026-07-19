@@ -17,8 +17,11 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System;
+using System.Diagnostics;
+using System.IO;
 using System.Net.Http;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Tasks;
 using OptiscalerManager.Core.Logging;
@@ -82,6 +85,90 @@ namespace OptiscalerManager.Core.Services
                 return l > c;
 
             return !string.Equals(current, latest, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // ── In-app self-update (close → updater script → relaunch) ────────────
+
+        /// <summary>
+        /// The real install directory: where the executable lives. NOT
+        /// AppContext.BaseDirectory — with single-file publishing that points at
+        /// the extraction temp dir, while update.sh/VERSION sit next to the exe.
+        /// </summary>
+        public static string? GetInstallDirectory()
+        {
+            try
+            {
+                var exe = Environment.ProcessPath;
+                return string.IsNullOrEmpty(exe) ? null : Path.GetDirectoryName(exe);
+            }
+            catch { return null; }
+        }
+
+        /// <summary>Name of the bundled updater script for the current OS.</summary>
+        public static string UpdaterScriptName =>
+            RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "update.ps1" : "update.sh";
+
+        /// <summary>True when the bundled updater script is present next to the exe.</summary>
+        public static bool CanSelfUpdate
+        {
+            get
+            {
+                var dir = GetInstallDirectory();
+                return dir is not null && File.Exists(Path.Combine(dir, UpdaterScriptName));
+            }
+        }
+
+        /// <summary>
+        /// The command line that runs the updater detached for the given install dir
+        /// and app pid: the script waits for the pid, swaps the files in place, and
+        /// relaunches the app on any outcome. Pure, for testability.
+        /// </summary>
+        public static (string FileName, string Arguments) BuildSelfUpdateCommand(
+            string installDir, int pid, bool isWindows)
+        {
+            var script = Path.Combine(installDir, isWindows ? "update.ps1" : "update.sh");
+            return isWindows
+                ? ("powershell",
+                   $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\" -WaitPid {pid} -Relaunch")
+                : ("/bin/sh", $"\"{script}\" --wait-pid {pid} --relaunch");
+        }
+
+        /// <summary>
+        /// Launches the bundled updater as a detached process. The caller should shut
+        /// the app down immediately afterwards — the script waits for this process to
+        /// exit, updates in place, and relaunches the app. Returns null on success or
+        /// a human-readable error (in which case the app should stay running).
+        /// </summary>
+        public static string? StartSelfUpdate()
+        {
+            var dir = GetInstallDirectory();
+            if (dir is null)
+                return "Could not determine the install directory.";
+            if (!File.Exists(Path.Combine(dir, UpdaterScriptName)))
+                return $"The updater script ({UpdaterScriptName}) was not found next to the app.";
+
+            var (file, args) = BuildSelfUpdateCommand(
+                dir, Environment.ProcessId, RuntimeInformation.IsOSPlatform(OSPlatform.Windows));
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = file,
+                    Arguments = args,
+                    WorkingDirectory = dir,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                };
+                if (Process.Start(psi) is null)
+                    return "The updater process could not be started.";
+                Log.Write($"[AppUpdate] Updater launched: {file} {args}");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Log.Write($"[AppUpdate] Failed to launch updater: {ex.Message}");
+                return $"Could not start the updater: {ex.Message}";
+            }
         }
 
         /// <summary>

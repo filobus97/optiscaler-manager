@@ -4,7 +4,8 @@
         Width="620" Height="640" MinWidth="520" MinHeight="440"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource BrBgBase}"
-        Title="Settings — Import your own DLLs">
+        XYFocus.NavigationModes="Keyboard,Gamepad"
+        Title="Settings">
 
   <Grid RowDefinitions="Auto,*,Auto" Margin="20">
 
@@ -101,7 +102,10 @@
                        Foreground="{StaticResource BrTextSecondary}"/>
             <StackPanel Orientation="Horizontal" Spacing="10">
               <Button Content="Check for updates" Click="OnCheckAppUpdate"
-                      ToolTip.Tip="Queries this app's GitHub releases for a newer version. To update in place, close the app and run update.sh / update.ps1 from the install folder — your imports and settings are kept."/>
+                      ToolTip.Tip="Asks GitHub whether a newer release of this app exists."/>
+              <Button Name="UpdateNowButton" Classes="BtnPrimary" Content="Update now" IsEnabled="False"
+                      Click="OnUpdateNow"
+                      ToolTip.Tip="Closes the app, updates it in place, and reopens it automatically. Your settings, imports, profiles and backups are kept. Enabled after a check finds a newer version."/>
               <TextBlock Name="AppUpdateResultText" VerticalAlignment="Center" FontSize="12"
                          Foreground="{StaticResource BrTextSecondary}"/>
             </StackPanel>
@@ -114,7 +118,8 @@
     </ScrollViewer>
 
     <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-      <Button Content="Close" Click="OnClose"/>
+      <Button Content="Close" Click="OnClose" IsCancel="True"
+              ToolTip.Tip="Back to the main screen (Esc). Everything here saves as you change it."/>
     </StackPanel>
   </Grid>
 </Window>

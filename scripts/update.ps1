@@ -9,17 +9,24 @@
 
     Usage:
         powershell -ExecutionPolicy Bypass -File update.ps1 [-Force] [-Dir <install-dir>]
+                                                            [-WaitPid <pid>] [-Relaunch]
 
       -Force          reinstall even if already on the latest version
       -Dir <path>     install dir to update (default: the folder this script is in)
+      -WaitPid <pid>  wait (up to 60s) for that process to exit before updating —
+                      used by the app's in-app "Update now" button
+      -Relaunch       start the app again when the updater finishes (on ANY outcome,
+                      so a failed download still brings the app back)
 
     The app must be closed while updating (a running .exe is locked by Windows);
-    the script will offer to close it for you.
+    without -WaitPid the script will offer to close it for you.
 #>
 [CmdletBinding()]
 param(
     [switch]$Force,
-    [string]$Dir
+    [string]$Dir,
+    [int]$WaitPid = 0,
+    [switch]$Relaunch
 )
 
 $ErrorActionPreference = 'Stop'
@@ -27,11 +34,29 @@ $Repo = 'filobus97/optiscaler-manager'
 $AssetPrefix = 'OptiscalerManager'
 $ExeName = 'OptiscalerManager.exe'
 
+# Install dir = -Dir, else this script's folder. Resolved before anything else so
+# the relaunch in the outer finally always knows where the exe lives.
+if (-not $Dir) { $Dir = Split-Path -Parent $PSCommandPath }
+
 function Fail($msg) { Write-Host "Error: $msg" -ForegroundColor Red; exit 1 }
 
-# Install dir = -Dir, else this script's folder.
-if (-not $Dir) { $Dir = Split-Path -Parent $PSCommandPath }
+try {
+
 if (-not (Test-Path $Dir)) { Fail "Install dir not found: $Dir" }
+
+# In-app flow: the app spawns us and then quits — wait for it to be gone
+# (its .exe is locked while running).
+if ($WaitPid -gt 0) {
+    Write-Host "Waiting for the app (pid $WaitPid) to exit..."
+    try {
+        Wait-Process -Id $WaitPid -Timeout 60 -ErrorAction Stop
+    } catch [Microsoft.PowerShell.Commands.ProcessCommandException] {
+        # Already gone — fine.
+    } catch {
+        Fail "Process $WaitPid is still running after 60s; aborting update."
+    }
+    Write-Host 'App closed.'
+}
 
 # Only win-x64 is published; on Windows-on-ARM it runs under emulation.
 $Rid = 'win-x64'
@@ -63,10 +88,11 @@ if (-not $Force -and $current -and ($current -eq $latestNum)) {
 $asset = $release.assets | Where-Object { $_.name -like "*-$Rid.zip" } | Select-Object -First 1
 if (-not $asset) { Fail "No asset for $Rid in release $latest (expected $AssetPrefix-$latestNum-$Rid.zip)." }
 
-# If the app is running, its .exe is locked. Offer to stop it.
+# If the app is (still) running, its .exe is locked. Interactive flow only —
+# the in-app flow already waited above.
 $procName = [IO.Path]::GetFileNameWithoutExtension($ExeName)
 $running = Get-Process -Name $procName -ErrorAction SilentlyContinue
-if ($running) {
+if ($running -and $WaitPid -eq 0) {
     $answer = Read-Host "OptiScaler Manager is running and must be closed to update. Close it now? [y/N]"
     if ($answer -match '^(y|yes)$') {
         $running | Stop-Process -Force
@@ -97,4 +123,17 @@ try {
 }
 finally {
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+}
+
+}
+finally {
+    # In-app flow: bring the app back regardless of how the update went, so the
+    # user is never left with nothing after "Update now".
+    if ($Relaunch) {
+        $exe = Join-Path $Dir $ExeName
+        if (Test-Path $exe) {
+            Write-Host "Relaunching $ExeName ..."
+            Start-Process -FilePath $exe -WorkingDirectory $Dir
+        }
+    }
 }
