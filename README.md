@@ -33,9 +33,10 @@ action per game, advanced options tucked away.
       **swapped in place**: only OptiScaler's own FSR DLLs already present in the game
       folder are replaced with the SDK's same-name equivalents — nothing new is added,
       and game-owned files (e.g. the game's own `amd_ags_x64.dll`) are never touched.
-      Right after an OptiScaler release this is usually identical to the default; its
-      value is picking up AMD's **newer** signedbin revisions before OptiScaler
-      bundles them;
+      The revision is **matched to the OptiScaler version being installed** (resolved
+      from the release's own submodule pin): OptiScaler hooks AMD's model-selection
+      code by byte pattern, so e.g. 0.9.3 can only hook FSR ≤ 4.1.0 binaries — giving
+      it 4.1.1 files silently disables FSR 4 (the menu caps at 3.1.5);
     - *FSR 4 INT8 community build* — from the OptiScaler-Extras repo, at a **version
       you pick** (upstream still recommends **4.0.2c** for RDNA2 on Windows);
     - *Custom DLLs over AMD's latest* — the latest AMD `signedbin` set as the base,

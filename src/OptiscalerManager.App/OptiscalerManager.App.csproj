@@ -13,7 +13,7 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <RootNamespace>OptiscalerManager.App</RootNamespace>
     <AssemblyName>OptiscalerManager</AssemblyName>
-    <Version>0.6.1</Version>
+    <Version>0.6.2</Version>
     <Product>OptiScaler Manager</Product>
 
     <!-- Self-contained single-file publish (no trimming — matches the source app). -->

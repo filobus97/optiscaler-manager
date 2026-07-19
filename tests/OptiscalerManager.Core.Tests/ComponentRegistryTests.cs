@@ -3,6 +3,7 @@
 
 using System.Linq;
 using OptiscalerManager.Core.Components;
+using OptiscalerManager.Core.Services;
 using Xunit;
 
 namespace OptiscalerManager.Core.Tests
@@ -209,6 +210,43 @@ namespace OptiscalerManager.Core.Tests
                 forceInt8: true, fsr4Watermark: true);
             Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "Fsr4ForceEnableInt8" && k.Value == "true");
             Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "Fsr4EnableWatermark" && k.Value == "true");
+        }
+
+        // ── signedbin revision matching ─────────────────────────────────────
+        // OptiScaler hooks the upscaler's model code by byte pattern; 0.9.3 has no
+        // pattern for the 4.1.1 binary (added in 0.9.4), so the AMD files must be
+        // fetched at the revision the installed OptiScaler release actually pins.
+
+        [Theory]
+        [InlineData("0.9.3")]
+        [InlineData("0.9.2")]
+        [InlineData("0.9.3-final")]
+        public void SignedBinRefs_PreFsr411Releases_UseThe410Pin_NeverHead(string version)
+        {
+            var refs = ComponentManagementService.SignedBinRefsFor(version);
+            Assert.Equal(ComponentManagementService.FidelityFxSdk410Ref, refs[0]);
+            Assert.DoesNotContain("main", refs);
+            Assert.DoesNotContain("master", refs);
+        }
+
+        [Theory]
+        [InlineData("0.9.4")]
+        [InlineData("0.9.4-final")]
+        [InlineData("0.10.0")]
+        [InlineData(null)]
+        public void SignedBinRefs_Fsr411CapableReleases_Use411PinThenHead(string? version)
+        {
+            var refs = ComponentManagementService.SignedBinRefsFor(version);
+            Assert.Equal(ComponentManagementService.FidelityFxSdkFallbackRef, refs[0]);
+            Assert.Contains("main", refs);
+        }
+
+        [Fact]
+        public void SignedBinRefs_ResolvedPin_AlwaysWins()
+        {
+            var refs = ComponentManagementService.SignedBinRefsFor("0.9.3", resolvedPin: "abc123");
+            Assert.Equal("abc123", refs[0]);
+            Assert.Contains(ComponentManagementService.FidelityFxSdk410Ref, refs);
         }
 
         [Fact]

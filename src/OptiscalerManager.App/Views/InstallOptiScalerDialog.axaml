@@ -32,7 +32,7 @@
           <StackPanel Spacing="6">
             <RadioButton Name="RbAmdSdk" GroupName="Fsr4" Content="Latest FSR from AMD"
                          Foreground="{StaticResource BrTextPrimary}"
-                         ToolTip.Tip="Download AMD's SIGNED prebuilt FSR DLLs from the official FidelityFX-SDK repository (Kits/FidelityFX/signedbin) — the exact artifacts OptiScaler bundles, at AMD's newest revision (can be newer than the snapshot OptiScaler pins) — and swap OptiScaler's matching files in place. Nothing new is added."/>
+                         ToolTip.Tip="Download AMD's SIGNED prebuilt FSR DLLs from the official FidelityFX-SDK repository (Kits/FidelityFX/signedbin) and swap OptiScaler's matching files in place. The revision is MATCHED to the OptiScaler version you install: each OptiScaler build can only hook the FSR binaries it knows (e.g. 0.9.3 can hook up to FSR 4.1.0; 4.1.1 needs 0.9.4), so newer files would silently disable FSR 4. Nothing new is added."/>
 
             <RadioButton Name="RbInt8" GroupName="Fsr4" Content="FSR 4 INT8 community build"
                          Foreground="{StaticResource BrTextPrimary}"

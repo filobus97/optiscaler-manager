@@ -221,12 +221,12 @@ public sealed class ManagerService
         {
             case Fsr4Backend.CustomMerged:
             {
-                await InstallCustomMergedAsync(game, status);
+                await InstallCustomMergedAsync(game, version, status);
                 break;
             }
             case Fsr4Backend.LatestAmdSdk:
             {
-                await InstallAmdSdkAsync(game, status);
+                await InstallAmdSdkAsync(game, version, status);
                 break;
             }
             case Fsr4Backend.Int8Community:
@@ -350,13 +350,15 @@ public sealed class ManagerService
 
     /// <summary>
     /// Downloads AMD's signed prebuilt FFX DLL set (signedbin) from the official
-    /// FidelityFX-SDK repository — the same artifacts OptiScaler bundles, at AMD's
-    /// newest revision — then imports it as an SDK package and swaps it in place.
+    /// FidelityFX-SDK repository — at the revision MATCHED to the OptiScaler release
+    /// being installed, because each OptiScaler build can only hook the upscaler
+    /// binaries it has patterns for — then imports it as an SDK package and swaps it
+    /// in place.
     /// </summary>
-    private async Task InstallAmdSdkAsync(Game game, IProgress<string>? status)
+    private async Task InstallAmdSdkAsync(Game game, string optiscalerVersion, IProgress<string>? status)
     {
-        status?.Report("Downloading AMD's signed FSR DLLs (FidelityFX-SDK signedbin)…");
-        var (version, dirPath) = await _components.DownloadFidelityFxSignedBinAsync();
+        status?.Report($"Downloading AMD's signed FSR DLLs (matched to OptiScaler {optiscalerVersion})…");
+        var (version, dirPath) = await _components.DownloadFidelityFxSignedBinAsync(optiscalerVersion: optiscalerVersion);
 
         status?.Report($"Preparing FSR SDK {version}…");
         var scan = await _components.ScanFsrSdkSourceAsync(dirPath);
@@ -383,19 +385,20 @@ public sealed class ManagerService
     /// Revert removes them). Falls back to a cached signedbin when offline; installs
     /// the custom overlay alone if nothing is cached.
     /// </summary>
-    private async Task InstallCustomMergedAsync(Game game, IProgress<string>? status)
+    private async Task InstallCustomMergedAsync(Game game, string optiscalerVersion, IProgress<string>? status)
     {
         var customs = _components.GetCustomDlls();
         if (customs.Count == 0)
             throw new InvalidOperationException("No custom DLLs imported. Add them in Settings first.");
 
-        // 1) Base: latest AMD signedbin (best effort — cached or custom-only fallback).
+        // 1) Base: AMD signedbin matched to the installed OptiScaler version
+        //    (best effort — cached or custom-only fallback).
         string? baseDir = null;
         string baseVersion = "custom";
         try
         {
-            status?.Report("Downloading AMD's signed FSR DLLs (base set)…");
-            (baseVersion, baseDir) = await _components.DownloadFidelityFxSignedBinAsync();
+            status?.Report($"Downloading AMD's signed FSR DLLs (matched to OptiScaler {optiscalerVersion})…");
+            (baseVersion, baseDir) = await _components.DownloadFidelityFxSignedBinAsync(optiscalerVersion: optiscalerVersion);
         }
         catch (Exception ex)
         {

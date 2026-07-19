@@ -1209,24 +1209,112 @@ namespace OptiscalerManager.Core.Services
         public const string FidelityFxSignedBinPath = "Kits/FidelityFX/signedbin";
 
         /// <summary>
-        /// Known-good fallback ref: the FidelityFX-SDK commit OptiScaler master pins
-        /// for its next release (signedbin of the v2.3.0 / FSR 4.1.1 era).
+        /// The FidelityFX-SDK commit OptiScaler ≥0.9.4 pins (signedbin of the
+        /// FFX 2.3 / FSR 4.1.1 era — 0.9.4 has hook patterns for these binaries).
         /// </summary>
         public const string FidelityFxSdkFallbackRef = "60f4ea81909200d8542eca14dccb2628b763a9a3";
 
         /// <summary>
+        /// The FidelityFX-SDK commit OptiScaler 0.9.3 pins (FSR 4.1.0). OptiScaler
+        /// hooks the upscaler's model-selection code by byte-pattern, and 0.9.3 only
+        /// carries patterns for the 4.0.3/4.1.0 binaries — a 4.1.1 upscaler cannot be
+        /// hooked by it and FSR 4 silently disappears from the menu.
+        /// </summary>
+        public const string FidelityFxSdk410Ref = "e236f2304dcda35f282fdddd085f41e2ff48c86a";
+
+        /// <summary>
+        /// The signedbin git refs to try, best first, for a given OptiScaler release.
+        /// Each OptiScaler build can only hook the upscaler binaries it has byte
+        /// patterns for (0.9.4 changelog: "Updated model/preset hooking for FSR
+        /// 4.1.1"), so the AMD files must be taken at the submodule commit that
+        /// release pins — newer is NOT better here. Resolution order: the pin
+        /// resolved live from the OptiScaler repo (when available), then the static
+        /// era pin for the version, then the repo head as a last resort for unknown
+        /// newer versions.
+        /// </summary>
+        public static string[] SignedBinRefsFor(string? optiscalerVersion, string? resolvedPin = null)
+        {
+            var refs = new System.Collections.Generic.List<string>();
+            if (!string.IsNullOrWhiteSpace(resolvedPin)) refs.Add(resolvedPin!);
+
+            // Parse the numeric part of the version ("0.9.4-final" → 0.9.4).
+            Version? v = null;
+            if (!string.IsNullOrWhiteSpace(optiscalerVersion))
+            {
+                var numeric = new string(optiscalerVersion!.TakeWhile(c => char.IsDigit(c) || c == '.').ToArray()).TrimEnd('.');
+                Version.TryParse(numeric.Contains('.') ? numeric : numeric + ".0", out v);
+            }
+
+            if (v is not null && v < new Version(0, 9, 4))
+            {
+                // 0.9.3 and older: only the 4.1.0-era signedbin is hookable.
+                if (!refs.Contains(FidelityFxSdk410Ref)) refs.Add(FidelityFxSdk410Ref);
+            }
+            else
+            {
+                // 0.9.4+ (or unknown): the 4.1.1-era pin, then the live head for
+                // releases newer than this app's knowledge.
+                if (!refs.Contains(FidelityFxSdkFallbackRef)) refs.Add(FidelityFxSdkFallbackRef);
+                refs.Add("main");
+                refs.Add("master");
+            }
+            return refs.ToArray();
+        }
+
+        /// <summary>
+        /// Resolves the FidelityFX-SDK-v2 submodule commit pinned by a given
+        /// OptiScaler release tag, via the GitHub contents API. Returns null on any
+        /// failure (offline, unknown tag) — callers fall back to the static era pins.
+        /// </summary>
+        public async Task<string?> ResolveSignedBinPinAsync(string optiscalerVersion)
+        {
+            foreach (var tag in new[] { $"v{optiscalerVersion}", optiscalerVersion })
+            {
+                try
+                {
+                    var url = $"https://api.github.com/repos/{_config.OptiScaler.RepoOwner}/{_config.OptiScaler.RepoName}" +
+                              $"/contents/external/FidelityFX-SDK-v2?ref={Uri.EscapeDataString(tag)}";
+                    var resp = await GetWithRetryAsync(() => _httpClient, url, maxRetries: 1, timeoutSeconds: 15);
+                    if (!resp.IsSuccessStatusCode) continue;
+
+                    using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+                    if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                        doc.RootElement.TryGetProperty("sha", out var sha))
+                    {
+                        var pin = sha.GetString();
+                        if (!string.IsNullOrWhiteSpace(pin))
+                        {
+                            Log.Write($"[FidelityFxSdk] OptiScaler {tag} pins signedbin commit {pin[..7]}");
+                            return pin;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Write($"[FidelityFxSdk] Pin resolution for '{tag}' failed: {ex.Message}");
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
         /// Downloads AMD's signed prebuilt FFX DLL set from the official
         /// FidelityFX-SDK repository tree (signedbin) into the cache and returns
-        /// (versionLabel, dirPath). Tries the repo's current head first so the result
-        /// can be NEWER than the snapshot OptiScaler's release pins, then falls back
-        /// to the known-good commit. Every file is validated as a 64-bit PE (a Git-LFS
-        /// pointer or an error page would fail validation). This is AMD's official
-        /// open-source SDK repo — not the proprietary amdxcffx64.dll, which remains
-        /// strictly bring-your-own.
+        /// (versionLabel, dirPath). The revision is MATCHED to the OptiScaler release
+        /// being installed (see <see cref="SignedBinRefsFor"/>) — each OptiScaler can
+        /// only hook the upscaler binaries it knows. Every file is validated as a
+        /// 64-bit PE (a Git-LFS pointer or an error page would fail validation).
+        /// This is AMD's official open-source SDK repo — not the proprietary
+        /// amdxcffx64.dll, which remains strictly bring-your-own.
         /// </summary>
-        public async Task<(string version, string dirPath)> DownloadFidelityFxSignedBinAsync(IProgress<double>? progress = null)
+        public async Task<(string version, string dirPath)> DownloadFidelityFxSignedBinAsync(
+            IProgress<double>? progress = null, string? optiscalerVersion = null)
         {
-            var refsToTry = new[] { "main", "master", FidelityFxSdkFallbackRef };
+            string? resolvedPin = null;
+            if (!string.IsNullOrWhiteSpace(optiscalerVersion))
+                resolvedPin = await ResolveSignedBinPinAsync(optiscalerVersion!);
+
+            var refsToTry = SignedBinRefsFor(optiscalerVersion, resolvedPin);
             Exception? lastError = null;
 
             foreach (var gitRef in refsToTry)

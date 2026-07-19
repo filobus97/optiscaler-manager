@@ -238,7 +238,7 @@ public static class ComponentRegistry
         {
             Id = ComponentIds.Fsr4AmdSdk,
             DisplayName = "Latest FSR from AMD",
-            Description = "AMD's signed prebuilt FSR DLLs from the official FidelityFX-SDK repository (Kits/FidelityFX/signedbin) — the exact artifacts OptiScaler bundles, fetched at AMD's newest revision, which can be newer than the snapshot OptiScaler's release pins. Swapped IN PLACE over OptiScaler's matching files; nothing new is added.",
+            Description = "AMD's signed prebuilt FSR DLLs from the official FidelityFX-SDK repository (Kits/FidelityFX/signedbin), fetched at the revision MATCHED to the OptiScaler version being installed — each OptiScaler build can only hook the FSR binaries it has patterns for. Swapped IN PLACE over OptiScaler's matching files; nothing new is added.",
             // In-place swap: candidates are OptiScaler's FSR set; only those actually
             // present in the game folder get replaced (enforced by InstallCustomFsrSdk).
             TargetFiles = new[]
