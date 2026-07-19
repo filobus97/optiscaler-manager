@@ -26,23 +26,22 @@ action per game, advanced options tucked away.
   install dialog then decouples the independent choices:
 
   **Step 1 — Backend (which files to install):**
-    - *Default — OptiScaler's own files* (**recommended**): OptiScaler's release already
-      bundles a working **FSR 4.1.1** upscaler (INT8-capable since OptiScaler 0.9.4),
-      so this alone enables FSR 4;
-    - *Latest FSR SDK from AMD* — AMD's official open-source FidelityFX SDK (GPUOpen),
+    - *OptiScaler default* (**recommended**): OptiScaler's release already bundles a
+      working **FSR 4.1.1** upscaler (INT8-capable since OptiScaler 0.9.4), so this
+      alone enables FSR 4;
+    - *Latest FSR from AMD* — AMD's official open-source FidelityFX SDK (GPUOpen),
       **swapped in place**: only OptiScaler's own FSR DLLs already present in the game
       folder are replaced with the SDK's same-name equivalents — nothing new is added,
       and game-owned files (e.g. the game's own `amd_ags_x64.dll`) are never touched.
-      Right after an OptiScaler release this is usually identical to *Default*; its
-      value is picking up AMD's **newer** signedbin revisions before OptiScaler bundles
-      them;
-    - *FSR 4 INT8 (community build)* — a community INT8 build from the OptiScaler-Extras
-      repo, at a **version you pick** (upstream still recommends **4.0.2c** for RDNA2
-      on Windows);
-    - *Custom DLLs + latest AMD SDK (merged)* — the latest AMD `signedbin` set as the
-      base, with **your imported custom DLLs merged on top**: same-name DLLs overwrite
-      AMD's, unknown names (e.g. `amdxcffx64.dll`) are **added alongside**. Everything
-      is manifest-tracked, so *Revert* removes it all.
+      Right after an OptiScaler release this is usually identical to the default; its
+      value is picking up AMD's **newer** signedbin revisions before OptiScaler
+      bundles them;
+    - *FSR 4 INT8 community build* — from the OptiScaler-Extras repo, at a **version
+      you pick** (upstream still recommends **4.0.2c** for RDNA2 on Windows);
+    - *Custom DLLs over AMD's latest* — the latest AMD `signedbin` set as the base,
+      with **your imported custom DLLs merged on top**: same-name DLLs overwrite
+      AMD's, unknown names (e.g. `amdxcffx64.dll`) are **added alongside**.
+      Everything is manifest-tracked, so *Revert* removes it all.
 
   **Step 2 — FSR 4 selection:** the Manager **always forces the flags that make FSR 4
   *available*** (`[FSR] Fsr4Update=true`); you then choose whether it also **selects**
@@ -157,7 +156,7 @@ Open **Settings** to import:
   folder (searched recursively), or a `.zip`/`.7z`/`.rar` archive — every valid
   **64-bit** DLL is imported into a flat library (largest copy wins when a name is
   duplicated; re-importing a name replaces it; entries are individually deletable).
-  At install time (the *Custom DLLs + latest AMD SDK* backend) they are **merged on
+  At install time (the *Custom DLLs over AMD's latest* backend) they are **merged on
   top of the latest AMD `signedbin` set**: same names overwrite AMD's file, new
   names (e.g. `amdxcffx64.dll`) are added alongside. Legacy imports from older
   versions are migrated automatically.
@@ -174,7 +173,7 @@ Open **Settings** to import:
   including the default `.ini`.
 
 When you click **Install OptiScaler**, the dialog lets you pick the backend
-(Default / latest AMD SDK / INT8 community / custom-merged) and which `.ini`
+(OptiScaler default / latest FSR from AMD / INT8 community build / custom DLLs) and which `.ini`
 profile to write. The Manager always sets `[FSR] Fsr4Update = true` and
 `UpscalerIndex` per your Step-2 choice (these win over the chosen profile,
 matching what is written to disk). You always see the exact file and ini changes

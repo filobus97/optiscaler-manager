@@ -77,7 +77,7 @@ public partial class InstallOptiScalerDialog : Window
         var def = this.FindControl<RadioButton>("RbDefault")!;
 
         customMerged.IsEnabled = _manager.HasCustomDlls;
-        if (!customMerged.IsEnabled) customMerged.Content = "Custom DLLs + latest AMD SDK — none imported (Settings)";
+        if (!customMerged.IsEnabled) customMerged.Content = "Custom DLLs over AMD's latest — none imported (Settings)";
 
         // Pre-select Default: OptiScaler's own release already bundles a working
         // FSR 4.1 upscaler, so the zero-decision path delivers FSR 4 out of the box.

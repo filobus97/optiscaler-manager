@@ -237,7 +237,7 @@ public static class ComponentRegistry
         new ComponentDefinition
         {
             Id = ComponentIds.Fsr4AmdSdk,
-            DisplayName = "Latest FSR SDK (AMD)",
+            DisplayName = "Latest FSR from AMD",
             Description = "AMD's signed prebuilt FSR DLLs from the official FidelityFX-SDK repository (Kits/FidelityFX/signedbin) — the exact artifacts OptiScaler bundles, fetched at AMD's newest revision, which can be newer than the snapshot OptiScaler's release pins. Swapped IN PLACE over OptiScaler's matching files; nothing new is added.",
             // In-place swap: candidates are OptiScaler's FSR set; only those actually
             // present in the game folder get replaced (enforced by InstallCustomFsrSdk).
@@ -259,7 +259,7 @@ public static class ComponentRegistry
         new ComponentDefinition
         {
             Id = ComponentIds.Fsr4Extras,
-            DisplayName = "FSR 4 INT8 (community build)",
+            DisplayName = "FSR 4 INT8 community build",
             Description = "A community FSR 4.x INT8 upscaler build (amd_fidelityfx_upscaler_dx12.dll) from the OptiScaler-Extras repo, at a version you pick. No proprietary AMD binary is bundled.",
             TargetFiles = new[] { "amd_fidelityfx_upscaler_dx12.dll" },
             IniKeys = new[]
@@ -272,7 +272,7 @@ public static class ComponentRegistry
         new ComponentDefinition
         {
             Id = ComponentIds.CustomMerged,
-            DisplayName = "Custom DLLs + latest AMD SDK",
+            DisplayName = "Custom DLLs over AMD's latest",
             Description = "The latest AMD signedbin set as the base, with your imported custom DLLs merged on top: same-name DLLs overwrite AMD's, unknown names (e.g. amdxcffx64.dll) are added alongside. Your DLLs are never downloaded — bring your own.",
             // Base = the AMD signedbin set (the custom overlay is dynamic and gets
             // annotated into the preview by BuildInstallPreview).
