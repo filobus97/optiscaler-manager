@@ -163,16 +163,41 @@ public partial class InstallOptiScalerDialog : Window
     }
 
     // Lazily populate the OptiScaler version list; "Latest" stays selected until the
-    // fetch completes so the dialog is usable immediately (and offline).
+    // fetch completes so the dialog is usable immediately (and offline). Stable
+    // releases and pre-releases are grouped under non-selectable separators.
     private async void SetupOptiScalerVersions()
     {
         var combo = this.FindControl<ComboBox>("OptiScalerVersionCombo")!;
-        combo.ItemsSource = new[] { "Latest (recommended)" };
+        ComboBoxItem Selectable(string label, string? version) => new() { Content = label, Tag = version };
+        ComboBoxItem Separator(string label) => new()
+        {
+            Content = label,
+            IsEnabled = false,
+            FontSize = 11,
+            Foreground = new SolidColorBrush(Color.Parse("#8A8AAA")),
+        };
+
+        combo.ItemsSource = new[] { Selectable("Latest stable (recommended)", null) };
         combo.SelectedIndex = 0;
 
         var versions = await _manager.GetOptiScalerVersionsAsync();
-        var items = new System.Collections.Generic.List<string> { "Latest (recommended)" };
-        items.AddRange(versions);
+        var stables = versions.Where(v => !_manager.IsBetaOptiScalerVersion(v)).ToList();
+        var betas = versions.Where(_manager.IsBetaOptiScalerVersion).ToList();
+
+        var items = new System.Collections.Generic.List<ComboBoxItem>
+        {
+            Selectable("Latest stable (recommended)", null),
+        };
+        if (stables.Count > 0)
+        {
+            items.Add(Separator("— Stable releases —"));
+            items.AddRange(stables.Select(v => Selectable(v, v)));
+        }
+        if (betas.Count > 0)
+        {
+            items.Add(Separator("— Pre-releases / betas —"));
+            items.AddRange(betas.Select(v => Selectable(v, v)));
+        }
         combo.ItemsSource = items;
         combo.SelectedIndex = 0;
         combo.SelectionChanged += OnOptionChanged;
@@ -181,8 +206,7 @@ public partial class InstallOptiScalerDialog : Window
     private string? CurrentOptiScalerVersion()
     {
         var combo = this.FindControl<ComboBox>("OptiScalerVersionCombo")!;
-        var v = combo.SelectedItem as string;
-        return (combo.SelectedIndex <= 0 || string.IsNullOrEmpty(v)) ? null : v;
+        return (combo.SelectedItem as ComboBoxItem)?.Tag as string;
     }
 
     private SpoofMethod? CurrentSpoofMethod()

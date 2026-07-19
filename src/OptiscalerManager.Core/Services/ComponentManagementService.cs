@@ -917,7 +917,10 @@ namespace OptiscalerManager.Core.Services
                     {
                         Version = version,
                         DownloadUrl = downloadUrl,
-                        IsBeta = isBeta,
+                        // Beta = from the dedicated betas repo OR marked prerelease on
+                        // the main repo (nightlies/pre tags) — otherwise pre-releases
+                        // get sorted in among the stable versions.
+                        IsBeta = isBeta || isPrerelease,
                         IsLatestStable = isThisLatestStable,
                         IsLatestBeta = isThisLatestBeta,
                     });

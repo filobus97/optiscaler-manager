@@ -171,6 +171,9 @@ public sealed class ManagerService
         return _components.GetDownloadedOptiScalerVersions();
     }
 
+    /// <summary>Version strings that are pre-releases/betas (for grouping in the UI).</summary>
+    public bool IsBetaOptiScalerVersion(string version) => _components.BetaVersions.Contains(version);
+
     // ── Install OptiScaler ──────────────────────────────────────────────────
     public async Task InstallAsync(Game game, Fsr4Backend backend, string? int8Version, bool selectFsr4,
         OptiScalerProfile? iniProfile, IProgress<string>? status = null,
