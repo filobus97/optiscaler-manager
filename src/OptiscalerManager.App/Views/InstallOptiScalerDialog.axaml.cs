@@ -108,9 +108,6 @@ public partial class InstallOptiScalerDialog : Window
                 this.FindControl<CheckBox>("ChkFakenvapi")!.IsChecked = true;
             OnOptionChanged(nukem, e);
         };
-
-        // Per-install spoof checkbox starts from the global Settings default.
-        this.FindControl<CheckBox>("ChkSpoofNvidia")!.IsChecked = _manager.SpoofNvidiaDefault;
     }
 
     // Reveal and lazily populate the INT8 version list when INT8 is selected.

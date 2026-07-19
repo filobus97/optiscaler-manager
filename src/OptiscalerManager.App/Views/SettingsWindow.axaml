@@ -71,19 +71,6 @@
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
                 BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="8">
-            <TextBlock Text="Nvidia override (GPU spoofing)" FontWeight="SemiBold"
-                       Foreground="{StaticResource BrTextPrimary}"/>
-            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                       Text="Some games hide DLSS / DLSS Frame Generation options unless they see an Nvidia GPU. When enabled, installs force [Spoofing] Dxgi=true so the game sees an Nvidia GPU (RTX 4090). This sets the DEFAULT for the per-game checkbox in the Install dialog — you can still flip it per install."/>
-            <CheckBox Name="SpoofDefaultCheck" Content="Spoof an Nvidia GPU by default on new installs"
-                      Foreground="{StaticResource BrTextPrimary}" FontSize="12"
-                      ToolTip.Tip="Pre-checks the 'Nvidia override' box in the Install dialog. Pairs well with the fakenvapi add-on so Reflex calls become Anti-Lag 2 / LatencyFlex."/>
-          </StackPanel>
-        </Border>
-
-        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
-          <StackPanel Spacing="8">
             <TextBlock Text="OptiScaler.ini profiles" FontWeight="SemiBold"
                        Foreground="{StaticResource BrTextPrimary}"/>
             <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"

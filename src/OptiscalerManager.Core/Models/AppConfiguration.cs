@@ -111,13 +111,6 @@ namespace OptiscalerManager.Core.Models
         /// </summary>
         public string? MenuShortcutKey { get; set; } = null;
 
-        /// <summary>
-        /// Global default for the "Nvidia override" install option. When true, installs
-        /// pre-select forcing [Spoofing] Dxgi=true so the game sees an Nvidia GPU (the
-        /// per-install dialog checkbox can still override it per game). Null/false = off.
-        /// </summary>
-        public bool? SpoofNvidiaDefault { get; set; } = null;
-
         // Window state persistence
         public double WindowWidth { get; set; } = 1200;
         public double WindowHeight { get; set; } = 720;

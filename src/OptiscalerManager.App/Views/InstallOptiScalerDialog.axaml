@@ -82,7 +82,7 @@
                       ToolTip.Tip="Installs dlssg_to_fsr3_amd_is_better.dll (your imported copy) and sets [FrameGen] FGInput=nukems. For games with DLSS Frame Generation; needs fakenvapi on AMD/Intel, so selecting this also selects fakenvapi."/>
             <CheckBox Name="ChkSpoofNvidia" Content="Nvidia override — spoof an Nvidia GPU for this game"
                       Foreground="{StaticResource BrTextPrimary}" FontSize="12"
-                      ToolTip.Tip="Forces [Spoofing] Dxgi=true so the game sees an Nvidia GPU (RTX 4090 by default). Use for games that hide DLSS/DLSS-G options on AMD/Intel. The default state of this checkbox can be set globally in Settings."/>
+                      ToolTip.Tip="Forces [Spoofing] Dxgi=true so this game sees an Nvidia GPU (RTX 4090 by default). Use for games that hide DLSS/DLSS-G options on AMD/Intel. Per game only — chosen here on each install."/>
           </StackPanel>
         </Border>
       </StackPanel>

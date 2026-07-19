@@ -36,25 +36,10 @@ public partial class SettingsWindow : Window
     {
         _manager = manager;
         SetupMenuKey();
-        SetupSpoofDefault();
         SetupAboutCard();
         RefreshNukemStatus();
         RefreshInventory();
         RefreshIniProfiles();
-    }
-
-    private void SetupSpoofDefault()
-    {
-        var check = this.FindControl<CheckBox>("SpoofDefaultCheck");
-        if (check is null) return;
-        check.IsChecked = _manager.SpoofNvidiaDefault;
-        check.IsCheckedChanged += (_, _) =>
-        {
-            _manager.SpoofNvidiaDefault = check.IsChecked == true;
-            SetResult(check.IsChecked == true
-                ? "Nvidia override will be pre-selected on new installs ([Spoofing] Dxgi=true)."
-                : "Nvidia override off by default (you can still enable it per install).");
-        };
     }
 
     private void SetupAboutCard()

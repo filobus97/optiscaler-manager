@@ -89,18 +89,6 @@ public sealed class ManagerService
         set { _components.Config.MenuShortcutKey = value; _components.SaveConfiguration(); }
     }
 
-    // ── Nvidia override (GPU spoofing) global default ───────────────────────
-    /// <summary>
-    /// Global default for the per-install "Nvidia override" checkbox. When on, the
-    /// install forces [Spoofing] Dxgi=true so the game sees an Nvidia GPU (needed by
-    /// games that hide DLSS/DLSS-G options on AMD/Intel; pairs with the fakenvapi add-on).
-    /// </summary>
-    public bool SpoofNvidiaDefault
-    {
-        get => _components.Config.SpoofNvidiaDefault == true;
-        set { _components.Config.SpoofNvidiaDefault = value; _components.SaveConfiguration(); }
-    }
-
     // ── Add-ons: fakenvapi + Nukem DLSSG-to-FSR3 ────────────────────────────
     /// <summary>True when Nukem's DLL has been imported into the cache (it cannot be auto-downloaded).</summary>
     public bool IsNukemFgCached => _components.IsNukemFGInstalled;

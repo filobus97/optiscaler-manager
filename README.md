@@ -60,8 +60,8 @@ action per game, advanced options tucked away.
       (`dlssg_to_fsr3_amd_is_better.dll`, **bring-your-own** — import it once in
       Settings). Selecting it sets `[FrameGen] FGInput=nukems` and pulls fakenvapi in;
     - *Nvidia override* — forces `[Spoofing] Dxgi=true` so the game sees an Nvidia GPU
-      (for games that hide DLSS options on AMD/Intel). Its default state is a global
-      Settings option; the checkbox decides per game.
+      (for games that hide DLSS options on AMD/Intel). **Per game only** — you choose
+      it in this dialog on each install; there is no global setting.
 
   Plus the **`OptiScaler.ini`** to use — OptiScaler's default, or one of your saved
   profiles. When you pick a custom `.ini`, the options above overwrite **only the keys
@@ -161,8 +161,6 @@ Open **Settings** to import:
   `dlssg_to_fsr3_amd_is_better.dll` (or the mod archive) once, then tick the add-on
   per install. fakenvapi needs no import: it is downloaded from the
   optiscaler/fakenvapi releases when selected.
-- **Nvidia override default.** Choose whether new installs pre-select GPU spoofing
-  (`[Spoofing] Dxgi=true`); you can still flip it per game in the Install dialog.
 - **`OptiScaler.ini` profiles.** Import any `OptiScaler.ini`, tag it with a name,
   and it becomes selectable in the Install dialog. Collect as many as you like;
   delete them from Settings.
