@@ -108,11 +108,25 @@ namespace OptiscalerManager.Core.Services
         public static string UpdaterScriptName =>
             RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "update.ps1" : "update.sh";
 
-        /// <summary>True when the bundled updater script is present next to the exe.</summary>
+        /// <summary>
+        /// True only when running as a published single-file bundle — the shape of
+        /// every shipped build. The entry assembly has no on-disk location inside a
+        /// single-file bundle, whereas a `dotnet run` / framework-dependent build
+        /// reports its .dll path. This keeps the in-app updater from targeting a dev
+        /// build folder (where the script is copied to the output dir too).
+        /// </summary>
+        public static bool IsSingleFilePublish =>
+            string.IsNullOrEmpty(Assembly.GetEntryAssembly()?.Location);
+
+        /// <summary>
+        /// True when this is a real single-file deployment with the bundled updater
+        /// script next to the exe — i.e. the in-app "Update now" flow can run.
+        /// </summary>
         public static bool CanSelfUpdate
         {
             get
             {
+                if (!IsSingleFilePublish) return false;
                 var dir = GetInstallDirectory();
                 return dir is not null && File.Exists(Path.Combine(dir, UpdaterScriptName));
             }

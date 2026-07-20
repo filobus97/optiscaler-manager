@@ -49,6 +49,16 @@ namespace OptiscalerManager.Core.Tests
         }
 
         [Fact]
+        public void CanSelfUpdate_False_UnderTestHost_NotSingleFile()
+        {
+            // The test runner is a normal framework-dependent host (assembly has an
+            // on-disk Location), so the single-file gate must report false — proving
+            // the in-app updater won't offer itself outside a shipped bundle.
+            Assert.False(AppUpdateService.IsSingleFilePublish);
+            Assert.False(AppUpdateService.CanSelfUpdate);
+        }
+
+        [Fact]
         public void SelfUpdateCommand_Linux_RunsShellScriptWithWaitRelaunchForce()
         {
             var (file, args) = AppUpdateService.BuildSelfUpdateCommand("/opt/osm", 1234, isWindows: false);
