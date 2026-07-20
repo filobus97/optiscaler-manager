@@ -105,7 +105,7 @@
                       ToolTip.Tip="Asks GitHub whether a newer release of this app exists."/>
               <Button Name="UpdateNowButton" Classes="BtnPrimary" Content="Update now" IsEnabled="False"
                       Click="OnUpdateNow"
-                      ToolTip.Tip="Closes the app, updates it in place, and reopens it automatically. Your settings, imports, profiles and backups are kept. Enabled after a check finds a newer version."/>
+                      ToolTip.Tip="Downloads and applies the update, then restarts the app automatically — no terminal (works in Steam Gaming Mode). Your settings, imports, profiles and backups are kept. Enabled after a check finds a newer version."/>
               <TextBlock Name="AppUpdateResultText" VerticalAlignment="Center" FontSize="12"
                          Foreground="{StaticResource BrTextSecondary}"/>
             </StackPanel>

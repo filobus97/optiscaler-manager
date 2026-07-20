@@ -8,6 +8,8 @@
     <AssemblyName>OptiscalerManager.Core</AssemblyName>
     <!-- No trimming: matches the source project (WPF/Avalonia + reflection paths). -->
     <PublishTrimmed>false</PublishTrimmed>
+    <!-- Required by the source-generated LibraryImport for libc execv (NativeExec). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>

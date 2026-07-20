@@ -179,9 +179,15 @@ in the live preview first.
 
 The app **checks for new releases at launch** (and on demand from *Settings → About &
 updates*). When a newer version exists, a dismissable banner appears with an **Update
-now** button: click it and the app closes itself, updates in place, and **reopens
-automatically** — no terminal needed (ideal from the couch). The check is best-effort;
+now** button — **no terminal needed** (ideal from the couch). The check is best-effort;
 offline it stays silent.
+
+- **Linux / macOS** update **seamlessly in-process**: the app downloads the new build,
+  swaps the files in place, and **restarts itself at the same process** — so it keeps
+  running under **Steam Gaming Mode / gamescope** (Steam never sees the "game" stop, so
+  the window comes right back). A brief flash and you're on the new version.
+- **Windows** closes the app, runs the bundled updater, and **reopens it automatically**
+  (a running `.exe` is locked, so it can't swap in place).
 
 Your data is never touched — all settings, imported DLLs, `.ini` profiles, backups and
 the download cache live in your OS config directory (`%APPDATA%\OptiscalerManager` on
@@ -199,11 +205,10 @@ sh update.sh                 # --force to reinstall, --dir <path> to target anot
 powershell -ExecutionPolicy Bypass -File update.ps1   # -Force / -Dir <path>
 ```
 
-The updater detects your platform, compares the bundled `VERSION` with the latest
+The script detects your platform, compares the bundled `VERSION` with the latest
 release, downloads the matching `OptiscalerManager-<version>-<rid>.zip`, and swaps the
-files in place. The in-app button simply runs this same script with `--wait-pid`/
-`--relaunch` so it waits for the app to close and reopens it. The scripts also live in
-[`scripts/`](scripts/) if you want to run them standalone.
+files in place. The scripts live in [`scripts/`](scripts/) if you want to run them
+standalone.
 
 ## Couch / Steam Deck (Bazzite) use
 

@@ -92,8 +92,8 @@ public partial class SettingsWindow : Window
             updateNow.IsEnabled = check.UpdateAvailable && _manager.CanSelfUpdate;
     }
 
-    private void OnUpdateNow(object? sender, RoutedEventArgs e)
-        => SelfUpdateLauncher.StartAndShutdown(_manager, msg =>
+    private async void OnUpdateNow(object? sender, RoutedEventArgs e)
+        => await SelfUpdateLauncher.StartAsync(_manager, msg =>
         {
             var result = this.FindControl<TextBlock>("AppUpdateResultText");
             if (result is not null) result.Text = msg;

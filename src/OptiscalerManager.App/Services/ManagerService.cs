@@ -119,11 +119,25 @@ public sealed class ManagerService
     public bool CanSelfUpdate => AppUpdateService.CanSelfUpdate;
 
     /// <summary>
-    /// Launches the detached updater (which waits for this process, updates in place,
-    /// and relaunches the app). Returns null on success — the caller should then shut
-    /// the app down — or a human-readable error to show while staying open.
+    /// True on platforms that update seamlessly in-process (Unix): the app replaces
+    /// its own process image at the same PID (survives Steam Gaming Mode). Windows
+    /// uses the detached-script flow instead.
+    /// </summary>
+    public bool UsesInProcessUpdate => AppUpdateService.UsesInProcessUpdate;
+
+    /// <summary>
+    /// Windows flow: launches the detached updater (which waits for this process,
+    /// updates in place, and relaunches it). Returns null on success — the caller
+    /// should then shut down — or a human-readable error to show while staying open.
     /// </summary>
     public string? StartSelfUpdate() => AppUpdateService.StartSelfUpdate();
+
+    /// <summary>
+    /// Unix flow: downloads the latest release, swaps files in place, and re-execs the
+    /// app at the same PID. Returns an error on failure (app stays running); on success
+    /// it does not return (the process is replaced).
+    /// </summary>
+    public Task<string?> RunInProcessUpdateAsync(Action<string>? report = null) => AppUpdate.RunInProcessUpdateAsync(report);
 
     // ── OptiScaler.ini profile library ──────────────────────────────────────
     /// <summary>All saved OptiScaler.ini profiles (built-in default + user-imported).</summary>

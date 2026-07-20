@@ -48,6 +48,39 @@ namespace OptiscalerManager.Core.Tests
             Assert.False(AppUpdateService.IsNewer("nightly-a", "nightly-a"));
         }
 
+        [Theory]
+        [InlineData("OptiscalerManager-0.9.0-linux-x64.zip", "linux-x64", true)]
+        [InlineData("OptiscalerManager-0.9.0-win-x64.zip", "win-x64", true)]
+        [InlineData("OptiscalerManager-0.9.0-osx-arm64.zip", "osx-arm64", true)]
+        [InlineData("OptiscalerManager-0.9.0-linux-x64.zip", "win-x64", false)]  // wrong platform
+        [InlineData("OptiscalerManager-0.9.0-osx-x64.zip", "osx-arm64", false)]  // arch mismatch
+        public void SelectAssetUrl_MatchesRidBySuffix(string assetName, string rid, bool shouldMatch)
+        {
+            var url = AppUpdateService.SelectAssetUrl(
+                new[] { (assetName, "https://example/dl") }, rid);
+            Assert.Equal(shouldMatch ? "https://example/dl" : null, url);
+        }
+
+        [Fact]
+        public void SelectAssetUrl_PicksTheMatchingRid_AmongMany()
+        {
+            var assets = new[]
+            {
+                ("OptiscalerManager-0.9.0-win-x64.zip", "u-win"),
+                ("OptiscalerManager-0.9.0-linux-x64.zip", "u-linux"),
+                ("OptiscalerManager-0.9.0-osx-arm64.zip", "u-mac"),
+            };
+            Assert.Equal("u-linux", AppUpdateService.SelectAssetUrl(assets, "linux-x64"));
+        }
+
+        [Fact]
+        public void CurrentRid_HasOsAndArch()
+        {
+            var rid = AppUpdateService.CurrentRid();
+            Assert.Contains("-", rid);
+            Assert.Matches("^(win|linux|osx)-", rid);
+        }
+
         [Fact]
         public void CanSelfUpdate_False_UnderTestHost_NotSingleFile()
         {

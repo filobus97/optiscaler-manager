@@ -30,8 +30,12 @@ public partial class MainWindow : Window
     {
         DetectGpu();
         RefreshImportSummary();
-        _ = CheckForAppUpdateAsync(); // fire-and-forget; silent unless a newer release exists
+        if (!Program.RelaunchedAfterUpdate)
+            _ = CheckForAppUpdateAsync(); // fire-and-forget; silent unless a newer release exists
         await RescanAsync();
+        // Set last so it wins over the scan's "Found N game(s)" status.
+        if (Program.RelaunchedAfterUpdate)
+            _vm.StatusText = $"Updated to v{_manager.AppVersion} ✓  •  Found {_vm.Games.Count} game(s).";
     }
 
     private async Task CheckForAppUpdateAsync()
@@ -78,8 +82,8 @@ public partial class MainWindow : Window
         if (banner is not null) banner.IsVisible = false;
     }
 
-    private void OnUpdateNowClick(object? sender, RoutedEventArgs e)
-        => SelfUpdateLauncher.StartAndShutdown(_manager, msg => _vm.StatusText = msg);
+    private async void OnUpdateNowClick(object? sender, RoutedEventArgs e)
+        => await SelfUpdateLauncher.StartAsync(_manager, msg => _vm.StatusText = msg);
 
     private void DetectGpu()
     {

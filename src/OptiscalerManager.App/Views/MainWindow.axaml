@@ -68,7 +68,7 @@
                    Foreground="{StaticResource BrTextPrimary}" FontSize="12" TextWrapping="Wrap"/>
         <Button Grid.Column="1" Name="UpdateNowButton" Classes="BtnPrimary" Content="Update now" FontSize="11" Margin="8,0,0,0"
                 Click="OnUpdateNowClick" IsEnabled="{Binding IsIdle}"
-                ToolTip.Tip="Closes the app, updates it in place, and reopens it automatically. Your settings, imports, profiles and backups are kept. Disabled while an install or revert is running."/>
+                ToolTip.Tip="Downloads and applies the update, then restarts the app automatically — no terminal (works in Steam Gaming Mode). Your settings, imports, profiles and backups are kept. Disabled while an install or revert is running."/>
         <Button Grid.Column="2" Content="Open releases page" FontSize="11" Margin="8,0"
                 Click="OnOpenReleasesClick"
                 ToolTip.Tip="Opens this app's GitHub releases page in your browser to read what changed."/>
