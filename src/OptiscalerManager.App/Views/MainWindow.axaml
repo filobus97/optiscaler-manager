@@ -10,11 +10,18 @@
         Title="OptiScaler Manager">
 
   <Window.Styles>
+    <!-- Scoped to the game list only (a global ListBoxItem rule would leak into
+         ComboBox dropdowns, since ComboBoxItem derives from ListBoxItem). -->
+    <Style Selector="ListBox#GamesList > ListBoxItem">
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="Margin" Value="4"/>
+      <Setter Property="CornerRadius" Value="{StaticResource RadiusMedium}"/>
+    </Style>
     <!-- The focused/selected game row lights up its card border. -->
-    <Style Selector="ListBoxItem:selected Border.GameCard">
+    <Style Selector="ListBox#GamesList > ListBoxItem:selected Border.GameCard">
       <Setter Property="BorderBrush" Value="{StaticResource BrAccent}"/>
     </Style>
-    <Style Selector="ListBoxItem:focus-visible Border.GameCard">
+    <Style Selector="ListBox#GamesList > ListBoxItem:focus-visible Border.GameCard">
       <Setter Property="BorderBrush" Value="{StaticResource BrAccent}"/>
     </Style>
   </Window.Styles>

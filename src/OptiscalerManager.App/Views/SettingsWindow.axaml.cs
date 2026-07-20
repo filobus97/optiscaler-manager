@@ -93,23 +93,11 @@ public partial class SettingsWindow : Window
     }
 
     private void OnUpdateNow(object? sender, RoutedEventArgs e)
-    {
-        var result = this.FindControl<TextBlock>("AppUpdateResultText");
-        if (result is not null) result.Text = "Updating — the app will close and reopen…";
-
-        var error = _manager.StartSelfUpdate();
-        if (error is not null)
+        => SelfUpdateLauncher.StartAndShutdown(_manager, msg =>
         {
-            SetResult($"Update failed to start: {error}", error: true);
-            return;
-        }
-
-        if (Avalonia.Application.Current?.ApplicationLifetime
-            is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
-            desktop.Shutdown();
-        else
-            Close();
-    }
+            var result = this.FindControl<TextBlock>("AppUpdateResultText");
+            if (result is not null) result.Text = msg;
+        });
 
     private void SetupMenuKey()
     {

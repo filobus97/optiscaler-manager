@@ -178,18 +178,18 @@ in the live preview first.
 ## Updating in place
 
 The app **checks for new releases at launch** (and on demand from *Settings → About &
-updates*): when a newer version exists, a dismissable banner offers the releases page
-and reminds you of the in-place updater. The check is best-effort — offline it stays
-silent.
+updates*). When a newer version exists, a dismissable banner appears with an **Update
+now** button: click it and the app closes itself, updates in place, and **reopens
+automatically** — no terminal needed (ideal from the couch). The check is best-effort;
+offline it stays silent.
 
-Each release ships a self-contained updater next to the executable that pulls the
-latest GitHub release and replaces the program **without touching your data** — all
-settings, imported DLLs, `.ini` profiles, backups and the download cache live in
-your OS config directory (`%APPDATA%\OptiscalerManager` on Windows,
-`~/.config/OptiscalerManager` on Linux, `~/Library/Application Support/OptiscalerManager`
-on macOS), *outside* the install folder.
+Your data is never touched — all settings, imported DLLs, `.ini` profiles, backups and
+the download cache live in your OS config directory (`%APPDATA%\OptiscalerManager` on
+Windows, `~/.config/OptiscalerManager` on Linux,
+`~/Library/Application Support/OptiscalerManager` on macOS), *outside* the install folder.
 
-Close the app first, then from the install folder run:
+You can also run the bundled updater by hand (e.g. to update a closed app). From the
+install folder:
 
 ```bash
 # Linux / macOS
@@ -200,9 +200,23 @@ powershell -ExecutionPolicy Bypass -File update.ps1   # -Force / -Dir <path>
 ```
 
 The updater detects your platform, compares the bundled `VERSION` with the latest
-release, downloads the matching `OptiscalerManager-<version>-<rid>.zip`, and swaps
-the files in place. The scripts also live in [`scripts/`](scripts/) if you want to
-run them standalone.
+release, downloads the matching `OptiscalerManager-<version>-<rid>.zip`, and swaps the
+files in place. The in-app button simply runs this same script with `--wait-pid`/
+`--relaunch` so it waits for the app to close and reopens it. The scripts also live in
+[`scripts/`](scripts/) if you want to run them standalone.
+
+## Couch / Steam Deck (Bazzite) use
+
+The whole UI is **keyboard- and controller-navigable**: arrow keys (or a D-pad / left
+stick) move focus in any direction, a bright focus ring shows where you are, **Enter**
+confirms and **Esc** backs out of dialogs. The game list walks with Up/Down; the
+Install and Revert buttons are one press to the side.
+
+On Steam Deck / Bazzite, add the app as a **non-Steam game** and use a **Steam Input**
+layout that maps the controller to a keyboard: D-pad / left stick → arrow keys,
+**A → Enter**, **B → Esc**. (Avalonia has no native Linux gamepad backend, so this
+Steam Input mapping is what delivers controller input — and it makes *Update now*
+work fully from the couch.)
 
 ## Native Wayland (Linux)
 

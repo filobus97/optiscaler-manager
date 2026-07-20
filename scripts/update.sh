@@ -29,8 +29,10 @@ ASSET_PREFIX="OptiscalerManager"
 RELAUNCH=0
 INSTALL_DIR=""
 
-# Runs from the EXIT trap: bring the app back regardless of how the update went.
-relaunch_app() {
+# Runs from the EXIT trap: remove the temp dir (if any) then bring the app back
+# regardless of how the update went.
+cleanup() {
+    [ -n "${TMP:-}" ] && rm -rf "$TMP"
     if [ "$RELAUNCH" -eq 1 ] && [ -x "$INSTALL_DIR/$ASSET_PREFIX" ]; then
         echo "Relaunching $ASSET_PREFIX …"
         # Detach fully so the app outlives this script.
@@ -64,7 +66,7 @@ main() {
     # From here on, any exit (success, up-to-date, or failure) relaunches the app
     # when --relaunch was requested, so the in-app flow never strands the user.
     TMP=""
-    trap 'rm -rf "$TMP"; relaunch_app' EXIT
+    trap 'cleanup' EXIT
 
     # In-app flow: the app spawns us and then quits — wait for it to be gone so
     # we never race its shutdown (Linux allows in-place overwrite, but waiting

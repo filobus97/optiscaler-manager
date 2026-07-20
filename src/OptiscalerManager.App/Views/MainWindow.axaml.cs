@@ -15,6 +15,7 @@ public partial class MainWindow : Window
 {
     private readonly ManagerService _manager = null!;
     private readonly MainViewModel _vm = new();
+    private bool _initialFocusDone;
 
     // Parameterless ctor for the XAML previewer/designer only.
     public MainWindow() { InitializeComponent(); DataContext = _vm; }
@@ -78,23 +79,7 @@ public partial class MainWindow : Window
     }
 
     private void OnUpdateNowClick(object? sender, RoutedEventArgs e)
-    {
-        // The updater waits for this process, swaps the files, and relaunches the
-        // app — so the correct sequence is: spawn it detached, then quit.
-        _vm.StatusText = "Updating — the app will close and reopen automatically…";
-        var error = _manager.StartSelfUpdate();
-        if (error is not null)
-        {
-            _vm.StatusText = $"Update failed to start: {error}";
-            return;
-        }
-
-        if (Avalonia.Application.Current?.ApplicationLifetime
-            is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
-            desktop.Shutdown();
-        else
-            Close();
-    }
+        => SelfUpdateLauncher.StartAndShutdown(_manager, msg => _vm.StatusText = msg);
 
     private void DetectGpu()
     {
@@ -144,17 +129,21 @@ public partial class MainWindow : Window
             _vm.HasNoGames = _vm.Games.Count == 0;
             _vm.StatusText = $"Found {_vm.Games.Count} game(s).";
 
-            // Land keyboard/controller focus on the game list so Up/Down works
-            // immediately; fall back to Settings when the list is empty.
-            var list = this.FindControl<ListBox>("GamesList");
-            if (_vm.Games.Count > 0 && list is not null)
+            // Land keyboard/controller focus on the game list ONLY on the first scan,
+            // so a manual Rescan doesn't yank focus away from whatever the user is on.
+            if (!_initialFocusDone)
             {
-                list.SelectedIndex = 0;
-                list.Focus();
-            }
-            else
-            {
-                this.FindControl<Button>("SettingsButton")?.Focus();
+                _initialFocusDone = true;
+                var list = this.FindControl<ListBox>("GamesList");
+                if (_vm.Games.Count > 0 && list is not null)
+                {
+                    list.SelectedIndex = 0;
+                    list.Focus();
+                }
+                else
+                {
+                    this.FindControl<Button>("SettingsButton")?.Focus();
+                }
             }
         }
         catch (Exception ex)

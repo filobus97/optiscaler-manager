@@ -12,7 +12,7 @@
     <StackPanel Grid.Row="0" Spacing="4">
       <TextBlock Name="TitleText" FontSize="18" FontWeight="Bold"
                  Foreground="{StaticResource BrTextPrimary}"/>
-      <TextBlock Text="Choose the FSR 4 backend and OptiScaler.ini to use. Nothing is written until you confirm — the preview below is exactly what will happen."
+      <TextBlock Text="Choose the OptiScaler version, backend, add-ons and OptiScaler.ini. Nothing is written until you confirm — the preview below is exactly what will happen."
                  FontSize="12" Foreground="{StaticResource BrTextSecondary}" TextWrapping="Wrap"/>
     </StackPanel>
 

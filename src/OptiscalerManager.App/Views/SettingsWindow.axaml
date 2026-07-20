@@ -10,10 +10,10 @@
   <Grid RowDefinitions="Auto,*,Auto" Margin="20">
 
     <StackPanel Grid.Row="0" Spacing="4">
-      <TextBlock Text="Bring your own components" FontSize="18" FontWeight="Bold"
+      <TextBlock Text="Settings" FontSize="18" FontWeight="Bold"
                  Foreground="{StaticResource BrTextPrimary}"/>
       <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                 Text="This app never downloads, bundles or links to proprietary AMD binaries. You supply a local file you already possess; it is copied into a private cache and used for installs."/>
+                 Text="Set the overlay key, import your own DLLs and .ini profiles, and manage add-ons. Anything you bring your own — the proprietary AMD runtime is never downloaded, only supplied by you and kept in a private cache."/>
     </StackPanel>
 
     <ScrollViewer Grid.Row="1" Margin="0,14,0,0">

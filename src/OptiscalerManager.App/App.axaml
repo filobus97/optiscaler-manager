@@ -119,16 +119,8 @@
             <Setter Property="BorderBrush" Value="{StaticResource BrAccent}"/>
             <Setter Property="BorderThickness" Value="2"/>
         </Style>
-        <Style Selector="ListBoxItem">
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="Margin" Value="4"/>
-            <Setter Property="CornerRadius" Value="{StaticResource RadiusMedium}"/>
-        </Style>
-        <Style Selector="ListBoxItem:focus-visible, ListBoxItem:selected">
-            <Setter Property="Background" Value="Transparent"/>
-        </Style>
-        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
-            <Setter Property="Background" Value="Transparent"/>
-        </Style>
+        <!-- ListBoxItem styling is intentionally NOT global: ComboBoxItem derives
+             from ListBoxItem, so a global rule would corrupt every ComboBox dropdown.
+             The game list styles its own items in MainWindow.axaml. -->
     </Application.Styles>
 </Application>
