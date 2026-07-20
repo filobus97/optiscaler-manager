@@ -13,6 +13,11 @@ namespace OptiscalerManager.App.Services;
 /// </summary>
 public static class SelfUpdateLauncher
 {
+    // Shutdown is asynchronous, so a fast second click (or a controller Enter-repeat)
+    // could otherwise spawn a second detached updater racing the first. Once we begin,
+    // every later call is a no-op.
+    private static bool _started;
+
     /// <summary>
     /// Starts the updater and, on success, shuts the app down. <paramref name="report"/>
     /// receives a status/error message for the caller's UI. Returns true when the
@@ -20,6 +25,17 @@ public static class SelfUpdateLauncher
     /// </summary>
     public static bool StartAndShutdown(ManagerService manager, Action<string> report)
     {
+        if (_started) return true; // already updating; ignore the repeat click
+
+        // Confirm we can actually quit BEFORE spawning the updater — otherwise the
+        // detached script would wait on a pid that never exits, then (with
+        // --relaunch) launch a second instance alongside this still-running one.
+        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            report("In-app update isn't available here — run update.sh / update.ps1 from the install folder.");
+            return false;
+        }
+
         report("Updating — the app will close and reopen automatically…");
 
         var error = manager.StartSelfUpdate();
@@ -29,8 +45,8 @@ public static class SelfUpdateLauncher
             return false;
         }
 
-        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-            desktop.Shutdown();
+        _started = true;
+        desktop.Shutdown();
         return true;
     }
 }

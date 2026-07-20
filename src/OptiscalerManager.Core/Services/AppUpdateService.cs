@@ -123,14 +123,20 @@ namespace OptiscalerManager.Core.Services
         /// and app pid: the script waits for the pid, swaps the files in place, and
         /// relaunches the app on any outcome. Pure, for testability.
         /// </summary>
+        /// <remarks>
+        /// Passes --force: the app has already decided (from its own GitHub check)
+        /// that an update is warranted, so the script must not second-guess it from a
+        /// possibly-stale on-disk VERSION file (which would no-op, relaunch the same
+        /// binary, and re-show the banner — an endless no-op update loop).
+        /// </remarks>
         public static (string FileName, string Arguments) BuildSelfUpdateCommand(
             string installDir, int pid, bool isWindows)
         {
             var script = Path.Combine(installDir, isWindows ? "update.ps1" : "update.sh");
             return isWindows
                 ? ("powershell",
-                   $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\" -WaitPid {pid} -Relaunch")
-                : ("/bin/sh", $"\"{script}\" --wait-pid {pid} --relaunch");
+                   $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\" -WaitPid {pid} -Relaunch -Force")
+                : ("/bin/sh", $"\"{script}\" --wait-pid {pid} --relaunch --force");
         }
 
         /// <summary>

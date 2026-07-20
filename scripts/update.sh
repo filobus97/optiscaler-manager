@@ -28,12 +28,17 @@ ASSET_PREFIX="OptiscalerManager"
 
 RELAUNCH=0
 INSTALL_DIR=""
+COPY_STATE="none"   # none | started | done — lets cleanup warn on an interrupted copy
 
 # Runs from the EXIT trap: remove the temp dir (if any) then bring the app back
-# regardless of how the update went.
+# regardless of how the update went (so the in-app flow never strands the user).
 cleanup() {
     [ -n "${TMP:-}" ] && rm -rf "$TMP"
     if [ "$RELAUNCH" -eq 1 ] && [ -x "$INSTALL_DIR/$ASSET_PREFIX" ]; then
+        # If the file copy was interrupted, the binary may be half-written — we still
+        # relaunch (better than leaving the user with nothing) but say so clearly.
+        [ "$COPY_STATE" = "started" ] && \
+            echo "WARNING: the update was interrupted while copying files; the install may be incomplete. Re-run the updater." >&2
         echo "Relaunching $ASSET_PREFIX …"
         # Detach fully so the app outlives this script.
         (cd "$INSTALL_DIR" && nohup "./$ASSET_PREFIX" >/dev/null 2>&1 &)
@@ -72,12 +77,18 @@ main() {
     # we never race its shutdown (Linux allows in-place overwrite, but waiting
     # keeps the sequence clean and is required on macOS translocation setups).
     if [ -n "$WAIT_PID" ]; then
+        # Guard against a non-numeric value making `kill` error out (and, under
+        # `set -e`, skip the wait or abort). Integer `sleep 1` keeps us portable to
+        # shells whose sleep rejects fractional seconds (busybox/strict POSIX).
+        case "$WAIT_PID" in
+            ''|*[!0-9]*) die "Invalid --wait-pid value: $WAIT_PID" ;;
+        esac
         echo "Waiting for the app (pid $WAIT_PID) to exit…"
         i=0
         while kill -0 "$WAIT_PID" 2>/dev/null; do
             i=$((i + 1))
-            [ "$i" -ge 120 ] && die "Process $WAIT_PID is still running after 60s; aborting update."
-            sleep 0.5
+            [ "$i" -ge 60 ] && die "Process $WAIT_PID is still running after 60s; aborting update."
+            sleep 1
         done
         echo "App closed."
     fi
@@ -137,7 +148,9 @@ main() {
     echo "Installing to $INSTALL_DIR …"
     # Copy the new payload over the install dir. User data is elsewhere, so this
     # only replaces the program, its bundled config.json template and these scripts.
+    COPY_STATE="started"
     cp -a "$TMP/extract/." "$INSTALL_DIR/" || die "Copy failed. Is the app closed and the folder writable?"
+    COPY_STATE="done"
 
     # Ensure the app and updater stay executable.
     for f in "$ASSET_PREFIX" update.sh; do

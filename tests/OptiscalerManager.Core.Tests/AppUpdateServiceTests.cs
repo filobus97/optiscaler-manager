@@ -49,23 +49,27 @@ namespace OptiscalerManager.Core.Tests
         }
 
         [Fact]
-        public void SelfUpdateCommand_Linux_RunsShellScriptWithWaitAndRelaunch()
+        public void SelfUpdateCommand_Linux_RunsShellScriptWithWaitRelaunchForce()
         {
             var (file, args) = AppUpdateService.BuildSelfUpdateCommand("/opt/osm", 1234, isWindows: false);
             Assert.Equal("/bin/sh", file);
             Assert.Contains("update.sh", args);
             Assert.Contains("--wait-pid 1234", args);
             Assert.Contains("--relaunch", args);
+            // --force: the app already decided to update; the script must not no-op
+            // on a stale on-disk VERSION and loop.
+            Assert.Contains("--force", args);
         }
 
         [Fact]
-        public void SelfUpdateCommand_Windows_RunsPowerShellWithWaitAndRelaunch()
+        public void SelfUpdateCommand_Windows_RunsPowerShellWithWaitRelaunchForce()
         {
             var (file, args) = AppUpdateService.BuildSelfUpdateCommand(@"C:\osm", 4321, isWindows: true);
             Assert.Equal("powershell", file);
             Assert.Contains("update.ps1", args);
             Assert.Contains("-WaitPid 4321", args);
             Assert.Contains("-Relaunch", args);
+            Assert.Contains("-Force", args);
             Assert.Contains("-ExecutionPolicy Bypass", args);
         }
     }

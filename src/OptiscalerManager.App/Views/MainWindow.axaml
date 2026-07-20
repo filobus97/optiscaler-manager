@@ -41,8 +41,8 @@
               IsEnabled="{Binding IsIdle}"
               ToolTip.Tip="Re-scan your libraries (Steam, Epic, GOG, Xbox, EA, Battle.net, Ubisoft) for installed games."/>
       <Button Grid.Column="2" Name="SettingsButton" Content="Settings"
-              Click="OnSettingsClick"
-              ToolTip.Tip="Import your own DLLs and .ini profiles, and set the OptiScaler overlay/menu key."/>
+              Click="OnSettingsClick" IsEnabled="{Binding IsIdle}"
+              ToolTip.Tip="Import your own DLLs and .ini profiles, manage add-ons, set the overlay key, and check for app updates."/>
     </Grid>
 
     <!-- GPU banner -->
@@ -67,8 +67,8 @@
         <TextBlock Name="UpdateBannerText" Grid.Column="0" VerticalAlignment="Center"
                    Foreground="{StaticResource BrTextPrimary}" FontSize="12" TextWrapping="Wrap"/>
         <Button Grid.Column="1" Name="UpdateNowButton" Classes="BtnPrimary" Content="Update now" FontSize="11" Margin="8,0,0,0"
-                Click="OnUpdateNowClick"
-                ToolTip.Tip="Closes the app, updates it in place, and reopens it automatically. Your settings, imports, profiles and backups are kept."/>
+                Click="OnUpdateNowClick" IsEnabled="{Binding IsIdle}"
+                ToolTip.Tip="Closes the app, updates it in place, and reopens it automatically. Your settings, imports, profiles and backups are kept. Disabled while an install or revert is running."/>
         <Button Grid.Column="2" Content="Open releases page" FontSize="11" Margin="8,0"
                 Click="OnOpenReleasesClick"
                 ToolTip.Tip="Opens this app's GitHub releases page in your browser to read what changed."/>
