@@ -38,6 +38,7 @@ public partial class SettingsWindow : Window
         SetupMenuKey();
         SetupAboutCard();
         RefreshNukemStatus();
+        if (_manager.IsNukemFgCached) RefreshNukemUpdateStatusAsync(); // async: flag a newer Nukem release
         RefreshInventory();
         RefreshIniProfiles();
     }
@@ -53,9 +54,23 @@ public partial class SettingsWindow : Window
     {
         var text = this.FindControl<TextBlock>("NukemStatusText");
         if (text is null) return;
-        text.Text = _manager.IsNukemFgCached
-            ? $"Imported ✓ (version tag: {_manager.NukemFgVersion ?? "manual"})"
-            : "Not imported yet";
+        if (!_manager.IsNukemFgCached)
+        {
+            text.Text = "Not imported yet";
+            return;
+        }
+        var line = $"Imported ✓ (version {_manager.NukemFgVersion ?? "unknown"})";
+        if (_manager.IsNukemFgUpdateAvailable && _manager.LatestNukemFgVersion is { } latest)
+            line += $"  •  newer available: v{latest} — re-import to update";
+        text.Text = line;
+    }
+
+    // Kicks a best-effort version check so the Nukem line can flag a newer release,
+    // then refreshes. Runs once when Settings opens.
+    private async void RefreshNukemUpdateStatusAsync()
+    {
+        await _manager.RefreshAddonStatusAsync();
+        RefreshNukemStatus();
     }
 
     private async void OnImportNukemFg(object? sender, RoutedEventArgs e)

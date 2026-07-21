@@ -96,6 +96,21 @@ public sealed class ManagerService
     /// <summary>The cached Nukem DLL's version tag, if known.</summary>
     public string? NukemFgVersion => _components.NukemFGVersion;
 
+    /// <summary>The latest Nukem FG version known from its repo (null until a check runs).</summary>
+    public string? LatestNukemFgVersion => _components.LatestNukemFGVersion;
+
+    /// <summary>True when the imported Nukem DLL is behind the latest published release.</summary>
+    public bool IsNukemFgUpdateAvailable => _components.IsNukemFGUpdateAvailable;
+
+    /// <summary>
+    /// Best-effort refresh of add-on version info (so the Settings add-on card can
+    /// flag a newer Nukem release). Never throws.
+    /// </summary>
+    public async Task RefreshAddonStatusAsync()
+    {
+        try { await _components.CheckForUpdatesAsync(); } catch { /* offline / rate-limited */ }
+    }
+
     /// <summary>
     /// Opens the manual-import flow (file picker / archive) for Nukem's
     /// dlssg_to_fsr3_amd_is_better.dll and stores it in the cache.

@@ -118,6 +118,9 @@ namespace OptiscalerManager.Core.Services
         public string? FakenvapiVersion => _localVersions.FakenvapiVersion;
         public string? NukemFGVersion => _localVersions.NukemFGVersion;
 
+        /// <summary>Latest Nukem FG version tag known from its repo (null until a check runs).</summary>
+        public string? LatestNukemFGVersion => _cachedNukemFGVersion;
+
         public bool IsOptiScalerUpdateAvailable { get; private set; }
         public bool IsFakenvapiUpdateAvailable { get; private set; }
         public bool IsNukemFGUpdateAvailable { get; private set; }
@@ -670,8 +673,15 @@ namespace OptiscalerManager.Core.Services
                         var extrasTask = FetchExtrasReleasesAsync();
                         await Task.Delay(150);
                         var optiPatcherTask = FetchOptiPatcherReleasesAsync();
+                        await Task.Delay(150);
+                        // Nukem's mod is bring-your-own (imported by hand), but its repo
+                        // publishes versioned releases — so we can still tell the user
+                        // when the copy they imported is behind the latest.
+                        var nukemCheckTask = CheckComponentUpdateAsync("NukemFG", _config.NukemFG);
 
-                        await Task.WhenAll(optiVersionsTask, optiBetasTask, fakeTask, extrasTask, optiPatcherTask);
+                        await Task.WhenAll(optiVersionsTask, optiBetasTask, fakeTask, extrasTask, optiPatcherTask, nukemCheckTask);
+
+                        _cachedNukemFGVersion = await nukemCheckTask;
 
                         var stableEntries = await optiVersionsTask;
                         var betaEntries = await optiBetasTask;
