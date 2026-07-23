@@ -236,7 +236,11 @@ public sealed class ManagerService
                           "No OptiScaler release is available and none is cached. Connect to the internet and try again.");
 
         var cachePath = _components.GetOptiScalerCachePath(version);
-        if (!Directory.Exists(cachePath) || Directory.GetFiles(cachePath, "*", SearchOption.AllDirectories).Length == 0)
+        // Re-download when the cache is missing OR incomplete — an interrupted prior
+        // download can leave a partial extraction (files present but no OptiScaler.dll),
+        // which we self-heal instead of failing the install and asking the user to
+        // manually clear the cache.
+        if (!_components.IsOptiScalerCacheComplete(version))
         {
             status?.Report($"Downloading OptiScaler {version}…");
             await _components.DownloadOptiScalerAsync(version);

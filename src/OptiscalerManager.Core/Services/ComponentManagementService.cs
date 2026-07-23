@@ -1971,6 +1971,14 @@ namespace OptiscalerManager.Core.Services
 
                     var extractDuration = DateTime.Now - extractStartTime;
                     Log.Write($"[Extract] Extraction completed: {fileCount} files in {extractDuration.TotalSeconds:F1}s");
+
+                    // Guard against a truncated/partial archive that extracts most files
+                    // but silently omits the main DLL — persisting that would fail every
+                    // install until the user manually cleared the cache.
+                    if (!OptiScalerCacheHasMainDll(extractPath))
+                        throw new Exception(
+                            "The downloaded OptiScaler package was incomplete (no OptiScaler.dll after extraction) — " +
+                            "usually an interrupted download. The partial cache has been discarded; please try again.");
                 }
                 finally
                 {
@@ -2161,6 +2169,26 @@ namespace OptiscalerManager.Core.Services
 
         public string GetOptiScalerCachePath() => Path.Combine(_cacheDir, "OptiScaler", OptiScalerVersion ?? "latest");
         public string GetOptiScalerCachePath(string version) => Path.Combine(_cacheDir, "OptiScaler", version);
+
+        /// <summary>
+        /// A cached OptiScaler version is only usable if the main injectable DLL is
+        /// present. An interrupted download can leave a folder full of files but no
+        /// OptiScaler.dll (or the legacy nvngx.dll) — callers re-download in that case.
+        /// </summary>
+        public bool IsOptiScalerCacheComplete(string version) => OptiScalerCacheHasMainDll(GetOptiScalerCachePath(version));
+
+        internal static bool OptiScalerCacheHasMainDll(string cacheDir)
+        {
+            if (!Directory.Exists(cacheDir)) return false;
+            foreach (var f in Directory.EnumerateFiles(cacheDir, "*.dll", SearchOption.AllDirectories))
+            {
+                var name = Path.GetFileName(f);
+                if (name.Equals("OptiScaler.dll", StringComparison.OrdinalIgnoreCase) ||
+                    name.Equals("nvngx.dll", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
         public string GetFakenvapiCachePath() => Path.Combine(_cacheDir, "Fakenvapi");
         /// <summary>Returns the cache directory for NukemFG files (legacy flat path).</summary>
         public string GetNukemFGCachePath() => Path.Combine(_cacheDir, "NukemFG");
