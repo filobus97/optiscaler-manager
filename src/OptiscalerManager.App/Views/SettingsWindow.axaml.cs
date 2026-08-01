@@ -36,11 +36,60 @@ public partial class SettingsWindow : Window
     {
         _manager = manager;
         SetupMenuKey();
+        SetupGamepadCard();
         SetupAboutCard();
         RefreshNukemStatus();
         if (_manager.IsNukemFgCached) RefreshNukemUpdateStatusAsync(); // async: flag a newer Nukem release
         RefreshInventory();
         RefreshIniProfiles();
+    }
+
+    private void SetupGamepadCard()
+    {
+        var check = this.FindControl<CheckBox>("GamepadCheck");
+        if (check is null) return;
+
+        check.IsChecked = _manager.GamepadNavigationEnabled;
+        check.IsCheckedChanged += (_, _) =>
+        {
+            _manager.GamepadNavigationEnabled = check.IsChecked == true;
+            RefreshGamepadStatus();
+            SetResult(check.IsChecked == true
+                ? "Controller navigation on — restart the app if no controller responds yet."
+                : "Controller navigation off from the next start.");
+        };
+
+        RefreshGamepadStatus();
+        // Reflect controllers plugged in while this window is open.
+        if (App.Gamepad is { } pad)
+            pad.DevicesChanged += RefreshGamepadStatus;
+    }
+
+    private void RefreshGamepadStatus()
+    {
+        var text = this.FindControl<TextBlock>("GamepadStatusText");
+        if (text is null) return;
+
+        var pad = App.Gamepad;
+        if (pad is null || !pad.IsSupported)
+        {
+            text.Text = "Controller navigation is available on Linux only.";
+            return;
+        }
+        if (!_manager.GamepadNavigationEnabled)
+        {
+            text.Text = "Disabled.";
+            return;
+        }
+
+        var devices = pad.ConnectedDevices;
+        if (devices.Count > 0)
+            text.Text = "Detected: " + string.Join(", ", devices);
+        else if (pad.PermissionDenied)
+            text.Text = "A controller was found but could not be read. Add your user to the 'input' group " +
+                        "(sudo usermod -aG input $USER) and log back in.";
+        else
+            text.Text = "No controller detected. Connect one — it is picked up automatically.";
     }
 
     private void SetupAboutCard()

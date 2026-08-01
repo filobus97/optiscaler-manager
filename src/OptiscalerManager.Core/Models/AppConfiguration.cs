@@ -111,6 +111,13 @@ namespace OptiscalerManager.Core.Models
         /// </summary>
         public string? MenuShortcutKey { get; set; } = null;
 
+        /// <summary>
+        /// Drive the UI with a game controller (Linux/evdev). On by default — it is
+        /// inert when no controller is connected. Turn off if a controller mapped to
+        /// keyboard input (e.g. by Steam Input) causes doubled presses.
+        /// </summary>
+        public bool GamepadNavigation { get; set; } = true;
+
         // Window state persistence
         public double WindowWidth { get; set; } = 1200;
         public double WindowHeight { get; set; } = 720;

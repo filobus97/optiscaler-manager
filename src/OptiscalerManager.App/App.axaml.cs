@@ -12,6 +12,12 @@ namespace OptiscalerManager.App;
 
 public partial class App : Application
 {
+    /// <summary>
+    /// Controller-to-UI bridge, shared so Settings can report what is connected.
+    /// Null until the desktop lifetime starts.
+    /// </summary>
+    public static GamepadNavigator? Gamepad { get; private set; }
+
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
     public override void OnFrameworkInitializationCompleted()
@@ -28,6 +34,20 @@ public partial class App : Application
             // picker, so it resolves it lazily through this accessor.
             var manager = new ManagerService(new AvaloniaManualComponentProvider(MainWindowAccessor));
             desktop.MainWindow = new MainWindow(manager);
+
+            // Drive the UI from a game controller (Linux/evdev). Best-effort: a
+            // failure here must never stop the app from starting.
+            try
+            {
+                Gamepad = new GamepadNavigator();
+                if (manager.GamepadNavigationEnabled) Gamepad.Start();
+            }
+            catch (System.Exception ex)
+            {
+                Log.Write($"[Gamepad] Disabled: {ex.Message}");
+            }
+
+            desktop.ShutdownRequested += (_, _) => Gamepad?.Dispose();
         }
 
         base.OnFrameworkInitializationCompleted();

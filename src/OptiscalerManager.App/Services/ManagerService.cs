@@ -89,6 +89,14 @@ public sealed class ManagerService
         set { _components.Config.MenuShortcutKey = value; _components.SaveConfiguration(); }
     }
 
+    // ── Controller navigation (global, persisted) ───────────────────────────
+    /// <summary>Whether a game controller may drive the UI. Applied at startup.</summary>
+    public bool GamepadNavigationEnabled
+    {
+        get => _components.Config.GamepadNavigation;
+        set { _components.Config.GamepadNavigation = value; _components.SaveConfiguration(); }
+    }
+
     // ── Add-ons: fakenvapi + Nukem DLSSG-to-FSR3 ────────────────────────────
     /// <summary>True when Nukem's DLL has been imported into the cache (it cannot be auto-downloaded).</summary>
     public bool IsNukemFgCached => _components.IsNukemFGInstalled;

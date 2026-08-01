@@ -212,16 +212,30 @@ standalone.
 
 ## Couch / Steam Deck (Bazzite) use
 
-The whole UI is **keyboard- and controller-navigable**: arrow keys (or a D-pad / left
-stick) move focus in any direction, a bright focus ring shows where you are, **Enter**
-confirms and **Esc** backs out of dialogs. The game list walks with Up/Down; the
-Install and Revert buttons are one press to the side.
+**Controllers work out of the box on Linux** — no Steam Input layout to configure:
 
-On Steam Deck / Bazzite, add the app as a **non-Steam game** and use a **Steam Input**
-layout that maps the controller to a keyboard: D-pad / left stick → arrow keys,
-**A → Enter**, **B → Esc**. (Avalonia has no native Linux gamepad backend, so this
-Steam Input mapping is what delivers controller input — and it makes *Update now*
-work fully from the couch.)
+| Control | Does |
+| --- | --- |
+| D-pad / left stick | Move focus (hold to repeat) |
+| **A** | Confirm — press the focused button, tick the focused option |
+| **B** | Back out / close the dialog |
+| **LB / RB** | Jump to the previous / next control |
+
+The game list walks with Up/Down and the Install and Revert buttons are one press to
+the side. A bright focus ring always shows where you are. The keyboard does exactly the
+same things (arrows, Enter, Esc, Tab) — the two are the same code path.
+
+Controllers are detected automatically, including ones connected while the app is
+running; *Settings → Controller* shows what is connected and lets you turn the feature
+off. On Steam Deck, add the app as a **non-Steam game** and it is fully usable from
+Gaming Mode, *Update now* included.
+
+> **Why this is built in:** Avalonia has no gamepad backend on Linux, so the app reads
+> the controller itself (`/dev/input`, evdev) and translates it into the same
+> navigation the keyboard produces. If your user cannot read input devices, Settings
+> says so — `sudo usermod -aG input $USER` and log back in. If you *prefer* a Steam
+> Input layout that emits keystrokes, turn the built-in support off in Settings so
+> presses don't register twice.
 
 ## Native Wayland (Linux)
 
