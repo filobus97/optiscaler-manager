@@ -73,6 +73,10 @@ internal static class Program
                 var name = EvdevGamepadSource.TryGetDeviceName(stream) ?? "(no name)";
                 var pad = EvdevGamepadSource.LooksLikeGamepad(stream, path);
                 Console.WriteLine($"  {(pad ? "GAMEPAD " : "        ")}{path}  \"{name}\"");
+
+                // Which axes exist decides where the scroll stick is read from, so show
+                // the working out — that is what a "scrolling does nothing" report needs.
+                if (pad) Console.WriteLine("           " + DescribeAxes(stream));
             }
             catch (UnauthorizedAccessException)
             {
@@ -108,6 +112,26 @@ internal static class Program
             ? $"Received {count} events — the controller pipeline works."
             : "No events received. If a GAMEPAD line appeared above, another program (e.g. Steam) is likely holding the device exclusively.");
         return 0;
+    }
+
+    /// <summary>Names the axes a pad declares and which two the scroll stick will use.</summary>
+    private static string DescribeAxes(FileStream stream)
+    {
+        var declared = EvdevGamepadSource.TryGetAbsAxes(stream);
+        if (declared is null) return "axes: could not be probed — assuming ABS_RX/ABS_RY for scrolling";
+
+        var names = new (ushort Code, string Name)[]
+        {
+            (Evdev.ABS_X, "ABS_X"), (Evdev.ABS_Y, "ABS_Y"), (Evdev.ABS_Z, "ABS_Z"),
+            (Evdev.ABS_RX, "ABS_RX"), (Evdev.ABS_RY, "ABS_RY"), (Evdev.ABS_RZ, "ABS_RZ"),
+            (Evdev.ABS_HAT0X, "ABS_HAT0X"), (Evdev.ABS_HAT0Y, "ABS_HAT0Y"),
+        };
+        var present = names.Where(n => n.Code < declared.Length && declared[n.Code]).Select(n => n.Name).ToList();
+        var scroll = EvdevGamepadDecoder.ScrollAxes(declared);
+        var scrollName = names.Where(n => n.Code == scroll.X || n.Code == scroll.Y).Select(n => n.Name);
+
+        return $"axes: {(present.Count > 0 ? string.Join(", ", present) : "none")}"
+             + $"  |  scroll stick: {string.Join(" + ", scrollName)}";
     }
 
     private static int SelfTestUpdate(string[] args)

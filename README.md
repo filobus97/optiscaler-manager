@@ -254,8 +254,9 @@ Gaming Mode, *Update now* included.
 ./OptiscalerManager --gamepad-test
 ```
 
-It lists every input device, marks the ones that report as controllers, says which it
-could open, then echoes decoded input for 20 seconds — enough to tell "not detected"
+It lists every input device, marks the ones that report as controllers, shows the axes
+each one declares and which two the scroll stick will read, says which it could open,
+then echoes decoded input for 20 seconds — enough to tell "not detected"
 from "detected but another program holds it" from "no permission".
 
 ## Native Wayland (Linux)

@@ -197,6 +197,63 @@ namespace OptiscalerManager.Core.Tests
             Assert.True(EvdevGamepadDecoder.ScrollAxis(0.9) > half, "further must be faster");
         }
 
+        /// <summary>Builds a declared-axis table like EVIOCGBIT(EV_ABS) returns.</summary>
+        private static bool[] Axes(params ushort[] present)
+        {
+            var axes = new bool[64];
+            foreach (var a in present) axes[a] = true;
+            return axes;
+        }
+
+        [Fact]
+        public void ScrollAxes_PrefersRightStickOverTriggers()
+        {
+            // An Xbox-style pad declares all six: RX/RY are the stick, Z/RZ the triggers.
+            // Picking Z/RZ here would scroll the page whenever a trigger is squeezed.
+            var axes = Axes(Evdev.ABS_X, Evdev.ABS_Y, Evdev.ABS_Z,
+                            Evdev.ABS_RX, Evdev.ABS_RY, Evdev.ABS_RZ);
+            Assert.Equal((Evdev.ABS_RX, Evdev.ABS_RY), EvdevGamepadDecoder.ScrollAxes(axes));
+        }
+
+        [Fact]
+        public void ScrollAxes_FallsBackToZ_WhenThePadHasNoRxRy()
+        {
+            // Older DirectInput-style pads put the right stick on Z/RZ and have no RX/RY.
+            var axes = Axes(Evdev.ABS_X, Evdev.ABS_Y, Evdev.ABS_Z, Evdev.ABS_RZ);
+            Assert.Equal((Evdev.ABS_Z, Evdev.ABS_RZ), EvdevGamepadDecoder.ScrollAxes(axes));
+        }
+
+        [Fact]
+        public void ScrollAxes_UnprobeableDevice_KeepsTheCommonMapping()
+            => Assert.Equal((Evdev.ABS_RX, Evdev.ABS_RY), EvdevGamepadDecoder.ScrollAxes(null));
+
+        [Fact]
+        public void ScrollAxes_PadWithNeitherPair_KeepsTheCommonMapping()
+            => Assert.Equal((Evdev.ABS_RX, Evdev.ABS_RY),
+                            EvdevGamepadDecoder.ScrollAxes(Axes(Evdev.ABS_X, Evdev.ABS_Y)));
+
+        [Fact]
+        public void ScrollsFromZ_WhenTheDeviceReportsTheRightStickThere()
+        {
+            var d = new EvdevGamepadDecoder(scrollAxes: (Evdev.ABS_Z, Evdev.ABS_RZ));
+            Assert.Empty(d.Feed(Frame(Evdev.EV_ABS, Evdev.ABS_RZ, 32767)));
+            Assert.True(d.Scroll.Y > 0);
+
+            // ...and the axes it is not using stay inert.
+            d.Feed(Frame(Evdev.EV_ABS, Evdev.ABS_RY, 32767));
+            Assert.Equal(0, d.Scroll.X, 6);
+        }
+
+        [Fact]
+        public void TriggersDoNotScroll_OnAnXboxStylePad()
+        {
+            // Default mapping = RX/RY, so squeezing a trigger (Z/RZ) must do nothing.
+            var d = new EvdevGamepadDecoder();
+            d.Feed(Frame(Evdev.EV_ABS, Evdev.ABS_Z, 1023));
+            d.Feed(Frame(Evdev.EV_ABS, Evdev.ABS_RZ, 1023));
+            Assert.True(d.Scroll.IsIdle);
+        }
+
         [Fact]
         public void LeftStick_DoesNotScroll()
         {

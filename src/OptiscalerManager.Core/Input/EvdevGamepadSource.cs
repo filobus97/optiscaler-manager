@@ -99,6 +99,9 @@ public sealed class EvdevGamepadSource : IDisposable
     /// <summary>The device's self-reported name, for diagnostics. Null if unavailable.</summary>
     public static string? TryGetDeviceName(FileStream stream) => EvdevIoctl.TryGetName(stream);
 
+    /// <summary>The absolute axes the device declares, indexed by code. Null if unprobeable.</summary>
+    public static bool[]? TryGetAbsAxes(FileStream stream) => EvdevIoctl.TryGetAbsAxes(stream);
+
     /// <summary>Turns "usb-Microsoft_X-Box_360_pad-event-joystick" into something readable.</summary>
     public static string FriendlyName(string devicePath)
     {
@@ -223,11 +226,14 @@ public sealed class EvdevGamepadSource : IDisposable
             // The device's own name beats parsing a udev symlink, and works for the
             // virtual pads that have no symlink to parse.
             Name = EvdevIoctl.TryGetName(stream) ?? FriendlyName(path);
+            // Which axes the right stick lives on varies by pad, so ask this one.
+            var scrollAxes = EvdevGamepadDecoder.ScrollAxes(EvdevIoctl.TryGetAbsAxes(stream));
             _decoder = new EvdevGamepadDecoder(
                 EvdevIoctl.GetAxisRange(stream, Evdev.ABS_X),
                 EvdevIoctl.GetAxisRange(stream, Evdev.ABS_Y),
-                EvdevIoctl.GetAxisRange(stream, Evdev.ABS_RX),
-                EvdevIoctl.GetAxisRange(stream, Evdev.ABS_RY));
+                EvdevIoctl.GetAxisRange(stream, scrollAxes.X),
+                EvdevIoctl.GetAxisRange(stream, scrollAxes.Y),
+                scrollAxes);
 
             _thread = new Thread(Loop) { IsBackground = true, Name = $"gamepad:{Name}" };
             _thread.Start();

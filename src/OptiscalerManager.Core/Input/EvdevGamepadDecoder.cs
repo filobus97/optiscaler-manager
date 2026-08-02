@@ -21,8 +21,10 @@ public static class Evdev
 
     public const ushort ABS_X = 0x00;       // left stick X
     public const ushort ABS_Y = 0x01;       // left stick Y
+    public const ushort ABS_Z = 0x02;       // trigger, or right stick X on older pads
     public const ushort ABS_RX = 0x03;      // right stick X
     public const ushort ABS_RY = 0x04;      // right stick Y
+    public const ushort ABS_RZ = 0x05;      // trigger, or right stick Y on older pads
     public const ushort ABS_HAT0X = 0x10;   // D-pad X (-1 / 0 / +1)
     public const ushort ABS_HAT0Y = 0x11;   // D-pad Y (-1 / 0 / +1)
 
@@ -85,6 +87,8 @@ public sealed class EvdevGamepadDecoder
     private readonly AxisRange _yRange;
     private readonly AxisRange _rxRange;
     private readonly AxisRange _ryRange;
+    private readonly ushort _scrollX;
+    private readonly ushort _scrollY;
 
     // Current direction contributed by each source (None when centred).
     private GamepadAction _hatX, _hatY, _stickX, _stickY;
@@ -96,12 +100,34 @@ public sealed class EvdevGamepadDecoder
 
     public EvdevGamepadDecoder(
         AxisRange? xRange = null, AxisRange? yRange = null,
-        AxisRange? rxRange = null, AxisRange? ryRange = null)
+        AxisRange? rxRange = null, AxisRange? ryRange = null,
+        (ushort X, ushort Y)? scrollAxes = null)
     {
         _xRange = xRange ?? AxisRange.Default;
         _yRange = yRange ?? AxisRange.Default;
         _rxRange = rxRange ?? AxisRange.Default;
         _ryRange = ryRange ?? AxisRange.Default;
+        (_scrollX, _scrollY) = scrollAxes ?? (Evdev.ABS_RX, Evdev.ABS_RY);
+    }
+
+    /// <summary>
+    /// Which axes carry the right stick, given the axes a device declares.
+    ///
+    /// Xbox-style pads put it on ABS_RX/ABS_RY and keep ABS_Z/ABS_RZ for the analog
+    /// triggers; older DirectInput-style pads have no RX/RY and use Z/RZ for the stick.
+    /// Listening to both sets is not an option — on an Xbox pad that would scroll the
+    /// page whenever a trigger is squeezed — so we ask the device which it has and
+    /// prefer RX/RY, which is also what a controller presented by Steam Input reports.
+    /// </summary>
+    public static (ushort X, ushort Y) ScrollAxes(bool[]? declaredAxes)
+    {
+        if (declaredAxes is null) return (Evdev.ABS_RX, Evdev.ABS_RY);
+
+        bool Has(ushort axis) => axis < declaredAxes.Length && declaredAxes[axis];
+
+        if (Has(Evdev.ABS_RX) && Has(Evdev.ABS_RY)) return (Evdev.ABS_RX, Evdev.ABS_RY);
+        if (Has(Evdev.ABS_Z) && Has(Evdev.ABS_RZ)) return (Evdev.ABS_Z, Evdev.ABS_RZ);
+        return (Evdev.ABS_RX, Evdev.ABS_RY);
     }
 
     /// <summary>
@@ -157,6 +183,18 @@ public sealed class EvdevGamepadDecoder
                 break;
 
             case Evdev.EV_ABS:
+                // The scroll axes are resolved per device, so they can't be switch cases.
+                if (code == _scrollX)
+                {
+                    Scroll = Scroll with { X = ScrollAxis(_rxRange.Normalize(value)) };
+                    break;
+                }
+                if (code == _scrollY)
+                {
+                    Scroll = Scroll with { Y = ScrollAxis(_ryRange.Normalize(value)) };
+                    break;
+                }
+
                 switch (code)
                 {
                     case Evdev.ABS_HAT0X:
@@ -173,14 +211,6 @@ public sealed class EvdevGamepadDecoder
                         _stickY = Deflect(_yRange.Normalize(value), _stickY, GamepadAction.Up, GamepadAction.Down);
                         break;
 
-                    // The right stick scrolls instead of navigating, so it only updates
-                    // the analog value and contributes nothing to Diff().
-                    case Evdev.ABS_RX:
-                        Scroll = Scroll with { X = ScrollAxis(_rxRange.Normalize(value)) };
-                        break;
-                    case Evdev.ABS_RY:
-                        Scroll = Scroll with { Y = ScrollAxis(_ryRange.Normalize(value)) };
-                        break;
                 }
                 break;
         }

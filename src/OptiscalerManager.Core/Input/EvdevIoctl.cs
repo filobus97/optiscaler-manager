@@ -73,6 +73,29 @@ internal static unsafe partial class EvdevIoctl
         catch { return null; }
     }
 
+    /// <summary>
+    /// Which absolute axes the device declares (EVIOCGBIT(EV_ABS)), indexed by axis
+    /// code. Null when the device can't be probed, so callers keep their defaults.
+    /// </summary>
+    public static bool[]? TryGetAbsAxes(FileStream stream)
+    {
+        try
+        {
+            // ABS_MAX is 0x3f, so 8 bytes covers every axis bit.
+            const int bytes = 8;
+            var bits = stackalloc byte[bytes];
+            for (var i = 0; i < bytes; i++) bits[i] = 0;
+
+            if (ioctl(Fd(stream), EviocgBit(Evdev.EV_ABS, bytes), bits) < 0) return null;
+
+            var axes = new bool[bytes * 8];
+            for (var i = 0; i < axes.Length; i++)
+                axes[i] = (bits[i / 8] & (1 << (i % 8))) != 0;
+            return axes;
+        }
+        catch { return null; }
+    }
+
     /// <summary>Reads an axis' real range (EVIOCGABS), falling back to the common 16-bit range.</summary>
     public static AxisRange GetAxisRange(FileStream stream, ushort axis)
     {
