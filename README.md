@@ -217,6 +217,7 @@ standalone.
 | Control | Does |
 | --- | --- |
 | D-pad / left stick | Move between controls (hold to repeat) |
+| Right stick | Scroll the page, like a wheel — push further to scroll faster |
 | **A** | Confirm — press the focused button, tick a checkbox, open a dropdown and pick from it |
 | **B** | Back out / close the dialog |
 | **LB / RB** | Jump to the previous / next control |
@@ -226,6 +227,9 @@ scrolls once you reach the last visible one), and **left/right moves across that
 row** — game, *Install OptiScaler*, *Revert*. Press **A** on the game itself to start
 the install without stepping over to the button first, and keep going up to leave the
 list for *Rescan* and *Settings*. A bright focus ring always shows where you are.
+
+The right stick scrolls whatever the focused control sits in — the game list on the
+main screen, the page in Settings — without changing what is selected.
 
 Settings and the install dialog open with something already focused, so the first press
 always does something, and dropdowns open and commit with **A** (**B** cancels). The

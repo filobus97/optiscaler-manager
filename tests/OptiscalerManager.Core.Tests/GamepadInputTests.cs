@@ -135,6 +135,76 @@ namespace OptiscalerManager.Core.Tests
         [Fact]
         public void ShortFrame_IsIgnored_RatherThanThrowing()
             => Assert.Empty(new EvdevGamepadDecoder().Feed(new byte[8]));
+        // --- Scroll stick (right stick) ---
+
+        [Fact]
+        public void RightStick_ScrollsWithoutMovingFocus()
+        {
+            // The whole point of the right stick: it must never navigate.
+            var d = new EvdevGamepadDecoder();
+            Assert.Empty(d.Feed(Frame(Evdev.EV_ABS, Evdev.ABS_RY, 32767)));
+            Assert.Empty(d.Feed(Frame(Evdev.EV_ABS, Evdev.ABS_RX, -32768)));
+
+            Assert.True(d.Scroll.Y > 0, "pushing down must scroll down");
+            Assert.True(d.Scroll.X < 0, "pushing left must scroll left");
+        }
+
+        [Fact]
+        public void RightStick_Centred_IsIdle()
+        {
+            var d = new EvdevGamepadDecoder();
+            d.Feed(Frame(Evdev.EV_ABS, Evdev.ABS_RY, 32767));
+            Assert.False(d.Scroll.IsIdle);
+
+            d.Feed(Frame(Evdev.EV_ABS, Evdev.ABS_RY, 0));
+            Assert.True(d.Scroll.IsIdle);
+        }
+
+        [Fact]
+        public void RightStick_RestingOffCentre_DoesNotDrift()
+        {
+            // A worn stick sitting just off centre would otherwise scroll forever.
+            var d = new EvdevGamepadDecoder();
+            d.Feed(Frame(Evdev.EV_ABS, Evdev.ABS_RY, (int)(32767 * 0.15)));
+            Assert.True(d.Scroll.IsIdle);
+        }
+
+        [Fact]
+        public void RightStick_HonoursTheDeviceAxisRange()
+        {
+            // Pads that report 8-bit axes must reach full speed too.
+            var d = new EvdevGamepadDecoder(rxRange: new AxisRange(0, 255), ryRange: new AxisRange(0, 255));
+            d.Feed(Frame(Evdev.EV_ABS, Evdev.ABS_RY, 255));
+            Assert.Equal(1.0, d.Scroll.Y, 3);
+        }
+
+        [Theory]
+        [InlineData(0.0, 0.0)]
+        [InlineData(0.2, 0.0)]      // exactly on the deadzone edge: still nothing
+        [InlineData(-0.1, 0.0)]
+        [InlineData(1.0, 1.0)]
+        [InlineData(-1.0, -1.0)]
+        public void ScrollCurve_IsFlatInsideTheDeadzoneAndFullAtTheEdge(double input, double expected)
+            => Assert.Equal(expected, EvdevGamepadDecoder.ScrollAxis(input), 6);
+
+        [Fact]
+        public void ScrollCurve_RampsUpGently()
+        {
+            // Squared response: half a push should be well under half speed, so small
+            // corrections stay controllable.
+            var half = EvdevGamepadDecoder.ScrollAxis(0.6);
+            Assert.InRange(half, 0.01, 0.45);
+            Assert.True(EvdevGamepadDecoder.ScrollAxis(0.9) > half, "further must be faster");
+        }
+
+        [Fact]
+        public void LeftStick_DoesNotScroll()
+        {
+            var d = new EvdevGamepadDecoder();
+            d.Feed(Frame(Evdev.EV_ABS, Evdev.ABS_Y, 32767));
+            Assert.True(d.Scroll.IsIdle);
+        }
+
     }
 
     public class DirectionRepeaterTests

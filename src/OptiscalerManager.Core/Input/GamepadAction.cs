@@ -27,3 +27,15 @@ public enum GamepadAction
 /// <param name="Action">The action.</param>
 /// <param name="Pressed">True on press, false on release.</param>
 public readonly record struct GamepadInput(GamepadAction Action, bool Pressed);
+
+/// <summary>
+/// How far the scroll stick is pushed, per axis, as -1..+1 with the deadzone already
+/// removed. Analog rather than a press/release, so pushing gently scrolls slowly and
+/// pushing to the edge scrolls fast — a wheel that also has a speed.
+/// Positive Y is downward, matching both evdev and scroll offsets.
+/// </summary>
+public readonly record struct GamepadScroll(double X, double Y)
+{
+    /// <summary>Stick centred — nothing to scroll.</summary>
+    public bool IsIdle => X == 0 && Y == 0;
+}

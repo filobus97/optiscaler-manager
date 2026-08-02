@@ -21,6 +21,8 @@ public static class Evdev
 
     public const ushort ABS_X = 0x00;       // left stick X
     public const ushort ABS_Y = 0x01;       // left stick Y
+    public const ushort ABS_RX = 0x03;      // right stick X
+    public const ushort ABS_RY = 0x04;      // right stick Y
     public const ushort ABS_HAT0X = 0x10;   // D-pad X (-1 / 0 / +1)
     public const ushort ABS_HAT0Y = 0x11;   // D-pad Y (-1 / 0 / +1)
 
@@ -61,6 +63,9 @@ public readonly record struct AxisRange(int Min, int Max)
 /// The D-pad and the left stick are independent sources for the same directions, so
 /// the decoder keeps each source's state and reports the *union*: a direction stays
 /// pressed while any source holds it, and only releases when every source lets go.
+///
+/// The right stick is separate: it stays analog and drives scrolling
+/// (see <see cref="Scroll"/>), so it never moves focus.
 /// </summary>
 public sealed class EvdevGamepadDecoder
 {
@@ -69,18 +74,48 @@ public sealed class EvdevGamepadDecoder
     private const double EngageThreshold = 0.5;
     private const double ReleaseThreshold = 0.35;
 
+    /// <summary>
+    /// Right-stick play ignored before scrolling starts. Larger than the navigation
+    /// thresholds because a worn stick that rests slightly off-centre would otherwise
+    /// scroll the page on its own, forever.
+    /// </summary>
+    public const double ScrollDeadzone = 0.2;
+
     private readonly AxisRange _xRange;
     private readonly AxisRange _yRange;
+    private readonly AxisRange _rxRange;
+    private readonly AxisRange _ryRange;
 
     // Current direction contributed by each source (None when centred).
     private GamepadAction _hatX, _hatY, _stickX, _stickY;
     private readonly HashSet<GamepadAction> _buttons = new();
     private readonly HashSet<GamepadAction> _reported = new();
 
-    public EvdevGamepadDecoder(AxisRange? xRange = null, AxisRange? yRange = null)
+    /// <summary>Current right-stick deflection. Analog, and zero while centred.</summary>
+    public GamepadScroll Scroll { get; private set; }
+
+    public EvdevGamepadDecoder(
+        AxisRange? xRange = null, AxisRange? yRange = null,
+        AxisRange? rxRange = null, AxisRange? ryRange = null)
     {
         _xRange = xRange ?? AxisRange.Default;
         _yRange = yRange ?? AxisRange.Default;
+        _rxRange = rxRange ?? AxisRange.Default;
+        _ryRange = ryRange ?? AxisRange.Default;
+    }
+
+    /// <summary>
+    /// Turns a normalized axis into a scroll rate: nothing inside the deadzone, then
+    /// squared so small pushes creep and large ones move — the same feel as easing a
+    /// scroll wheel.
+    /// </summary>
+    public static double ScrollAxis(double normalized)
+    {
+        var magnitude = Math.Abs(normalized);
+        if (magnitude <= ScrollDeadzone) return 0;
+
+        var scaled = (magnitude - ScrollDeadzone) / (1 - ScrollDeadzone);
+        return Math.Sign(normalized) * scaled * scaled;
     }
 
     /// <summary>Maps a button keycode to its action (None when we don't use it).</summary>
@@ -136,6 +171,15 @@ public sealed class EvdevGamepadDecoder
                         break;
                     case Evdev.ABS_Y:
                         _stickY = Deflect(_yRange.Normalize(value), _stickY, GamepadAction.Up, GamepadAction.Down);
+                        break;
+
+                    // The right stick scrolls instead of navigating, so it only updates
+                    // the analog value and contributes nothing to Diff().
+                    case Evdev.ABS_RX:
+                        Scroll = Scroll with { X = ScrollAxis(_rxRange.Normalize(value)) };
+                        break;
+                    case Evdev.ABS_RY:
+                        Scroll = Scroll with { Y = ScrollAxis(_ryRange.Normalize(value)) };
                         break;
                 }
                 break;

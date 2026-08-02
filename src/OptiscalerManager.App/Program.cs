@@ -86,13 +86,18 @@ internal static class Program
         if (!any) Console.WriteLine("  (none found)");
 
         Console.WriteLine();
-        Console.WriteLine("Listening for 20s — press buttons / move the stick now:");
+        Console.WriteLine("Listening for 20s — press buttons / move the sticks now:");
         using var source = new EvdevGamepadSource();
         var count = 0;
         source.Input += i =>
         {
             Interlocked.Increment(ref count);
             Console.WriteLine($"  {DateTime.Now:HH:mm:ss.fff}  {i.Action} {(i.Pressed ? "pressed" : "released")}");
+        };
+        source.Scroll += s =>
+        {
+            Interlocked.Increment(ref count);
+            Console.WriteLine($"  {DateTime.Now:HH:mm:ss.fff}  scroll x={s.X:+0.00;-0.00; 0.00} y={s.Y:+0.00;-0.00; 0.00}");
         };
         source.Start();
         Console.WriteLine($"  reading: {(source.ConnectedDevices.Count > 0 ? string.Join(", ", source.ConnectedDevices) : "(no controller opened)")}");

@@ -44,14 +44,18 @@ public sealed class GamepadNavigator : IDisposable
         _started = true;
 
         _source.Input += OnInput;
+        _source.Scroll += scroll => Dispatcher.UIThread.Post(() => _scroll = scroll);
         _source.DevicesChanged += () => Dispatcher.UIThread.Post(() => DevicesChanged?.Invoke());
         _source.Start();
 
-        // Drives auto-repeat for held directions.
+        // Drives auto-repeat for held directions, and the scroll stick, which is
+        // continuous and so has to be applied on a clock rather than per event.
         _repeatTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(40), DispatcherPriority.Input, (_, _) =>
         {
-            foreach (var action in _repeater.Tick(DateTime.UtcNow))
+            var now = DateTime.UtcNow;
+            foreach (var action in _repeater.Tick(now))
                 SendKey(action);
+            ApplyScroll(now);
         });
         _repeatTimer.Start();
         Log.Write("[Gamepad] Controller navigation started.");
@@ -116,6 +120,54 @@ public sealed class GamepadNavigator : IDisposable
             Source = target,
         });
     }
+
+    /// <summary>How fast the scroll stick moves the page at full deflection.</summary>
+    private const double MaxScrollPixelsPerSecond = 1600;
+
+    private GamepadScroll _scroll;
+    private DateTime _lastScrollTick;
+
+    /// <summary>
+    /// Scrolls the page under the scroll stick. Unlike the D-pad this is continuous, so
+    /// it moves by elapsed time rather than per event — holding the stick scrolls
+    /// smoothly, and how far you push sets the speed.
+    /// </summary>
+    private void ApplyScroll(DateTime now)
+    {
+        var elapsed = now - _lastScrollTick;
+        _lastScrollTick = now;
+
+        if (_scroll.IsIdle) return;
+        // A long gap means we were idle or the app was busy; don't lurch.
+        if (elapsed <= TimeSpan.Zero || elapsed > TimeSpan.FromMilliseconds(250)) return;
+
+        if (ActiveWindow() is not { } window) return;
+        if (FindScrollViewer(window) is not { } viewer) return;
+
+        var step = MaxScrollPixelsPerSecond * elapsed.TotalSeconds;
+        var maxX = Math.Max(0, viewer.Extent.Width - viewer.Viewport.Width);
+        var maxY = Math.Max(0, viewer.Extent.Height - viewer.Viewport.Height);
+        viewer.Offset = new Vector(
+            Math.Clamp(viewer.Offset.X + (_scroll.X * step), 0, maxX),
+            Math.Clamp(viewer.Offset.Y + (_scroll.Y * step), 0, maxY));
+    }
+
+    /// <summary>
+    /// The scroller the stick should move: the one holding the focused control, so the
+    /// stick always scrolls what you are looking at. Falls back to the first scrollable
+    /// one in the window when focus is outside any of them.
+    /// </summary>
+    private static ScrollViewer? FindScrollViewer(Window window)
+    {
+        for (var v = window.FocusManager?.GetFocusedElement() as Visual; v is not null; v = v.GetVisualParent())
+            if (v is ScrollViewer inner && CanScroll(inner))
+                return inner;
+
+        return window.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(CanScroll);
+    }
+
+    private static bool CanScroll(ScrollViewer viewer) =>
+        viewer.Extent.Height > viewer.Viewport.Height || viewer.Extent.Width > viewer.Viewport.Width;
 
     /// <summary>
     /// Moves focus onto a window's first control. Used when a screen opens with nothing

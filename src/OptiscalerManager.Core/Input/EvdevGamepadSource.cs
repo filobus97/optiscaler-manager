@@ -29,6 +29,9 @@ public sealed class EvdevGamepadSource : IDisposable
     /// <summary>Raised (on a background thread) for every logical press/release.</summary>
     public event Action<GamepadInput>? Input;
 
+    /// <summary>Raised (on a background thread) when the scroll stick's deflection changes.</summary>
+    public event Action<GamepadScroll>? Scroll;
+
     /// <summary>Raised when the set of connected controllers changes.</summary>
     public event Action? DevicesChanged;
 
@@ -136,7 +139,7 @@ public sealed class EvdevGamepadSource : IDisposable
 
                     try
                     {
-                        var reader = DeviceReader.TryOpen(path, target, OnInput);
+                        var reader = DeviceReader.TryOpen(path, target, OnInput, OnScroll);
                         if (reader is null) continue;   // not a controller (keyboard, mouse, touchpad…)
                         _readers[path] = reader;
                         changed = true;
@@ -170,6 +173,8 @@ public sealed class EvdevGamepadSource : IDisposable
 
     private void OnInput(GamepadInput input) => Input?.Invoke(input);
 
+    private void OnScroll(GamepadScroll scroll) => Scroll?.Invoke(scroll);
+
     public void Dispose()
     {
         _disposed = true;
@@ -187,6 +192,7 @@ public sealed class EvdevGamepadSource : IDisposable
         private readonly FileStream _stream;
         private readonly EvdevGamepadDecoder _decoder;
         private readonly Action<GamepadInput> _sink;
+        private readonly Action<GamepadScroll> _scrollSink;
         private readonly Thread _thread;
         private volatile bool _stop;
 
@@ -195,7 +201,8 @@ public sealed class EvdevGamepadSource : IDisposable
         public bool Faulted { get; private set; }
 
         /// <summary>Opens the device if it is a controller; returns null when it isn't.</summary>
-        public static DeviceReader? TryOpen(string path, string target, Action<GamepadInput> sink)
+        public static DeviceReader? TryOpen(string path, string target,
+            Action<GamepadInput> sink, Action<GamepadScroll> scrollSink)
         {
             var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             if (!LooksLikeGamepad(stream, path))
@@ -203,20 +210,24 @@ public sealed class EvdevGamepadSource : IDisposable
                 stream.Dispose();   // a keyboard/mouse/touchpad — leave it alone
                 return null;
             }
-            return new DeviceReader(stream, path, target, sink);
+            return new DeviceReader(stream, path, target, sink, scrollSink);
         }
 
-        private DeviceReader(FileStream stream, string path, string target, Action<GamepadInput> sink)
+        private DeviceReader(FileStream stream, string path, string target,
+            Action<GamepadInput> sink, Action<GamepadScroll> scrollSink)
         {
             _stream = stream;
             Target = target;
             _sink = sink;
+            _scrollSink = scrollSink;
             // The device's own name beats parsing a udev symlink, and works for the
             // virtual pads that have no symlink to parse.
             Name = EvdevIoctl.TryGetName(stream) ?? FriendlyName(path);
             _decoder = new EvdevGamepadDecoder(
                 EvdevIoctl.GetAxisRange(stream, Evdev.ABS_X),
-                EvdevIoctl.GetAxisRange(stream, Evdev.ABS_Y));
+                EvdevIoctl.GetAxisRange(stream, Evdev.ABS_Y),
+                EvdevIoctl.GetAxisRange(stream, Evdev.ABS_RX),
+                EvdevIoctl.GetAxisRange(stream, Evdev.ABS_RY));
 
             _thread = new Thread(Loop) { IsBackground = true, Name = $"gamepad:{Name}" };
             _thread.Start();
@@ -227,6 +238,7 @@ public sealed class EvdevGamepadSource : IDisposable
             var buffer = new byte[Evdev.EventSize * 32];
             try
             {
+                var lastScroll = _decoder.Scroll;
                 while (!_stop)
                 {
                     var read = _stream.Read(buffer, 0, buffer.Length);
@@ -234,6 +246,14 @@ public sealed class EvdevGamepadSource : IDisposable
                     for (var offset = 0; offset + Evdev.EventSize <= read; offset += Evdev.EventSize)
                         foreach (var change in _decoder.Feed(buffer.AsSpan(offset, Evdev.EventSize)))
                             _sink(change);
+
+                    // Report the scroll stick once per batch: evdev sends X and Y as
+                    // separate events, so per-event reporting would jitter diagonals.
+                    if (_decoder.Scroll != lastScroll)
+                    {
+                        lastScroll = _decoder.Scroll;
+                        _scrollSink(lastScroll);
+                    }
                 }
             }
             catch (Exception ex)
