@@ -94,10 +94,10 @@
             BorderThickness="1" BorderBrush="{StaticResource BrBorderSubtle}">
       <Grid>
         <!-- ListBox (not ItemsControl) so Up/Down walks the game rows with the
-             keyboard/controller; the focused row's buttons are one Right away. -->
+             keyboard/controller; the focused row's buttons are one Right away.
+             Left/Right across the row's three cells is wired up in the code-behind. -->
         <ListBox Name="GamesList" ItemsSource="{Binding Games}" Margin="8"
-                 Background="Transparent" SelectionMode="Single"
-                 KeyDown="OnGamesListKeyDown">
+                 Background="Transparent" SelectionMode="Single">
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="vm:GameRowViewModel">
               <Border Classes="GameCard" Padding="14,12"

@@ -1,11 +1,14 @@
 // OptiScaler Manager - GPL-3.0-or-later. See repository LICENSE.
 using System;
+using System.Linq;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using OptiscalerManager.App.Services;
 using OptiscalerManager.App.ViewModels;
 using OptiscalerManager.Core.Services;
@@ -19,7 +22,19 @@ public partial class MainWindow : Window
     private bool _initialFocusDone;
 
     // Parameterless ctor for the XAML previewer/designer only.
-    public MainWindow() { InitializeComponent(); DataContext = _vm; }
+    public MainWindow()
+    {
+        InitializeComponent();
+        DataContext = _vm;
+
+        var list = this.FindControl<ListBox>("GamesList");
+        if (list is null) return;
+
+        // Tunnelling: this has to run *before* the ListBox's own key handling, which
+        // would otherwise swallow the arrows we need for moving across a row.
+        list.AddHandler(KeyDownEvent, OnGamesListKeyDown, RoutingStrategies.Tunnel);
+        list.GotFocus += OnGamesListGotFocus;
+    }
 
     public MainWindow(ManagerService manager) : this()
     {
@@ -143,11 +158,13 @@ public partial class MainWindow : Window
                 if (_vm.Games.Count > 0 && list is not null)
                 {
                     list.SelectedIndex = 0;
-                    list.Focus();
+                    // The row container, not the ListBox: focusing the ListBox itself
+                    // leaves focus nowhere, so the arrows/D-pad would only scroll.
+                    FocusRowCell(list, 0, 0);
                 }
                 else
                 {
-                    this.FindControl<Button>("SettingsButton")?.Focus();
+                    this.FindControl<Button>("SettingsButton")?.Focus(NavigationMethod.Directional);
                 }
             }
         }
@@ -170,19 +187,100 @@ public partial class MainWindow : Window
         RefreshImportSummary();
     }
 
-    /// <summary>
-    /// Enter / controller-A on a focused game row starts its install, so a couch user
-    /// doesn't have to sidestep to the button first. Safe: this only opens the preview
-    /// dialog, which still requires an explicit confirm.
-    /// </summary>
-    private async void OnGamesListKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Enter) return;
-        if (sender is not ListBox { SelectedItem: GameRowViewModel row }) return;
-        if (!row.IsIdle) return;
+    // Each game row is a three-cell grid: the game card (0), Install (1), Revert (2).
+    private const int RevertColumn = 2;
 
-        e.Handled = true;
-        await InstallForRowAsync(row);
+    /// <summary>
+    /// Keyboard/controller navigation of the game list, as a 2D grid: Up/Down moves
+    /// between games, Left/Right between the row's three cells (game, Install, Revert).
+    ///
+    /// Up/Down on the game card is left to the ListBox itself — it already moves the
+    /// selection, scrolls the new row into view, and lets focus escape to the header at
+    /// the top edge. We only take over when focus sits on one of the row's buttons, to
+    /// stay in the same column while moving between games.
+    /// </summary>
+    private void OnGamesListKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (sender is not ListBox list || list.ItemCount == 0 || list.SelectedIndex < 0) return;
+
+        var column = FocusedRowColumn();
+        switch (e.Key)
+        {
+            case Key.Left:
+            case Key.Right:
+                // Always handled: nothing sits to the left or right of the list, and
+                // leaving it unhandled lets the ListBox pull focus back to the card.
+                e.Handled = true;
+                var cell = Math.Clamp(column + (e.Key == Key.Right ? 1 : -1), 0, RevertColumn);
+                if (cell != column) FocusRowCell(list, list.SelectedIndex, cell);
+                break;
+
+            case Key.Up:
+            case Key.Down:
+                if (column == 0) return;                       // the ListBox does this better
+                var row = list.SelectedIndex + (e.Key == Key.Down ? 1 : -1);
+                if (row < 0 || row >= list.ItemCount) return;  // edge: let focus escape
+                list.SelectedIndex = row;
+                e.Handled = FocusRowCell(list, row, column);
+                break;
+
+            case Key.Enter:
+                // Only from the card — on a button, the button's own Enter handling wins.
+                // Safe either way: this opens the preview dialog, which still requires
+                // an explicit confirm.
+                if (column != 0) return;
+                if (list.SelectedItem is not GameRowViewModel selected || !selected.IsIdle) return;
+                e.Handled = true;
+                _ = InstallForRowAsync(selected);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Which cell of a game row currently has focus: 0 for the card itself,
+    /// otherwise the grid column of the focused button.
+    /// </summary>
+    private int FocusedRowColumn()
+    {
+        for (var v = FocusManager?.GetFocusedElement() as Visual; v is not null; v = v.GetVisualParent())
+        {
+            if (v is Button button) return Grid.GetColumn(button);
+            if (v is ListBoxItem) return 0;
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// Focuses one cell of a game row, scrolling the row into view first so the
+    /// container exists even when it was scrolled off-screen.
+    /// </summary>
+    private static bool FocusRowCell(ListBox list, int row, int column)
+    {
+        list.ScrollIntoView(row);
+        list.UpdateLayout();
+        if (list.ContainerFromIndex(row) is not ListBoxItem container) return false;
+
+        if (column != 0)
+        {
+            var button = container.GetVisualDescendants().OfType<Button>()
+                .FirstOrDefault(b => Grid.GetColumn(b) == column && b.IsEffectivelyEnabled);
+            // While an install or revert runs the row's buttons are disabled; staying on
+            // the card beats dropping focus somewhere unpredictable.
+            if (button is not null) return button.Focus(NavigationMethod.Directional);
+        }
+
+        return container.Focus(NavigationMethod.Directional);
+    }
+
+    /// <summary>
+    /// Focusing the ListBox itself leaves focus nowhere, so the arrows/D-pad would only
+    /// scroll. Hand focus to the selected row instead.
+    /// </summary>
+    private void OnGamesListGotFocus(object? sender, FocusChangedEventArgs e)
+    {
+        if (sender is not ListBox list || !ReferenceEquals(e.Source, list) || list.ItemCount == 0) return;
+        if (list.SelectedIndex < 0) list.SelectedIndex = 0;
+        FocusRowCell(list, list.SelectedIndex, 0);
     }
 
     private async void OnInstallClick(object? sender, RoutedEventArgs e)

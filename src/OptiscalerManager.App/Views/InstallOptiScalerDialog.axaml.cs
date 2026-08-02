@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using OptiscalerManager.App.Services;
@@ -65,7 +66,7 @@ public partial class InstallOptiScalerDialog : Window
         UpdatePreview();
 
         // Start keyboard/controller focus on the recommended backend.
-        Opened += (_, _) => this.FindControl<RadioButton>("RbDefault")?.Focus();
+        Opened += (_, _) => this.FindControl<RadioButton>("RbDefault")?.Focus(NavigationMethod.Directional);
 
         // INT8 is the default backend — reveal and load its version list on open.
         if (this.FindControl<RadioButton>("RbInt8")!.IsChecked == true)

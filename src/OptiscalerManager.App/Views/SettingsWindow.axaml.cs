@@ -3,6 +3,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
@@ -42,6 +43,10 @@ public partial class SettingsWindow : Window
         if (_manager.IsNukemFgCached) RefreshNukemUpdateStatusAsync(); // async: flag a newer Nukem release
         RefreshInventory();
         RefreshIniProfiles();
+
+        // Without this the page opens with nothing focused, and a controller's first
+        // D-pad press has no starting point to move from.
+        Opened += (_, _) => this.FindControl<ComboBox>("MenuKeyCombo")?.Focus(NavigationMethod.Directional);
     }
 
     private void SetupGamepadCard()

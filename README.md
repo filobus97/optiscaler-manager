@@ -216,14 +216,21 @@ standalone.
 
 | Control | Does |
 | --- | --- |
-| D-pad / left stick | Move focus (hold to repeat) |
-| **A** | Confirm — press the focused button, tick the focused option |
+| D-pad / left stick | Move between controls (hold to repeat) |
+| **A** | Confirm — press the focused button, tick a checkbox, open a dropdown and pick from it |
 | **B** | Back out / close the dialog |
 | **LB / RB** | Jump to the previous / next control |
 
-The game list walks with Up/Down and the Install and Revert buttons are one press to
-the side. A bright focus ring always shows where you are. The keyboard does exactly the
-same things (arrows, Enter, Esc, Tab) — the two are the same code path.
+The game list behaves like a grid: **up/down changes the highlighted game** (the list
+scrolls once you reach the last visible one), and **left/right moves across that game's
+row** — game, *Install OptiScaler*, *Revert*. Press **A** on the game itself to start
+the install without stepping over to the button first, and keep going up to leave the
+list for *Rescan* and *Settings*. A bright focus ring always shows where you are.
+
+Settings and the install dialog open with something already focused, so the first press
+always does something, and dropdowns open and commit with **A** (**B** cancels). The
+keyboard does exactly the same things (arrows, Enter, Esc, Tab) — the two are the same
+code path.
 
 Controllers are detected automatically, including ones connected while the app is
 running; *Settings → Controller* shows what is connected and lets you turn the feature

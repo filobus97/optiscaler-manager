@@ -8,6 +8,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using OptiscalerManager.Core.Input;
 using OptiscalerManager.Core.Logging;
 
@@ -91,9 +92,12 @@ public sealed class GamepadNavigator : IDisposable
         var window = ActiveWindow();
         if (window is null) return;
 
-        // Deliver to whatever has focus, falling back to the window so a fresh screen
-        // with nothing focused still responds (the handler will move focus into it).
-        var target = window.FocusManager?.GetFocusedElement() as Interactive ?? window;
+        // Deliver to whatever has focus. A window that has just opened may have none,
+        // and arrow keys sent to the window itself go nowhere — so seed focus on its
+        // first control, making the very first D-pad press do something visible.
+        var target = window.FocusManager?.GetFocusedElement() as Interactive
+                     ?? SeedFocus(window)
+                     ?? window;
 
         target.RaiseEvent(new KeyEventArgs
         {
@@ -113,6 +117,19 @@ public sealed class GamepadNavigator : IDisposable
         });
     }
 
+    /// <summary>
+    /// Moves focus onto a window's first control. Used when a screen opens with nothing
+    /// focused, so directional input has somewhere to start from.
+    /// </summary>
+    private static Interactive? SeedFocus(Window window)
+    {
+        var first = window.GetVisualDescendants()
+            .OfType<InputElement>()
+            .FirstOrDefault(x => x is { Focusable: true, IsEffectivelyEnabled: true, IsEffectivelyVisible: true });
+
+        return first is not null && first.Focus(NavigationMethod.Directional) ? first : null;
+    }
+
     private bool _sawActivation;
     private bool _loggedPermissiveMode;
 
@@ -127,7 +144,7 @@ public sealed class GamepadNavigator : IDisposable
     /// But some backends (Avalonia's Wayland support is still experimental) may never
     /// report a window as active. Rather than silently swallowing every press there,
     /// we only enforce the focus rule once we have seen activation work at least once;
-    /// until then we fall back to the main window so the controller is usable.
+    /// until then we keep going with the topmost window so the controller is usable.
     /// </summary>
     private Window? ActiveWindow()
     {
@@ -135,7 +152,7 @@ public sealed class GamepadNavigator : IDisposable
             return null;
 
         // Dialogs are modal, so the active one must win over the main window.
-        var active = desktop.Windows.FirstOrDefault(w => w.IsActive);
+        var active = desktop.Windows.LastOrDefault(w => w.IsActive);
         if (active is not null)
         {
             _sawActivation = true;
@@ -148,9 +165,16 @@ public sealed class GamepadNavigator : IDisposable
         {
             _loggedPermissiveMode = true;
             Log.Write("[Gamepad] This backend never reports window activation — " +
-                      "routing input to the main window so the controller still works.");
+                      "routing input to the topmost window so the controller still works.");
         }
-        return desktop.MainWindow;
+
+        // Windows are listed in the order they opened, so the last visible one is the
+        // modal dialog on top. Targeting MainWindow here would send Settings' input to
+        // the screen behind it. The fallbacks matter: an empty list must still leave the
+        // controller working rather than silently dead.
+        return desktop.Windows.LastOrDefault(w => w.IsVisible)
+               ?? desktop.Windows.LastOrDefault()
+               ?? desktop.MainWindow;
     }
 
     public void Dispose()
