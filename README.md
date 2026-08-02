@@ -237,6 +237,16 @@ Gaming Mode, *Update now* included.
 > Input layout that emits keystrokes, turn the built-in support off in Settings so
 > presses don't register twice.
 
+**Controller not responding?** Run the built-in diagnostic from the install folder:
+
+```bash
+./OptiscalerManager --gamepad-test
+```
+
+It lists every input device, marks the ones that report as controllers, says which it
+could open, then echoes decoded input for 20 seconds — enough to tell "not detected"
+from "detected but another program holds it" from "no permission".
+
 ## Native Wayland (Linux)
 
 The app targets **Avalonia 12.1** and uses its **native Wayland backend** when run

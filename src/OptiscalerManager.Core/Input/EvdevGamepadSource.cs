@@ -35,7 +35,11 @@ public sealed class EvdevGamepadSource : IDisposable
     /// <summary>True when a device was found but could not be opened (permissions).</summary>
     public bool PermissionDenied { get; private set; }
 
-    public EvdevGamepadSource(string inputRoot = "/dev/input") => _inputRoot = inputRoot;
+    /// <summary>Where input devices live. OSM_INPUT_ROOT overrides it (diagnostics/tests).</summary>
+    public static string DefaultInputRoot =>
+        Environment.GetEnvironmentVariable("OSM_INPUT_ROOT") is { Length: > 0 } r ? r : "/dev/input";
+
+    public EvdevGamepadSource(string? inputRoot = null) => _inputRoot = inputRoot ?? DefaultInputRoot;
 
     /// <summary>Friendly names of the controllers currently being read.</summary>
     public IReadOnlyList<string> ConnectedDevices
@@ -54,12 +58,18 @@ public sealed class EvdevGamepadSource : IDisposable
     }
 
     /// <summary>
-    /// Finds controller event devices. udev symlinks every joystick/gamepad as
-    /// <c>*-event-joystick</c>, which identifies them without needing ioctl probes
-    /// of every input device.
+    /// Every input node worth probing: the raw <c>event*</c> devices plus udev's
+    /// <c>*-event-joystick</c> symlinks. The raw nodes matter because virtual pads —
+    /// including the one Steam presents when it takes over a controller in Gaming
+    /// Mode — often have no by-id/by-path symlink at all.
     /// </summary>
-    public static IEnumerable<string> DiscoverDevicePaths(string inputRoot)
+    public static IEnumerable<string> DiscoverCandidatePaths(string inputRoot)
     {
+        if (Directory.Exists(inputRoot))
+            foreach (var path in Directory.EnumerateFileSystemEntries(inputRoot))
+                if (Path.GetFileName(path).StartsWith("event", StringComparison.Ordinal))
+                    yield return path;
+
         foreach (var sub in new[] { "by-id", "by-path" })
         {
             var dir = Path.Combine(inputRoot, sub);
@@ -69,6 +79,22 @@ public sealed class EvdevGamepadSource : IDisposable
                     yield return path;
         }
     }
+
+    /// <summary>Kept for callers that only want udev's joystick symlinks.</summary>
+    public static IEnumerable<string> DiscoverDevicePaths(string inputRoot) =>
+        DiscoverCandidatePaths(inputRoot).Where(p => p.EndsWith("-event-joystick", StringComparison.Ordinal));
+
+    /// <summary>
+    /// Decides whether an opened device is a controller by asking it (EVIOCGBIT for
+    /// BTN_SOUTH). When the device can't be probed — a test fixture, an odd node — we
+    /// fall back to udev's naming so nothing that used to work stops working.
+    /// </summary>
+    public static bool LooksLikeGamepad(FileStream stream, string path) =>
+        EvdevIoctl.TryIsGamepad(stream)
+        ?? path.EndsWith("-event-joystick", StringComparison.Ordinal);
+
+    /// <summary>The device's self-reported name, for diagnostics. Null if unavailable.</summary>
+    public static string? TryGetDeviceName(FileStream stream) => EvdevIoctl.TryGetName(stream);
 
     /// <summary>Turns "usb-Microsoft_X-Box_360_pad-event-joystick" into something readable.</summary>
     public static string FriendlyName(string devicePath)
@@ -87,7 +113,7 @@ public sealed class EvdevGamepadSource : IDisposable
         if (_disposed) return;
         try
         {
-            var found = DiscoverDevicePaths(_inputRoot).ToList();
+            var found = DiscoverCandidatePaths(_inputRoot).ToList();
             var changed = false;
 
             lock (_sync)
@@ -110,7 +136,8 @@ public sealed class EvdevGamepadSource : IDisposable
 
                     try
                     {
-                        var reader = new DeviceReader(path, target, OnInput);
+                        var reader = DeviceReader.TryOpen(path, target, OnInput);
+                        if (reader is null) continue;   // not a controller (keyboard, mouse, touchpad…)
                         _readers[path] = reader;
                         changed = true;
                         Log.Write($"[Gamepad] Reading controller: {reader.Name} ({path})");
@@ -167,15 +194,29 @@ public sealed class EvdevGamepadSource : IDisposable
         public string Target { get; }
         public bool Faulted { get; private set; }
 
-        public DeviceReader(string path, string target, Action<GamepadInput> sink)
+        /// <summary>Opens the device if it is a controller; returns null when it isn't.</summary>
+        public static DeviceReader? TryOpen(string path, string target, Action<GamepadInput> sink)
         {
-            Name = FriendlyName(path);
+            var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            if (!LooksLikeGamepad(stream, path))
+            {
+                stream.Dispose();   // a keyboard/mouse/touchpad — leave it alone
+                return null;
+            }
+            return new DeviceReader(stream, path, target, sink);
+        }
+
+        private DeviceReader(FileStream stream, string path, string target, Action<GamepadInput> sink)
+        {
+            _stream = stream;
             Target = target;
             _sink = sink;
-            _stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            // The device's own name beats parsing a udev symlink, and works for the
+            // virtual pads that have no symlink to parse.
+            Name = EvdevIoctl.TryGetName(stream) ?? FriendlyName(path);
             _decoder = new EvdevGamepadDecoder(
-                EvdevAxis.TryGetRange(_stream, Evdev.ABS_X),
-                EvdevAxis.TryGetRange(_stream, Evdev.ABS_Y));
+                EvdevIoctl.GetAxisRange(stream, Evdev.ABS_X),
+                EvdevIoctl.GetAxisRange(stream, Evdev.ABS_Y));
 
             _thread = new Thread(Loop) { IsBackground = true, Name = $"gamepad:{Name}" };
             _thread.Start();
@@ -207,35 +248,5 @@ public sealed class EvdevGamepadSource : IDisposable
             _stop = true;
             try { _stream.Dispose(); } catch { }  // unblocks the pending read
         }
-    }
-}
-
-/// <summary>Reads an absolute axis' real range via EVIOCGABS, so stick deadzones are correct.</summary>
-internal static partial class EvdevAxis
-{
-    [StructLayout(LayoutKind.Sequential)]
-    private struct AbsInfo
-    {
-        public int Value, Minimum, Maximum, Fuzz, Flat, Resolution;
-    }
-
-    [LibraryImport("libc", SetLastError = true)]
-    private static partial int ioctl(int fd, nuint request, ref AbsInfo info);
-
-    /// <summary>EVIOCGABS(axis) = _IOR('E', 0x40 + axis, struct input_absinfo).</summary>
-    private static nuint EviocgAbs(ushort axis) =>
-        (nuint)((2u << 30) | (24u << 16) | ((uint)'E' << 8) | (0x40u + axis));
-
-    public static AxisRange TryGetRange(FileStream stream, ushort axis)
-    {
-        try
-        {
-            var info = default(AbsInfo);
-            var fd = stream.SafeFileHandle.DangerousGetHandle().ToInt32();
-            if (ioctl(fd, EviocgAbs(axis), ref info) == 0 && info.Maximum > info.Minimum)
-                return new AxisRange(info.Minimum, info.Maximum);
-        }
-        catch { /* fall through to the default range */ }
-        return AxisRange.Default;
     }
 }

@@ -203,6 +203,32 @@ namespace OptiscalerManager.Core.Tests
         public void MissingInputRoot_YieldsNothing()
             => Assert.Empty(EvdevGamepadSource.DiscoverDevicePaths("/definitely/not/here"));
 
+        [Fact]
+        public void CandidateScan_IncludesRawEventNodes_NotJustUdevSymlinks()
+        {
+            // Virtual pads (e.g. the one Steam exposes in Gaming Mode) often have no
+            // by-id/by-path symlink, so raw event* nodes must be probed too.
+            var root = Path.Combine(Path.GetTempPath(), "osm_input_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path.Combine(root, "by-id"));
+            File.WriteAllText(Path.Combine(root, "event0"), "");
+            File.WriteAllText(Path.Combine(root, "event12"), "");
+            File.WriteAllText(Path.Combine(root, "mice"), "");   // not an event node
+            File.WriteAllText(Path.Combine(root, "by-id", "usb-Pad-event-joystick"), "");
+            try
+            {
+                var candidates = EvdevGamepadSource.DiscoverCandidatePaths(root).Select(Path.GetFileName).ToList();
+                Assert.Contains("event0", candidates);
+                Assert.Contains("event12", candidates);
+                Assert.Contains("usb-Pad-event-joystick", candidates);
+                Assert.DoesNotContain("mice", candidates);
+            }
+            finally { Directory.Delete(root, true); }
+        }
+
+        [Fact]
+        public void CandidateScan_MissingRoot_IsEmpty()
+            => Assert.Empty(EvdevGamepadSource.DiscoverCandidatePaths("/definitely/not/here"));
+
         [Theory]
         [InlineData("usb-Microsoft_X-Box_360_pad-event-joystick", "Microsoft X-Box 360 pad")]
         [InlineData("usb-Valve_Software_Steam_Controller-event-joystick", "Valve Software Steam Controller")]

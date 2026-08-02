@@ -10,7 +10,10 @@
 
 using Avalonia;
 using System;
+using System.IO;
 using System.Linq;
+using System.Threading;
+using OptiscalerManager.Core.Input;
 using OptiscalerManager.Core.Services;
 
 namespace OptiscalerManager.App;
@@ -31,12 +34,74 @@ internal static class Program
         if (args.Contains("--self-test-update"))
             return SelfTestUpdate(args);
 
+        // Controller diagnostics: prints what input devices exist, which are readable,
+        // which report as controllers, then echoes live input. Run this and share the
+        // output when a controller isn't working.
+        if (args.Contains("--gamepad-test"))
+            return GamepadTest();
+
         // The updater re-execs us with a marker; consume it (don't pass to Avalonia)
         // and surface an "Updated ✓" note on the main screen.
         RelaunchedAfterUpdate = args.Contains(AppUpdateService.UpdatedMarker);
         var avaloniaArgs = args.Where(a => a != AppUpdateService.UpdatedMarker && a != "--self-test-update").ToArray();
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(avaloniaArgs);
+        return 0;
+    }
+
+    private static int GamepadTest()
+    {
+        Console.WriteLine($"OptiScaler Manager {AppUpdateService.GetCurrentVersion()} — controller diagnostics");
+        Console.WriteLine($"user={Environment.UserName}  linux={OperatingSystem.IsLinux()}");
+        Console.WriteLine();
+
+        var root = EvdevGamepadSource.DefaultInputRoot;
+        if (!Directory.Exists(root))
+        {
+            Console.WriteLine($"{root} does not exist — no input devices are visible to this process.");
+            return 1;
+        }
+
+        Console.WriteLine("Devices:");
+        var any = false;
+        foreach (var path in EvdevGamepadSource.DiscoverCandidatePaths(root).OrderBy(p => p, StringComparer.Ordinal))
+        {
+            any = true;
+            try
+            {
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                var name = EvdevGamepadSource.TryGetDeviceName(stream) ?? "(no name)";
+                var pad = EvdevGamepadSource.LooksLikeGamepad(stream, path);
+                Console.WriteLine($"  {(pad ? "GAMEPAD " : "        ")}{path}  \"{name}\"");
+            }
+            catch (UnauthorizedAccessException)
+            {
+                Console.WriteLine($"  DENIED   {path}  (no read permission)");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  ERROR    {path}  ({ex.GetType().Name}: {ex.Message})");
+            }
+        }
+        if (!any) Console.WriteLine("  (none found)");
+
+        Console.WriteLine();
+        Console.WriteLine("Listening for 20s — press buttons / move the stick now:");
+        using var source = new EvdevGamepadSource();
+        var count = 0;
+        source.Input += i =>
+        {
+            Interlocked.Increment(ref count);
+            Console.WriteLine($"  {DateTime.Now:HH:mm:ss.fff}  {i.Action} {(i.Pressed ? "pressed" : "released")}");
+        };
+        source.Start();
+        Console.WriteLine($"  reading: {(source.ConnectedDevices.Count > 0 ? string.Join(", ", source.ConnectedDevices) : "(no controller opened)")}");
+        Thread.Sleep(TimeSpan.FromSeconds(20));
+
+        Console.WriteLine();
+        Console.WriteLine(count > 0
+            ? $"Received {count} events — the controller pipeline works."
+            : "No events received. If a GAMEPAD line appeared above, another program (e.g. Steam) is likely holding the device exclusively.");
         return 0;
     }
 
