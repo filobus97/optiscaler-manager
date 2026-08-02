@@ -2,6 +2,7 @@
 using System;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -169,10 +170,29 @@ public partial class MainWindow : Window
         RefreshImportSummary();
     }
 
+    /// <summary>
+    /// Enter / controller-A on a focused game row starts its install, so a couch user
+    /// doesn't have to sidestep to the button first. Safe: this only opens the preview
+    /// dialog, which still requires an explicit confirm.
+    /// </summary>
+    private async void OnGamesListKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        if (sender is not ListBox { SelectedItem: GameRowViewModel row }) return;
+        if (!row.IsIdle) return;
+
+        e.Handled = true;
+        await InstallForRowAsync(row);
+    }
+
     private async void OnInstallClick(object? sender, RoutedEventArgs e)
     {
         if (sender is not Control { DataContext: GameRowViewModel row }) return;
+        await InstallForRowAsync(row);
+    }
 
+    private async Task InstallForRowAsync(GameRowViewModel row)
+    {
         // Configuration + transparent preview first — nothing is written until confirm.
         var dialog = new InstallOptiScalerDialog(_manager, row.Game);
         var confirmed = await dialog.ShowDialogFor(this);

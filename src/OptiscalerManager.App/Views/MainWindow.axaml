@@ -96,7 +96,8 @@
         <!-- ListBox (not ItemsControl) so Up/Down walks the game rows with the
              keyboard/controller; the focused row's buttons are one Right away. -->
         <ListBox Name="GamesList" ItemsSource="{Binding Games}" Margin="8"
-                 Background="Transparent" SelectionMode="Single">
+                 Background="Transparent" SelectionMode="Single"
+                 KeyDown="OnGamesListKeyDown">
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="vm:GameRowViewModel">
               <Border Classes="GameCard" Padding="14,12"

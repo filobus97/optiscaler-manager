@@ -113,12 +113,28 @@ public sealed class GamepadNavigator : IDisposable
         });
     }
 
-    private static Window? ActiveWindow()
+    private bool _loggedInactiveDrop;
+
+    /// <summary>
+    /// The window that should receive controller input, or null when the app is not
+    /// focused. Returning null matters: the reader keeps running while the app sits in
+    /// the background, and without this check a controller being used in a *game*
+    /// would still be navigating — and pressing — this app's UI behind it.
+    /// </summary>
+    private Window? ActiveWindow()
     {
         if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
             return null;
+
         // Dialogs are modal, so the active one must win over the main window.
-        return desktop.Windows.FirstOrDefault(w => w.IsActive) ?? desktop.MainWindow;
+        var active = desktop.Windows.FirstOrDefault(w => w.IsActive);
+        if (active is null && !_loggedInactiveDrop)
+        {
+            _loggedInactiveDrop = true;
+            Log.Write("[Gamepad] Input ignored while the app is not focused (logged once).");
+        }
+        if (active is not null) _loggedInactiveDrop = false;
+        return active;
     }
 
     public void Dispose()
