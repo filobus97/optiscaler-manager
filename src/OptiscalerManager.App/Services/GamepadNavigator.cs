@@ -43,6 +43,15 @@ public sealed class GamepadNavigator : IDisposable
         if (_started || !IsSupported) return;
         _started = true;
 
+        // Sees every real key press in the app, so we can notice when our presses are
+        // being duplicated by an external mapping. Class handlers are process-wide.
+        if (!_watchingForDuplicates)
+        {
+            _watchingForDuplicates = true;
+            InputElement.KeyDownEvent.AddClassHandler<TopLevel>(
+                (_, e) => NoteExternalKey(e), RoutingStrategies.Tunnel, handledEventsToo: true);
+        }
+
         _source.Input += OnInput;
         _source.Scroll += scroll => Dispatcher.UIThread.Post(() => _scroll = scroll);
         _source.DevicesChanged += () => Dispatcher.UIThread.Post(() => DevicesChanged?.Invoke());
@@ -88,20 +97,78 @@ public sealed class GamepadNavigator : IDisposable
         _ => null,
     };
 
+    // How close two presses of the same key have to be to be the same press arriving twice.
+    private static readonly TimeSpan DuplicateWindow = TimeSpan.FromMilliseconds(250);
+    private const int DuplicatesBeforeBackingOff = 3;
+
+    private static bool _watchingForDuplicates;
+    private (Key Key, DateTime At)? _lastSent;
+    private (Key Key, DateTime At)? _lastExternal;
+    private int _duplicateCount;
+
+    /// <summary>
+    /// True when something else (Steam Input, typically) is already turning this
+    /// controller into key presses, so we have stopped doing it as well.
+    /// </summary>
+    public bool DeferringToExternalMapping { get; private set; }
+
+    /// <summary>
+    /// Watches for a real key press that matches one we just synthesized. Steam Input
+    /// maps the pad to the keyboard, and we read the same pad directly, so every press
+    /// arrives twice — which walks two rows at a time and double-fires buttons.
+    ///
+    /// Detection is deliberately narrow: it needs the *same key* within a few hundred
+    /// milliseconds, several times over. A layout that emits something else (mouse
+    /// clicks, say) never matches, so we never back off when we are the only thing
+    /// driving the UI.
+    /// </summary>
+    private void NoteExternalKey(KeyEventArgs e)
+    {
+        // Ours are tagged Gamepad; anything else came from the real input pipeline.
+        if (DeferringToExternalMapping || e.KeyDeviceType == KeyDeviceType.Gamepad) return;
+
+        var now = DateTime.UtcNow;
+        _lastExternal = (e.Key, now);
+        if (_lastSent is { } sent && sent.Key == e.Key && now - sent.At <= DuplicateWindow)
+            CountDuplicate();
+    }
+
+    private void CountDuplicate()
+    {
+        if (++_duplicateCount < DuplicatesBeforeBackingOff) return;
+
+        DeferringToExternalMapping = true;
+        Log.Write("[Gamepad] Every press is arriving twice — something else (Steam Input?) is " +
+                  "already mapping this controller to the keyboard. Leaving navigation to it; " +
+                  "the scroll stick keeps working.");
+        Dispatcher.UIThread.Post(() => DevicesChanged?.Invoke());
+    }
+
     private void SendKey(GamepadAction action)
     {
+        if (DeferringToExternalMapping) return;
+
         var mapped = MapToKey(action);
         if (mapped is not { } m) return;
 
         var window = ActiveWindow();
         if (window is null) return;
 
-        // Deliver to whatever has focus. A window that has just opened may have none,
-        // and arrow keys sent to the window itself go nowhere — so seed focus on its
-        // first control, making the very first D-pad press do something visible.
-        var target = window.FocusManager?.GetFocusedElement() as Interactive
-                     ?? SeedFocus(window)
-                     ?? window;
+        // The external mapping may land either side of ours, so check both orders.
+        var now = DateTime.UtcNow;
+        if (_lastExternal is { } ext && ext.Key == m.Key && now - ext.At <= DuplicateWindow)
+            CountDuplicate();
+        _lastSent = (m.Key, now);
+
+        if (window.FocusManager?.GetFocusedElement() is not Interactive target)
+        {
+            // Nothing is focused: either the screen just opened, or the control that had
+            // focus was disabled mid-action (pressing Rescan disables Rescan). Place
+            // focus and stop there — a press must never activate whatever it happens to
+            // land on, or a stray Enter here would open the install dialog.
+            SeedFocus(window);
+            return;
+        }
 
         target.RaiseEvent(new KeyEventArgs
         {

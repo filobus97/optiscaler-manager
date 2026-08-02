@@ -142,7 +142,7 @@ public partial class MainWindow : Window
             _vm.Games.Clear();
             foreach (var g in games)
             {
-                var row = new GameRowViewModel(g);
+                var row = new GameRowViewModel(g) { GlobalBusy = _vm.IsBusy };
                 row.RefreshFromGame();
                 _vm.Games.Add(row);
             }
@@ -291,6 +291,8 @@ public partial class MainWindow : Window
 
     private async Task InstallForRowAsync(GameRowViewModel row)
     {
+        if (!_vm.IsIdle || !row.IsIdle) return;   // a scan or another install is running
+
         // Configuration + transparent preview first — nothing is written until confirm.
         var dialog = new InstallOptiScalerDialog(_manager, row.Game);
         var confirmed = await dialog.ShowDialogFor(this);
@@ -329,6 +331,7 @@ public partial class MainWindow : Window
     private async void OnRevertClick(object? sender, RoutedEventArgs e)
     {
         if (sender is not Control { DataContext: GameRowViewModel row }) return;
+        if (!_vm.IsIdle || !row.IsIdle) return;   // a scan or another install is running
 
         // Give clear feedback instead of silently doing nothing when there is no install.
         if (!_manager.HasInstall(row.Game))

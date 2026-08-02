@@ -22,7 +22,14 @@ public sealed class MainViewModel : ViewModelBase
     public bool IsBusy
     {
         get => _isBusy;
-        set { if (SetField(ref _isBusy, value)) OnPropertyChanged(nameof(IsIdle)); }
+        set
+        {
+            if (!SetField(ref _isBusy, value)) return;
+            OnPropertyChanged(nameof(IsIdle));
+            // The rows' buttons follow the screen's state, so nothing in the list is
+            // clickable while a scan or an install is running.
+            foreach (var row in Games) row.GlobalBusy = value;
+        }
     }
     public bool IsIdle => !_isBusy;
 

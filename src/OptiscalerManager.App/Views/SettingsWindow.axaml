@@ -62,7 +62,7 @@
                        Text="Navigate the whole app with a game controller: D-pad or left stick to move, right stick to scroll, A to confirm, B to go back, shoulders to jump between controls. In the game list, up/down picks the game and left/right reaches its Install and Revert buttons. Works on the desktop and in Steam Gaming Mode."/>
             <CheckBox Name="GamepadCheck" Content="Enable controller navigation"
                       Foreground="{StaticResource BrTextPrimary}" FontSize="12"
-                      ToolTip.Tip="Reads the controller directly. Turn this off if you use Steam Input to map the controller to keyboard keys and presses register twice. Takes effect on the next start."/>
+                      ToolTip.Tip="Reads the controller directly. If something else (Steam Input) is already mapping it to the keyboard, that is detected and navigation is left to it automatically — turn this off only if you want the controller ignored entirely. Takes effect on the next start."/>
             <TextBlock Name="GamepadStatusText" TextWrapping="Wrap" FontSize="12"
                        Foreground="{StaticResource BrTextSecondary}"/>
           </StackPanel>

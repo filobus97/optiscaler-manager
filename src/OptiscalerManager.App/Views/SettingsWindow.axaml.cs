@@ -88,7 +88,12 @@ public partial class SettingsWindow : Window
         }
 
         var devices = pad.ConnectedDevices;
-        if (devices.Count > 0)
+        if (pad.DeferringToExternalMapping)
+            text.Text = "Detected: " + string.Join(", ", devices) +
+                        "\nSteam Input (or something like it) is already mapping this controller to the " +
+                        "keyboard, so every press was arriving twice. Navigation is left to it; the scroll " +
+                        "stick still works.";
+        else if (devices.Count > 0)
             text.Text = "Detected: " + string.Join(", ", devices);
         else if (pad.PermissionDenied)
             text.Text = "A controller was found but could not be read. Add your user to the 'input' group " +

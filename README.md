@@ -244,9 +244,10 @@ Gaming Mode, *Update now* included.
 > **Why this is built in:** Avalonia has no gamepad backend on Linux, so the app reads
 > the controller itself (`/dev/input`, evdev) and translates it into the same
 > navigation the keyboard produces. If your user cannot read input devices, Settings
-> says so — `sudo usermod -aG input $USER` and log back in. If you *prefer* a Steam
-> Input layout that emits keystrokes, turn the built-in support off in Settings so
-> presses don't register twice.
+> says so — `sudo usermod -aG input $USER` and log back in. If a Steam Input layout is
+> already emitting keystrokes for the same pad, the app notices that every press is
+> arriving twice and leaves navigation to it (the scroll stick keeps working), so the
+> two don't fight; Settings says when this has happened.
 
 **Controller not responding?** Run the built-in diagnostic from the install folder:
 

@@ -33,7 +33,18 @@ public sealed class GameRowViewModel : ViewModelBase
         set { if (SetField(ref _isBusy, value)) OnPropertyChanged(nameof(IsIdle)); }
     }
 
-    public bool IsIdle => !_isBusy;
+    private bool _globalBusy;
+    /// <summary>
+    /// True while the whole screen is busy — a scan, or another game's install. A row
+    /// has to follow that too, or a press could start an install mid-scan.
+    /// </summary>
+    public bool GlobalBusy
+    {
+        get => _globalBusy;
+        set { if (SetField(ref _globalBusy, value)) OnPropertyChanged(nameof(IsIdle)); }
+    }
+
+    public bool IsIdle => !_isBusy && !_globalBusy;
 
     private bool _isInstalled;
     public bool IsInstalled
