@@ -159,7 +159,21 @@ internal static class Program
     {
         var builder = AppBuilder.Configure<App>();
 
+        // Which windowing backend to use on Linux.
+        //
+        // The native Wayland backend is upstream-experimental, and as of Avalonia 12.1.2
+        // it never sends xdg_toplevel.set_app_id and implements no icon protocol. The
+        // compositor therefore cannot tell which application a window belongs to, and
+        // shows a placeholder in the titlebar (and can only guess in the taskbar) no
+        // matter what icon the app sets — that is not something this app can fix from
+        // its side. X11, which runs through XWayland inside a Wayland session, sets both
+        // _NET_WM_ICON and WM_CLASS, so the icon and the desktop entry pair up properly.
+        //
+        // Set OSM_BACKEND=wayland to use the native backend anyway (and lose the icon);
+        // OSM_BACKEND=x11 forces X11 explicitly.
+        var backend = Environment.GetEnvironmentVariable("OSM_BACKEND");
         var underWayland = OperatingSystem.IsLinux()
+            && string.Equals(backend, "wayland", StringComparison.OrdinalIgnoreCase)
             && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"));
 
         // The experimental Wayland backend is not selected by UsePlatformDetect() and,

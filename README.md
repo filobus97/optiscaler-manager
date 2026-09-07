@@ -309,13 +309,27 @@ each one declares and which two the scroll stick will read, says which it could 
 then echoes decoded input for 20 seconds — enough to tell "not detected"
 from "detected but another program holds it" from "no permission".
 
-## Native Wayland (Linux)
+## Windowing backend (Linux)
 
-The app targets **Avalonia 12.1** and uses its **native Wayland backend** when run
-under a Wayland session (detected via `WAYLAND_DISPLAY`), falling back to X11
-otherwise. The Wayland backend is officially *experimental* upstream; if you hit a
-rendering issue, force X11 by unsetting `WAYLAND_DISPLAY` (e.g. run through
-XWayland).
+The app targets **Avalonia 12.1** and runs on **X11 by default** — through XWayland
+when you are in a Wayland session. Avalonia's native Wayland backend is available with
+`OSM_BACKEND=wayland`:
+
+```bash
+OSM_BACKEND=wayland ./OptiscalerManager   # native Wayland (no app icon, see below)
+OSM_BACKEND=x11     ./OptiscalerManager   # force X11 (the default)
+```
+
+**Why X11 is the default:** the native Wayland backend is *experimental* upstream and,
+as of Avalonia 12.1.2, never sends `xdg_toplevel.set_app_id` and implements no icon
+protocol. A Wayland compositor therefore has no way to tell which application a window
+belongs to, so it shows a placeholder icon in the title bar regardless of what the app
+sets — nothing this app can do fixes that from its side. On X11 the icon is attached to
+the window directly (`_NET_WM_ICON`) and `WM_CLASS` matches the desktop entry, so the
+icon shows up in the title bar, the taskbar and the switcher.
+
+If a future Avalonia release sends an app-id, native Wayland becomes the better default
+again.
 
 ---
 
