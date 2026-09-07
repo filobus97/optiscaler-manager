@@ -7,6 +7,7 @@
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BrBgBase}"
         XYFocus.NavigationModes="Keyboard,Gamepad"
+        Icon="/Assets/icon-256.png"
         Title="OptiScaler Manager">
 
   <Window.Styles>

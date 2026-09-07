@@ -20,7 +20,7 @@ public partial class InstallOptiScalerDialog : Window
     /// <summary>The backend the user confirmed.</summary>
     public Fsr4Backend SelectedBackend { get; private set; } = Fsr4Backend.Default;
 
-    /// <summary>Whether the Manager should select FSR 4 (UpscalerIndex=0) vs leave it auto.</summary>
+    /// <summary>Whether the Manager selects the FSR 4 upscaler ([Upscalers]) vs leaving it auto.</summary>
     public bool SelectFsr4 { get; private set; } = true;
 
     /// <summary>The INT8 community build version the user confirmed (null unless INT8 chosen).</summary>
@@ -143,10 +143,18 @@ public partial class InstallOptiScalerDialog : Window
 
         _int8Loaded = true;
         var combo = this.FindControl<ComboBox>("Int8VersionCombo")!;
-        combo.ItemsSource = new[] { "Loading…" };
+        combo.ItemsSource = new System.Collections.Generic.List<ComboBoxItem> { new() { Content = "Loading…" } };
         combo.SelectedIndex = 0;
-        var versions = await _manager.GetInt8VersionsAsync();
-        combo.ItemsSource = versions.Count > 0 ? versions : new[] { "(none available)" };
+        var releases = await _manager.GetInt8ReleasesAsync();
+        combo.ItemsSource = releases.Count > 0
+            ? releases.Select(r => new ComboBoxItem
+              {
+                  // Mark the ones upstream has not declared stable — the list is every
+                  // release the repo publishes, pre-releases included.
+                  Content = r.IsPreRelease ? $"{r.Version}  •  pre-release" : r.Version,
+                  Tag = r.Version,
+              }).ToList()
+            : new System.Collections.Generic.List<ComboBoxItem> { new() { Content = "(none available)" } };
         combo.SelectedIndex = 0;
         combo.SelectionChanged += OnOptionChanged;
         UpdatePreview();
@@ -233,9 +241,8 @@ public partial class InstallOptiScalerDialog : Window
     private string? CurrentInt8Version()
     {
         var combo = this.FindControl<ComboBox>("Int8VersionCombo")!;
-        var v = combo.SelectedItem as string;
-        if (string.IsNullOrEmpty(v) || v == "Loading…" || v == "(none available)") return null;
-        return v;
+        // Tag carries the raw tag; Content may be decorated with "pre-release".
+        return (combo.SelectedItem as ComboBoxItem)?.Tag as string;
     }
 
     private OptiScalerProfile? CurrentProfile()

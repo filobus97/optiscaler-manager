@@ -5,6 +5,7 @@
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource BrBgBase}"
         XYFocus.NavigationModes="Keyboard,Gamepad"
+        Icon="/Assets/icon-256.png"
         Title="Install OptiScaler">
 
   <Grid RowDefinitions="Auto,*,Auto" Margin="20">
@@ -35,11 +36,11 @@
           <StackPanel Spacing="6">
             <RadioButton Name="RbInt8" GroupName="Fsr4" Content="FSR 4 INT8 community build"
                          Foreground="{StaticResource BrTextPrimary}"
-                         ToolTip.Tip="Install a community FSR 4 INT8 build (amd_fidelityfx_upscaler_dx12.dll) from the OptiScaler-Extras repo, at the version you pick below. This is the option that provides FSR 4 without a driver."/>
+                         ToolTip.Tip="Install a community FSR 4 INT8 build (amd_fidelityfx_upscaler_dx12.dll) from github.com/Agustinm28/OptiScaler-Extras — a third-party repo, not part of the official OptiScaler project. Pick the version below. This is the option that provides FSR 4 without a driver."/>
             <StackPanel Name="Int8VersionPanel" Orientation="Horizontal" Spacing="8" Margin="26,0,0,0" IsVisible="False">
               <TextBlock Text="Version:" VerticalAlignment="Center" Foreground="{StaticResource BrTextSecondary}"/>
               <ComboBox Name="Int8VersionCombo" MinWidth="180"
-                        ToolTip.Tip="Which INT8 community build to install (newest first). Populated from the OptiScaler-Extras repo."/>
+                        ToolTip.Tip="Which INT8 community build to install (newest first). This is every release published by github.com/Agustinm28/OptiScaler-Extras, so entries marked pre-release are builds its author has not declared stable."/>
             </StackPanel>
 
             <RadioButton Name="RbCustomMerged" GroupName="Fsr4" Content="Custom DLLs"

@@ -32,17 +32,24 @@ action per game, advanced options tucked away.
       AMD" option**: OptiScaler hooks AMD's model-selection code by byte pattern, so
       the only compatible AMD binaries are exactly the ones each release bundles —
       e.g. giving 0.9.3 a 4.1.1 upscaler silently disables FSR 4 (menu caps at 3.1.5);
-    - *FSR 4 INT8 community build* — from the OptiScaler-Extras repo, at a **version
-      you pick** (upstream still recommends **4.0.2c** for RDNA2 on Windows);
+    - *FSR 4 INT8 community build* — from
+      [`Agustinm28/OptiScaler-Extras`](https://github.com/Agustinm28/OptiScaler-Extras)
+      (third-party, **not** the official OptiScaler project), at a **version you pick**
+      (upstream still recommends **4.0.2c** for RDNA2 on Windows);
     - *Custom DLLs* — **your imported DLLs overlaid on the OptiScaler install**: names
       OptiScaler ships (e.g. the upscaler) are swapped in place, unknown names (e.g.
       `amdxcffx64.dll`) are **added alongside**. Fully offline. Everything is
       manifest-tracked, so *Revert* removes it all.
 
-  **Step 2 — FSR 4 selection:** the Manager **always forces the flags that make FSR 4
+  **Step 2 — FSR 4 selection:** the Manager **always forces the flag that makes FSR 4
   *available*** (`[FSR] Fsr4Update=true`); you then choose whether it also **selects**
-  FSR 4 for you (`UpscalerIndex=0`) or leaves it **auto** so you pick it in OptiScaler's
-  in-game overlay. Two optional toggles cover FSR 4.1.1's new GPU validation:
+  FSR 4 for you or leaves that to OptiScaler so you pick it in the in-game overlay.
+  Selecting it writes `[Upscalers] Dx12Upscaler` (plus the DX11/Vulkan equivalents) —
+  the setting that decides *which upscaler runs at all*. This matters: the DX12 default
+  is XeSS, and while XeSS is running none of the FSR keys are even read. The exact value
+  differs by OptiScaler release (newer ones renamed `fsr31` to `ffx`), so it is read from
+  the ini that ships with the release you install rather than hardcoded — writing the
+  wrong one would silently fall back to FSR 2.1.2. Two optional toggles cover FSR 4.1.1's new GPU validation:
   **Force INT8 on unsupported GPUs** (`Fsr4ForceEnableInt8=true`, for RDNA2 / mobile
   RDNA3 / Intel / Nvidia — it can't help GPUs without INT8 support) and **Show the FSR4
   watermark** (`Fsr4EnableWatermark=true`) to verify on screen whether you're really
@@ -64,8 +71,8 @@ action per game, advanced options tucked away.
 
   Plus the **`OptiScaler.ini`** to use — OptiScaler's default, or one of your saved
   profiles. When you pick a custom `.ini`, the options above overwrite **only the keys
-  they affect** (`Fsr4Update`, `UpscalerIndex`, the optional toggles above, and the menu
-  key); the rest of your `.ini` is left exactly as you wrote it.
+  they affect** (`Fsr4Update`, the `[Upscalers]` selection, the optional toggles above,
+  and the menu key); the rest of your `.ini` is left exactly as you wrote it.
 - **Transparent — no black boxes.** Before anything is written, a live
   **"What will happen"** preview lists the *exact files* that will be placed next
   to your game and the *exact `OptiScaler.ini` keys* that will change (updating as
@@ -77,8 +84,9 @@ action per game, advanced options tucked away.
 ### On AMD binaries
 
 OptiScaler Manager downloads OptiScaler releases (which bundle AMD's signed,
-openly-distributed FFX DLLs) and community FSR 4 INT8 builds from the
-OptiScaler-Extras repository. It **never downloads, bundles, or links to the
+openly-distributed FFX DLLs) and community FSR 4 INT8 builds from the third-party
+[`Agustinm28/OptiScaler-Extras`](https://github.com/Agustinm28/OptiScaler-Extras)
+repository. It **never downloads, bundles, or links to the
 proprietary FSR 4 driver runtime `amdxcffx64.dll`**: that one is strictly
 **bring-your-own**, supplied from a local file/folder/archive you already possess and
 copied into a private cache. See [Importing your own DLLs](#importing-your-own-dlls-and-ini-profiles).
@@ -170,8 +178,8 @@ Open **Settings** to import:
 
 When you click **Install OptiScaler**, the dialog lets you pick the backend
 (OptiScaler default / INT8 community build / custom DLLs) and which `.ini`
-profile to write. The Manager always sets `[FSR] Fsr4Update = true` and
-`UpscalerIndex` per your Step-2 choice (these win over the chosen profile,
+profile to write. The Manager always sets `[FSR] Fsr4Update = true` and the
+`[Upscalers]` selection per your Step-2 choice (these win over the chosen profile,
 matching what is written to disk). You always see the exact file and ini changes
 in the live preview first.
 
@@ -210,6 +218,40 @@ release, downloads the matching `OptiscalerManager-<version>-<rid>.zip`, and swa
 files in place. The scripts live in [`scripts/`](scripts/) if you want to run them
 standalone.
 
+## Where files come from, and what is checked
+
+Everything the Manager downloads comes over HTTPS from GitHub release assets. There is
+no other download host, and nothing is fetched from a URL you cannot see here:
+
+| What | Repository | Whose |
+| --- | --- | --- |
+| OptiScaler itself | [`optiscaler/OptiScaler`](https://github.com/optiscaler/OptiScaler) | official project |
+| OptiPatcher (Nvidia override) | [`optiscaler/OptiPatcher`](https://github.com/optiscaler/OptiPatcher) | official project |
+| fakenvapi (Reflex → Anti-Lag 2) | [`optiscaler/fakenvapi`](https://github.com/optiscaler/fakenvapi) | official project |
+| **FSR 4 INT8 community builds** | [`Agustinm28/OptiScaler-Extras`](https://github.com/Agustinm28/OptiScaler-Extras) | **third-party**, not the official project |
+| This app's own updates | [`filobus97/optiscaler-manager`](https://github.com/filobus97/optiscaler-manager) | this project |
+| Nukem's DLSSG-to-FSR3 | — | **not downloaded**: you import it yourself |
+| `amdxcffx64.dll` (AMD FSR 4 runtime) | — | **never downloaded**: bring your own |
+
+Two of those deserve a second look. Despite the name, **OptiScaler-Extras is a personal
+repository, not part of the official OptiScaler project** — the INT8 builds are community
+work. And the version list is every release that repo publishes, so entries marked
+*pre-release* are builds its author has not declared stable.
+
+What the Manager actually verifies:
+
+- every download is HTTPS from `github.com`;
+- archives are opened and **only the one expected filename** is extracted, with paths
+  validated so an archive cannot write outside the target folder;
+- each extracted or imported DLL is checked to be a real **64-bit PE** before use;
+- every file written is recorded in a per-game manifest, and *Revert* restores what was
+  there before.
+
+What it does **not** do: verify checksums or code signatures. GitHub-over-TLS is the
+trust anchor, the same one you rely on when installing OptiScaler by hand. That applies
+to this app too — it updates itself from its own releases, so treat it with the same
+care you would any mod tool, and read the release notes before updating.
+
 ## Couch / Steam Deck (Bazzite) use
 
 **Controllers work out of the box on Linux** — no Steam Input layout to configure:
@@ -240,6 +282,13 @@ Controllers are detected automatically, including ones connected while the app i
 running; *Settings → Controller* shows what is connected and lets you turn the feature
 off. On Steam Deck, add the app as a **non-Steam game** and it is fully usable from
 Gaming Mode, *Update now* included.
+
+On first run under Linux the app registers a desktop entry
+(`~/.local/share/applications/OptiscalerManager.desktop`) and its icons under
+`~/.local/share/icons/hicolor/`. That is what puts it in the application menu with a
+proper taskbar icon — Wayland compositors take the icon from the desktop entry rather
+than from the window, so without it the taskbar can only show a placeholder. Delete
+those two paths to undo it.
 
 > **Why this is built in:** Avalonia has no gamepad backend on Linux, so the app reads
 > the controller itself (`/dev/input`, evdev) and translates it into the same

@@ -9,6 +9,7 @@
 // version. See the repository LICENSE for details.
 
 using Avalonia;
+using Avalonia.X11;
 using System;
 using System.IO;
 using System.Linq;
@@ -166,7 +167,10 @@ internal static class Program
         // HarfBuzz explicitly. UsePlatformDetect() wires both itself elsewhere.
         builder = underWayland
             ? builder.UseWayland().UseSkia().UseHarfBuzz()
-            : builder.UsePlatformDetect();
+            : builder.UsePlatformDetect()
+                     // Must match StartupWMClass in the installed desktop entry, or
+                     // X11 desktops show a generic icon and a separate taskbar group.
+                     .With(new X11PlatformOptions { WmClass = "OptiscalerManager" });
 
         return builder
             .WithInterFont()

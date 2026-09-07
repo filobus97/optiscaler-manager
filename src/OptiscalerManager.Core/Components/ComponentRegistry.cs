@@ -44,8 +44,8 @@ public static class ComponentRegistry
     /// </summary>
     public static readonly IReadOnlyList<IniKeyChange> Fsr4EnableKeys = new[]
     {
-        new IniKeyChange("FSR", "UpscalerIndex", "0"),
         new IniKeyChange("FSR", "Fsr4Update", "true"),
+        new IniKeyChange("Upscalers", "Dx12Upscaler", "ffx / fsr31 (to match this release)"),
     };
 
     private static readonly IReadOnlyList<ComponentDefinition> _definitions = BuildDefinitions();
@@ -211,7 +211,12 @@ public static class ComponentRegistry
         var iniKeys = new List<IniKeyChange>
         {
             new IniKeyChange("FSR", "Fsr4Update", "true"),
-            new IniKeyChange("FSR", "UpscalerIndex", selectFsr4 ? "0" : "auto"),
+            // The exact code depends on the OptiScaler release (newer ones renamed
+            // "fsr31" to "ffx"), so it is read from the ini that ships with it.
+            new IniKeyChange("Upscalers", "Dx12Upscaler", selectFsr4 ? "ffx / fsr31 (to match this release)" : "auto"),
+            new IniKeyChange("Upscalers", "Dx11Upscaler", selectFsr4 ? "ffx_12 / fsr31_12 (to match this release)" : "auto"),
+            new IniKeyChange("Upscalers", "VulkanUpscaler", selectFsr4 ? "ffx_12 / fsr31_12 (to match this release)" : "auto"),
+            new IniKeyChange("FSR", "UpscalerIndex", "auto"),
         };
         if (forceInt8)
             iniKeys.Add(new IniKeyChange("FSR", "Fsr4ForceEnableInt8", "true"));
@@ -243,12 +248,12 @@ public static class ComponentRegistry
         {
             Id = ComponentIds.Fsr4Extras,
             DisplayName = "FSR 4 INT8 community build",
-            Description = "A community FSR 4.x INT8 upscaler build (amd_fidelityfx_upscaler_dx12.dll) from the OptiScaler-Extras repo, at a version you pick. No proprietary AMD binary is bundled.",
+            Description = "A community FSR 4.x INT8 upscaler build (amd_fidelityfx_upscaler_dx12.dll) from github.com/Agustinm28/OptiScaler-Extras (third-party, not the official OptiScaler project), at a version you pick. No proprietary AMD binary is bundled.",
             TargetFiles = new[] { "amd_fidelityfx_upscaler_dx12.dll" },
             IniKeys = new[]
             {
-                new IniKeyChange("FSR", "UpscalerIndex", "0"),
                 new IniKeyChange("FSR", "Fsr4Update", "true"),
+                new IniKeyChange("Upscalers", "Dx12Upscaler", "ffx / fsr31 (to match this release)"),
             },
             Requires = new[] { ComponentIds.OptiScaler },
         },
@@ -270,8 +275,8 @@ public static class ComponentRegistry
             },
             IniKeys = new[]
             {
-                new IniKeyChange("FSR", "UpscalerIndex", "0"),
                 new IniKeyChange("FSR", "Fsr4Update", "true"),
+                new IniKeyChange("Upscalers", "Dx12Upscaler", "ffx / fsr31 (to match this release)"),
             },
             Requires = new[] { ComponentIds.OptiScaler },
             IsBringYourOwn = true,

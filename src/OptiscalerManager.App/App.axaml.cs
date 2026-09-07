@@ -32,6 +32,9 @@ public partial class App : Application
 
             // The manual-component provider needs the active window for its file
             // picker, so it resolves it lazily through this accessor.
+            // Wayland gets the taskbar icon from the desktop entry, not from the window.
+            DesktopEntryService.EnsureInstalled();
+
             var manager = new ManagerService(new AvaloniaManualComponentProvider(MainWindowAccessor));
             desktop.MainWindow = new MainWindow(manager);
 

@@ -13,8 +13,10 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <RootNamespace>OptiscalerManager.App</RootNamespace>
     <AssemblyName>OptiscalerManager</AssemblyName>
-    <Version>0.11.2</Version>
+    <Version>0.12.0</Version>
     <Product>OptiScaler Manager</Product>
+    <!-- Windows executable icon (Explorer / taskbar before the window exists). -->
+    <ApplicationIcon>..\..\assets\icons\icon.ico</ApplicationIcon>
 
     <!-- Self-contained single-file publish (no trimming — matches the source app). -->
     <PublishSingleFile>true</PublishSingleFile>
@@ -26,7 +28,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <AvaloniaResource Include="assets\**" />
+    <!-- App icon. Embedded so the window can set it on every platform, and so the
+         Linux desktop entry can be installed without shipping loose files. -->
+    <AvaloniaResource Include="..\..\assets\icons\*.png" Link="Assets/%(Filename)%(Extension)" />
     <!-- Repo template read by ComponentManagementService.MergeReposFromTemplate to
          resolve where OptiScaler / Extras / etc. are downloaded from. Must sit next
          to the executable (and inside the single-file publish payload). -->

@@ -41,7 +41,7 @@ namespace OptiscalerManager.Core.Tests
             Assert.Contains("amd_fidelityfx_upscaler_dx12.dll", preview.Files);
             Assert.DoesNotContain("{injection}", preview.Files);
 
-            Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "UpscalerIndex" && k.Value == "0");
+            Assert.Contains(preview.IniKeys, k => k.Section == "Upscalers" && k.Key == "Dx12Upscaler");
             Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "Fsr4Update" && k.Value == "true");
             Assert.Empty(preview.Conflicts);
         }
@@ -66,7 +66,7 @@ namespace OptiscalerManager.Core.Tests
         {
             var preview = ComponentRegistry.BuildPreview(
                 new[] { ComponentIds.CustomMerged, ComponentIds.OptiScaler });
-            Assert.Single(preview.IniKeys, k => k.Section == "FSR" && k.Key == "UpscalerIndex");
+            Assert.Single(preview.IniKeys, k => k.Section == "Upscalers" && k.Key == "Dx12Upscaler");
         }
 
         [Fact]
@@ -97,7 +97,7 @@ namespace OptiscalerManager.Core.Tests
             Assert.DoesNotContain("amdxcffx64.dll", preview.Files);
             // Availability flags are forced regardless of backend.
             Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "Fsr4Update" && k.Value == "true");
-            Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "UpscalerIndex" && k.Value == "0");
+            Assert.Contains(preview.IniKeys, k => k.Section == "Upscalers" && k.Key == "Dx12Upscaler");
         }
 
         [Fact]
@@ -126,13 +126,22 @@ namespace OptiscalerManager.Core.Tests
         }
 
         [Theory]
-        [InlineData(true, "0")]
-        [InlineData(false, "auto")]
-        public void InstallPreview_SelectFsr4_DrivesUpscalerIndex(bool select, string expected)
+        [InlineData(true)]
+        [InlineData(false)]
+        public void InstallPreview_SelectFsr4_DrivesTheUpscalerChoice(bool select)
         {
+            // The preview must show the key that actually decides which upscaler runs.
+            // UpscalerIndex never did: its default is already 0, so the "0" the Manager
+            // used to write was indistinguishable from writing nothing.
             var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Int8Community, selectFsr4: select);
-            Assert.Single(preview.IniKeys, k => k.Section == "FSR" && k.Key == "UpscalerIndex");
-            Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "UpscalerIndex" && k.Value == expected);
+            var dx12 = Assert.Single(preview.IniKeys, k => k.Section == "Upscalers" && k.Key == "Dx12Upscaler");
+
+            if (select)
+                Assert.DoesNotContain("auto", dx12.Value);
+            else
+                Assert.Equal("auto", dx12.Value);
+
+            Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "UpscalerIndex" && k.Value == "auto");
         }
 
         [Fact]

@@ -63,6 +63,20 @@ public sealed class ManagerService
     /// Ensures the INT8 community version list is populated (best-effort network fetch),
     /// then returns it, falling back to any already-downloaded versions when offline.
     /// </summary>
+    /// <summary>
+    /// INT8 community builds with their upstream pre-release flag, so the picker can
+    /// say which ones their author has not marked stable.
+    /// </summary>
+    public async Task<IReadOnlyList<(string Version, bool IsPreRelease)>> GetInt8ReleasesAsync()
+    {
+        var versions = await GetInt8VersionsAsync();
+        var flags = _components.ExtrasAvailableReleases
+            .ToDictionary(r => r.Version, r => r.IsPreRelease, StringComparer.OrdinalIgnoreCase);
+        return versions
+            .Select(v => (Version: v, IsPreRelease: flags.TryGetValue(v, out var pre) && pre))
+            .ToList();
+    }
+
     public async Task<IReadOnlyList<string>> GetInt8VersionsAsync()
     {
         if (_components.ExtrasAvailableVersions.Count == 0)
@@ -371,8 +385,9 @@ public sealed class ManagerService
 
     /// <summary>
     /// Writes the (and only the) OptiScaler.ini keys the Manager is responsible for:
-    /// [FSR] Fsr4Update=true always, [FSR] UpscalerIndex = 0 (Manager selects FSR 4) or
-    /// auto (user selects in-game), the opt-in [FSR] Fsr4ForceEnableInt8 /
+    /// [FSR] Fsr4Update=true always, [Upscalers] Dx12/Dx11/VulkanUpscaler (the FSR
+    /// upscaler when the Manager selects FSR 4, auto when the user selects it in-game),
+    /// the opt-in [FSR] Fsr4ForceEnableInt8 /
     /// Fsr4EnableWatermark and [Spoofing] Dxgi toggles, and [Menu] ShortcutKey when a
     /// menu key is configured. Applied last, so it overrides anything the backend
     /// installers set. Off toggles leave the keys untouched (OptiScaler's auto behaviour).
@@ -381,7 +396,16 @@ public sealed class ManagerService
         bool forceInt8 = false, bool fsr4Watermark = false)
     {
         GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4Update", "true");
-        GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "UpscalerIndex", selectFsr4 ? "0" : "auto");
+
+        // Which upscaler runs at all. This is the setting that makes "select FSR 4"
+        // mean anything; the DX12 default is XeSS, and FSR keys are not read while it
+        // is running. Written after Fsr4Update so it wins over the backend installers.
+        GameInstallationService.SelectFsr4Upscaler(gameDir, selectFsr4);
+
+        // UpscalerIndex picks *which* FSR version the FSR upscaler uses, by position in
+        // a list the FidelityFX runtime reports. Its default is already 0, so the 0 that
+        // older Manager versions wrote here was a no-op; write auto to clear it.
+        GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "UpscalerIndex", "auto");
 
         if (forceInt8)
             GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4ForceEnableInt8", "true");

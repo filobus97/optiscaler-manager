@@ -19,6 +19,8 @@ using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using OptiscalerManager.Core.Models;
 
@@ -1931,12 +1933,11 @@ namespace OptiscalerManager.Core.Services
                     postInstallHash: ComputeSha256(destPath));
             }
 
-            // Engage FSR4 on non-RDNA4 GPUs:
-            //  - UpscalerIndex=0 selects the FSR 4.x backend on current OptiScaler builds
-            //  - Fsr4Update=true is the equivalent key on older (0.7.x) builds; unknown
-            //    keys are ignored by OptiScaler's ini parser, so setting both is safe.
-            ModifyOptiScalerIniKey(gameDir, "FSR", "UpscalerIndex", "0");
+            // Engage FSR4: Fsr4Update lets OptiScaler upgrade FSR 3.x to FSR 4, and
+            // [Upscalers] selects the FSR upscaler in the first place — without it the
+            // DX12 default is XeSS and none of the FSR keys are even read.
             ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4Update", "true");
+            SelectFsr4Upscaler(gameDir, true);
 
             if (isSdk)
             {
@@ -2094,6 +2095,7 @@ namespace OptiscalerManager.Core.Services
             {
                 ModifyOptiScalerIniKey(gameDir, "FSR", "UpscalerIndex", "auto");
                 ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4Update", "auto");
+                SelectFsr4Upscaler(gameDir, false);
             }
 
             if (manifest != null)
@@ -2117,6 +2119,99 @@ namespace OptiscalerManager.Core.Services
         /// file, the section, or the key as needed. Unlike ModifyOptiScalerIni (which
         /// only handles [General]), this is section-aware.
         /// </summary>
+        /// <summary>
+        /// The <c>[Upscalers]</c> codes that select the FSR 3.1/4 upscaler for each API.
+        /// </summary>
+        public sealed record Fsr4UpscalerCodes(string Dx12, string Dx11, string Vulkan);
+
+        // What each naming era calls the FSR 3.1/4 upscaler. Older OptiScaler releases
+        // use "fsr31"/"fsr31_12"; newer ones renamed these to "ffx"/"ffx_12".
+        private static readonly Fsr4UpscalerCodes LegacyCodes = new("fsr31", "fsr31_12", "fsr31_12");
+        private static readonly Fsr4UpscalerCodes ModernCodes = new("ffx", "ffx_12", "ffx_12");
+
+        /// <summary>
+        /// Works out which <c>[Upscalers]</c> codes this OptiScaler release understands.
+        ///
+        /// The names changed between releases: what used to be <c>fsr31</c> is now
+        /// <c>ffx</c>. This matters more than a cosmetic rename — on a release that
+        /// expects <c>ffx</c>, the value <c>fsr31</c> is not a DX12 option at all and
+        /// falls through to FSR 2.1.2, so guessing would silently downgrade the game.
+        ///
+        /// Every release documents its own valid codes in the comments above these keys,
+        /// so we read them from the ini that shipped with it instead of mapping version
+        /// numbers. Returns null when that cannot be determined, so callers can leave the
+        /// keys alone rather than risk writing one this build does not accept.
+        /// </summary>
+        public static Fsr4UpscalerCodes? DetectFsr4UpscalerCodes(string gameDir)
+        {
+            var iniPath = Path.Combine(gameDir, "OptiScaler.ini");
+            if (!File.Exists(iniPath)) return null;
+
+            try
+            {
+                var documented = new StringBuilder();
+                var inSection = false;
+
+                foreach (var raw in File.ReadAllLines(iniPath))
+                {
+                    var line = raw.Trim();
+                    if (line.StartsWith("["))
+                    {
+                        // Only the [Upscalers] comments describe these codes; "ffx"
+                        // appears elsewhere in the file for unrelated settings.
+                        inSection = line.Equals("[Upscalers]", StringComparison.OrdinalIgnoreCase);
+                        continue;
+                    }
+                    if (inSection && line.StartsWith(";"))
+                        documented.Append(line).Append('\n');
+                }
+
+                var text = documented.ToString();
+                if (Regex.IsMatch(text, @"\bffx(_12)?\b", RegexOptions.IgnoreCase)) return ModernCodes;
+                if (Regex.IsMatch(text, @"\bfsr31(_12)?\b", RegexOptions.IgnoreCase)) return LegacyCodes;
+            }
+            catch (Exception ex)
+            {
+                Log.Write($"[FSR4] Could not read the upscaler codes from OptiScaler.ini: {ex.Message}");
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Selects (or stops forcing) the FSR 3.1/4 upscaler in <c>[Upscalers]</c>.
+        ///
+        /// This is the key that actually decides which upscaler runs. Without it the
+        /// DX12 default is XeSS, and every FSR setting is then configuring an upscaler
+        /// that is not running — which is exactly what made "select FSR 4 for me" look
+        /// like it did nothing.
+        /// </summary>
+        public static void SelectFsr4Upscaler(string gameDir, bool select)
+        {
+            if (!select)
+            {
+                // Hand the choice back to OptiScaler rather than leaving a stale value
+                // behind from an earlier install.
+                ModifyOptiScalerIniKey(gameDir, "Upscalers", "Dx12Upscaler", "auto");
+                ModifyOptiScalerIniKey(gameDir, "Upscalers", "Dx11Upscaler", "auto");
+                ModifyOptiScalerIniKey(gameDir, "Upscalers", "VulkanUpscaler", "auto");
+                return;
+            }
+
+            var codes = DetectFsr4UpscalerCodes(gameDir);
+            if (codes is null)
+            {
+                Log.Write("[FSR4] OptiScaler.ini does not document its upscaler codes — leaving " +
+                          "[Upscalers] alone so an unsupported value cannot downgrade the upscaler.");
+                return;
+            }
+
+            ModifyOptiScalerIniKey(gameDir, "Upscalers", "Dx12Upscaler", codes.Dx12);
+            ModifyOptiScalerIniKey(gameDir, "Upscalers", "Dx11Upscaler", codes.Dx11);
+            ModifyOptiScalerIniKey(gameDir, "Upscalers", "VulkanUpscaler", codes.Vulkan);
+            Log.Write($"[FSR4] Selected the FSR 4 upscaler ([Upscalers] Dx12Upscaler={codes.Dx12}).");
+        }
+
         public static void ModifyOptiScalerIniKey(string gameDir, string section, string key, string value)
         {
             var iniPath = Path.Combine(gameDir, "OptiScaler.ini");

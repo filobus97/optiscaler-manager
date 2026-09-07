@@ -231,6 +231,8 @@ namespace OptiscalerManager.Core.Models
         public string Version { get; set; } = string.Empty;
         public string? DownloadUrl { get; set; }
         public bool IsLatest { get; set; }
+        /// <summary>Marked pre-release upstream — surfaced so it is not picked unknowingly.</summary>
+        public bool IsPreRelease { get; set; }
     }
 
     /// <summary>

@@ -97,5 +97,124 @@ namespace OptiscalerManager.Core.Tests
             Assert.Equal("99", ValueOf("Other", "UpscalerIndex"));
             Assert.Equal("0", ValueOf("FSR", "UpscalerIndex"));
         }
+        // ── [Upscalers] selection: the key that actually decides which upscaler runs ──
+
+        // Real comment blocks from the two OptiScaler naming eras.
+        private const string LegacyUpscalersSection = @"[Upscalers]
+; Select Upscaler for Dx11 games
+; fsr22 (native DX11), fsr31 (native DX11), xess (native DX11, Arc only), xess_12 (dx11on12), fsr21_12 (dx11on12), fsr22_12 (dx11on12), fsr31_12 (dx11on12, FSR4), dlss - Default (auto) is fsr22
+Dx11Upscaler=auto
+
+; Select Upscaler for Dx12 games
+; xess, fsr21, fsr22, fsr31 (also for FSR4), dlss - Default (auto) is xess
+Dx12Upscaler=auto
+
+; Select Upscaler for Vulkan games
+; fsr21 (native VK), fsr22 (native VK), fsr31 (native VK), xess (native VK), fsr21_12 (VKon12), fsr31_12 (VKon12, FSR4), dlss - Default (auto) is fsr22
+VulkanUpscaler=auto
+
+[FSR]
+Fsr4Update=auto
+";
+
+        private const string ModernUpscalersSection = @"[Upscalers]
+; Select Upscaler for Dx11 games
+; fsr22 (native DX11), fsr31 (native DX11), xess (native DX11, Arc only), xess_12 (dx11on12), fsr21_12 (dx11on12), fsr22_12 (dx11on12), ffx_12 (FSR 2.3; 3.1; 4.x), dlss - Default (auto) is fsr22
+Dx11Upscaler=auto
+
+; Select Upscaler for Dx12 games
+; xess, fsr21, fsr22, ffx (FSR 2.3; 3.1; 4.x), dlss
+; Default (auto) is DLSS when capable gpu, FSR4 when capable gpu, XeSS otherwise
+Dx12Upscaler=auto
+
+; Select Upscaler for Vulkan games
+; fsr21 (native VK), fsr22 (native VK), ffx (native FSR 2.3; 3.1), xess (native VK), fsr21_12 (VKon12), ffx_12 (FSR 2.3; 3.1; 4.x), dlss - Default (auto) is fsr22
+VulkanUpscaler=auto
+
+[FSR]
+Fsr4Update=auto
+";
+
+        [Fact]
+        public void DetectsLegacyUpscalerCodes()
+        {
+            File.WriteAllText(IniPath, LegacyUpscalersSection);
+            var codes = GameInstallationService.DetectFsr4UpscalerCodes(_dir);
+            Assert.NotNull(codes);
+            Assert.Equal("fsr31", codes!.Dx12);
+            Assert.Equal("fsr31_12", codes.Dx11);
+            Assert.Equal("fsr31_12", codes.Vulkan);
+        }
+
+        [Fact]
+        public void DetectsModernUpscalerCodes()
+        {
+            File.WriteAllText(IniPath, ModernUpscalersSection);
+            var codes = GameInstallationService.DetectFsr4UpscalerCodes(_dir);
+            Assert.NotNull(codes);
+            Assert.Equal("ffx", codes!.Dx12);
+            Assert.Equal("ffx_12", codes.Dx11);
+            Assert.Equal("ffx_12", codes.Vulkan);
+        }
+
+        [Fact]
+        public void SelectingFsr4_WritesTheUpscalerThatActuallyRuns()
+        {
+            // The whole bug: without this key the DX12 default is XeSS, so every FSR
+            // setting configures an upscaler that never runs.
+            File.WriteAllText(IniPath, LegacyUpscalersSection);
+            GameInstallationService.SelectFsr4Upscaler(_dir, true);
+            Assert.Equal("fsr31", ValueOf("Upscalers", "Dx12Upscaler"));
+        }
+
+        [Fact]
+        public void SelectingFsr4_NeverWritesALegacyCodeToAModernRelease()
+        {
+            // "fsr31" is not a DX12 option on modern builds — it falls through to
+            // FSR 2.1.2, so writing it would silently downgrade the game.
+            File.WriteAllText(IniPath, ModernUpscalersSection);
+            GameInstallationService.SelectFsr4Upscaler(_dir, true);
+            Assert.Equal("ffx", ValueOf("Upscalers", "Dx12Upscaler"));
+        }
+
+        [Fact]
+        public void UndocumentedIni_LeavesUpscalerAlone_RatherThanGuessing()
+        {
+            // Writing a code this build does not accept is worse than doing nothing.
+            File.WriteAllText(IniPath, "[Upscalers]\nDx12Upscaler=auto\n");
+            GameInstallationService.SelectFsr4Upscaler(_dir, true);
+            Assert.Equal("auto", ValueOf("Upscalers", "Dx12Upscaler"));
+        }
+
+        [Fact]
+        public void NotSelectingFsr4_HandsTheChoiceBack()
+        {
+            File.WriteAllText(IniPath, LegacyUpscalersSection);
+            GameInstallationService.SelectFsr4Upscaler(_dir, true);
+            Assert.Equal("fsr31", ValueOf("Upscalers", "Dx12Upscaler"));
+
+            // Reinstalling with the box unticked must not leave the forced value behind.
+            GameInstallationService.SelectFsr4Upscaler(_dir, false);
+            Assert.Equal("auto", ValueOf("Upscalers", "Dx12Upscaler"));
+            Assert.Equal("auto", ValueOf("Upscalers", "Dx11Upscaler"));
+            Assert.Equal("auto", ValueOf("Upscalers", "VulkanUpscaler"));
+        }
+
+        [Fact]
+        public void OnlyTheUpscalersSectionDecidesTheCodes()
+        {
+            // "ffx" appears elsewhere in a real ini (EnableFfxInputs, FfxDx12Path...);
+            // reading those would misdetect an old release as a new one.
+            File.WriteAllText(IniPath, LegacyUpscalersSection + @"
+[Inputs]
+; OptiScaler will hook FidelityFX (amd_fidelityfx_dx12.dll) API Inputs
+EnableFfxInputs=auto
+; ffx ffx_12
+UseFfxInputs=auto
+");
+            var codes = GameInstallationService.DetectFsr4UpscalerCodes(_dir);
+            Assert.Equal("fsr31", codes!.Dx12);
+        }
+
     }
 }

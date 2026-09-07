@@ -5,6 +5,7 @@
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource BrBgBase}"
         XYFocus.NavigationModes="Keyboard,Gamepad"
+        Icon="/Assets/icon-256.png"
         Title="Settings">
 
   <Grid RowDefinitions="Auto,*,Auto" Margin="20">

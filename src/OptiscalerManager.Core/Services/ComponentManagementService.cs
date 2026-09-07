@@ -99,6 +99,13 @@ namespace OptiscalerManager.Core.Services
         /// <summary>The latest (first) Extras version tag, or null if none fetched yet.</summary>
         public string? LatestExtrasVersion => _cachedLatestExtrasVersion;
 
+        /// <summary>
+        /// Available Extras releases with their upstream pre-release flag, so the UI can
+        /// mark builds that their author has not declared stable.
+        /// </summary>
+        public System.Collections.Generic.List<ExtrasReleaseEntry> ExtrasAvailableReleases
+            => _extrasCache.Releases;
+
         public System.Collections.Generic.List<string> ExtrasDownloadedVersions
             => GetDownloadedExtrasVersions();
 
@@ -1076,6 +1083,8 @@ namespace OptiscalerManager.Core.Services
                         Version = version,
                         DownloadUrl = downloadUrl,
                         IsLatest = !latestMarked,
+                        IsPreRelease = element.TryGetProperty("prerelease", out var pre)
+                                       && pre.ValueKind == JsonValueKind.True,
                     });
                     latestMarked = true;
                 }
@@ -1199,6 +1208,19 @@ namespace OptiscalerManager.Core.Services
 
             if (!File.Exists(dllPath))
                 throw new Exception("amd_fidelityfx_upscaler_dx12.dll not found inside the downloaded archive.");
+
+            // Same check a DLL you import by hand gets. A download is not more
+            // trustworthy than a local file, so do not let it skip validation: a
+            // truncated transfer or a wrong-architecture build should fail here rather
+            // than next to the game's exe.
+            var pe = PeFileInspector.Inspect(dllPath);
+            if (!pe.IsValidPe || !pe.Is64Bit)
+            {
+                try { File.Delete(dllPath); } catch { }
+                throw new Exception(
+                    $"The downloaded amd_fidelityfx_upscaler_dx12.dll is not a valid 64-bit DLL " +
+                    $"(from {downloadUrl}). Nothing was installed.");
+            }
 
             return dllPath;
         }
