@@ -2584,7 +2584,7 @@ namespace OptiscalerManager.Core.Services
         // ── Unified custom-DLL library (bring your own, one or more) ─────────────
         //
         // Flat per-file store: Cache/CustomDlls/<name>.dll + <name>.dll.json.
-        // At install time these are overlaid on top of the latest AMD signedbin set:
+        // At install time these are overlaid on top of the OptiScaler install:
         // same-name entries overwrite the AMD/OptiScaler file, unknown names (e.g.
         // amdxcffx64.dll) are added alongside. Nothing here is ever downloaded — the
         // user supplies files they already possess.

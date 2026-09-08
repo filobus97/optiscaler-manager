@@ -29,7 +29,7 @@ public static class ComponentIds
     public const string OptiPatcher = "optipatcher";
     /// <summary>FSR 4.x INT8 community upscaler build from the OptiScaler "Extras" repo.</summary>
     public const string Fsr4Extras = "fsr4-extras";
-    /// <summary>User-supplied custom DLLs merged on top of the latest AMD signedbin set.</summary>
+    /// <summary>User-supplied custom DLLs overlaid on top of the OptiScaler install.</summary>
     public const string CustomMerged = "custom-merged";
 }
 

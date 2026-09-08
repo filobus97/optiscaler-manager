@@ -164,6 +164,21 @@ namespace OptiscalerManager.Core.Tests
                 Assert.Single(Analyze().DetectedComponents).Source);
         }
 
+        // ── Version labels ───────────────────────────────────────────────────────
+
+        [Theory]
+        [InlineData("3.7.0.0", "3.7")]
+        [InlineData("4.1.1.0", "4.1.1")]
+        [InlineData("1.3.0.0", "1.3")]
+        [InlineData("1.0.0.0", "1.0")]
+        [InlineData("3.1.5", "3.1.5")]
+        // The one that matters: trimming zero characters rather than whole groups
+        // turned 3.7.10 into 3.7.1 — a real version, and the wrong one.
+        [InlineData("3.7.10.0", "3.7.10")]
+        [InlineData("10.0.0.0", "10.0")]
+        public void ShortensVersionsWithoutChangingThem(string raw, string expected)
+            => Assert.Equal(expected, VersionLabel.Short(raw));
+
         // ── Effective configuration ──────────────────────────────────────────────
 
         private void WriteIni(string body) => File.WriteAllText(Path.Combine(_dir, "OptiScaler.ini"), body);

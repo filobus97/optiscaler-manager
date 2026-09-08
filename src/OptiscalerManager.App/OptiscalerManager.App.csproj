@@ -13,7 +13,7 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <RootNamespace>OptiscalerManager.App</RootNamespace>
     <AssemblyName>OptiscalerManager</AssemblyName>
-    <Version>0.13.0</Version>
+    <Version>0.13.1</Version>
     <Product>OptiScaler Manager</Product>
     <!-- Windows executable icon (Explorer / taskbar before the window exists). -->
     <ApplicationIcon>..\..\assets\icons\icon.ico</ApplicationIcon>

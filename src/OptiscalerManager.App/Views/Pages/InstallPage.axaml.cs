@@ -96,7 +96,7 @@ public partial class InstallPage : UserControl, IHostedPage
         customMerged.IsCheckedChanged += OnOptionChanged;
         def.IsCheckedChanged += OnOptionChanged;
 
-        // Step 2 radios drive UpscalerIndex in the preview.
+        // Step 2 radios drive the [Upscalers] selection in the preview.
         this.FindControl<RadioButton>("RbSelectNow")!.IsCheckedChanged += OnOptionChanged;
         this.FindControl<RadioButton>("RbSelectInGame")!.IsCheckedChanged += OnOptionChanged;
 

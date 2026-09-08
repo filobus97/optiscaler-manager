@@ -34,7 +34,7 @@
             <TextBlock Text="Custom DLLs (bring your own)" FontWeight="SemiBold"
                        Foreground="{StaticResource BrTextPrimary}"/>
             <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                       Text="Import one or more DLLs you already possess (e.g. amdxcffx64.dll, a custom amd_fidelityfx_upscaler_dx12.dll build). At install time they are merged on top of the latest AMD signedbin set: same names overwrite AMD's file, new names are added alongside. Only 64-bit DLLs are accepted; nothing is ever downloaded for you."/>
+                       Text="Import one or more DLLs you already possess (e.g. amdxcffx64.dll, a custom amd_fidelityfx_upscaler_dx12.dll build). At install time they are overlaid on the OptiScaler install: names OptiScaler ships are swapped in place, new names are added alongside. Only 64-bit DLLs are accepted; nothing is ever downloaded for you."/>
             <StackPanel Orientation="Horizontal" Spacing="10">
               <Button Content="Import DLL(s)…" Click="OnImportDlls"
                       ToolTip.Tip="Pick one or more local .dll files (multi-select). Each is validated as a 64-bit PE."/>
@@ -53,7 +53,7 @@
             <TextBlock Text="Controller" FontWeight="SemiBold"
                        Foreground="{StaticResource BrTextPrimary}"/>
             <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                       Text="Navigate the whole app with a game controller: D-pad or left stick to move, right stick to scroll, A to confirm, B to go back, shoulders to jump between controls. In the game list, up/down picks the game and left/right reaches its Install and Revert buttons. Works on the desktop and in Steam Gaming Mode."/>
+                       Text="Navigate the whole app with a game controller: D-pad or left stick to move, right stick to scroll, A to confirm, B to go back, shoulders to jump between controls. In the game list, up/down picks the game and left/right reaches its Install and Details buttons. Works on the desktop and in Steam Gaming Mode."/>
             <CheckBox Name="GamepadCheck" Content="Enable controller navigation"
                       Foreground="{StaticResource BrTextPrimary}" FontSize="12"
                       ToolTip.Tip="Reads the controller directly. If something else (Steam Input) is already mapping it to the keyboard, that is detected and navigation is left to it automatically — turn this off only if you want the controller ignored entirely. Takes effect on the next start."/>

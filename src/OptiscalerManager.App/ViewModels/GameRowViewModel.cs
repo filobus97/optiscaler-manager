@@ -1,6 +1,7 @@
 // OptiScaler Manager - GPL-3.0-or-later. See repository LICENSE.
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using OptiscalerManager.Core.Models;
 
 namespace OptiscalerManager.App.ViewModels;
@@ -82,9 +83,7 @@ public sealed class GameRowViewModel : ViewModelBase
         void Add(string label, string? version)
         {
             if (version is null) return;
-            // Trailing ".0" groups are noise at a glance ("3.7.10.0" -> "3.7.10").
-            var trimmed = version.TrimEnd('.', '0');
-            badges.Add(string.IsNullOrEmpty(trimmed) ? label : $"{label} {trimmed}");
+            badges.Add($"{label} {VersionLabel.Short(version)}".TrimEnd());
         }
 
         Add("DLSS", Game.DlssVersion);

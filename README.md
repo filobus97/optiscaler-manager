@@ -15,6 +15,32 @@ action per game, advanced options tucked away.
 > **Primary platform: Linux.** Windows is fully supported as the secondary
 > target; macOS at least runs the UI. Windows-only install paths are guarded.
 
+![The game list](docs/screenshots/games.png)
+
+<sub>Screenshots show a sample game library.</sub>
+
+---
+
+## Get it
+
+Grab the archive for your platform from the
+[latest release](https://github.com/filobus97/optiscaler-manager/releases/latest),
+unpack it anywhere, and run it. It is a single self-contained binary — no runtime to
+install, nothing written outside the folder you unpacked and your config directory.
+
+```bash
+# Linux
+unzip OptiscalerManager-<version>-linux-x64.zip -d ~/Apps/OptiscalerManager
+cd ~/Apps/OptiscalerManager && chmod +x OptiscalerManager && ./OptiscalerManager
+```
+
+On Windows, unpack and run `OptiscalerManager.exe`. On a **Steam Deck**, add it as a
+non-Steam game — it is fully usable from Gaming Mode with a controller, updates
+included. See [Couch / Steam Deck use](#couch--steam-deck-bazzite-use).
+
+It updates itself from then on: see [Updating in place](#updating-in-place).
+Building from source is in [Building & running](#building--running).
+
 ---
 
 ## What it is (and what it deliberately isn't)
@@ -39,17 +65,15 @@ action per game, advanced options tucked away.
     - *Custom DLLs* — **your imported DLLs overlaid on the OptiScaler install**: names
       OptiScaler ships (e.g. the upscaler) are swapped in place, unknown names (e.g.
       `amdxcffx64.dll`) are **added alongside**. Fully offline. Everything is
-      manifest-tracked, so *Revert* removes it all.
+      manifest-tracked, so *Remove OptiScaler* takes it all back out.
 
   **Step 2 — FSR 4 selection:** the Manager **always forces the flag that makes FSR 4
   *available*** (`[FSR] Fsr4Update=true`); you then choose whether it also **selects**
   FSR 4 for you or leaves that to OptiScaler so you pick it in the in-game overlay.
   Selecting it writes `[Upscalers] Dx12Upscaler` (plus the DX11/Vulkan equivalents) —
-  the setting that decides *which upscaler runs at all*. This matters: the DX12 default
-  is XeSS, and while XeSS is running none of the FSR keys are even read. The exact value
-  differs by OptiScaler release (newer ones renamed `fsr31` to `ffx`), so it is read from
-  the ini that ships with the release you install rather than hardcoded — writing the
-  wrong one would silently fall back to FSR 2.1.2. Two optional toggles cover FSR 4.1.1's new GPU validation:
+  the setting that decides *which upscaler runs at all*, because the DX12 default is
+  XeSS ([how that value is chosen](#choosing-the-upscaler-key)). Two optional toggles
+  cover FSR 4.1.1's new GPU validation:
   **Force INT8 on unsupported GPUs** (`Fsr4ForceEnableInt8=true`, for RDNA2 / mobile
   RDNA3 / Intel / Nvidia — it can't help GPUs without INT8 support) and **Show the FSR4
   watermark** (`Fsr4EnableWatermark=true`) to verify on screen whether you're really
@@ -81,6 +105,13 @@ action per game, advanced options tucked away.
   set to do (which upscaler will really run, whether FSR 4 is on, frame generation,
   the Nvidia override, the overlay key). **Removing OptiScaler lives here**, not in
   the game list, so it is harder to hit by accident with a controller.
+
+  ![A game's details page](docs/screenshots/details.png)
+
+  ...and, further down the same page, what OptiScaler is actually set to do:
+
+  ![What OptiScaler is set to do](docs/screenshots/details-optiscaler.png)
+
 - **One window, always.** Settings, the install screen and the details page replace
   the game list in place rather than opening windows of their own — gamescope (Steam's
   Gaming Mode) composites a single application surface, and one window also means the
@@ -120,6 +151,21 @@ Both of these are *derived* from that registry, with no bespoke logic:
   automatically recognised as incompatible.
 - **The "What will happen" preview** — the file and ini-key lists you see are the
   exact data the installer acts on.
+
+### Choosing the upscaler key
+
+`[Upscalers] Dx12Upscaler` decides which upscaler actually runs, and its default is
+XeSS — while XeSS is running, none of the FSR settings are even read. The value that
+selects FSR is **not the same across OptiScaler releases**: newer ones renamed `fsr31`
+to `ffx`, and on those builds `fsr31` is not a DX12 option at all — it falls through to
+FSR 2.1.2. Since the app can install older releases too, the codes are read from the
+comments in the `OptiScaler.ini` that ships with the release being installed, and left
+alone entirely when they cannot be determined. Guessing would silently downgrade the
+upscaler.
+
+(`[FSR] UpscalerIndex`, which older versions of this app wrote, is *not* that switch:
+it picks which FSR version the FSR upscaler uses, its default is already `0`, and it is
+only read from inside the FSR upscaler.)
 
 The details page follows the same idea: what each upscaling file *is* lives in an
 [upscaler catalogue](src/OptiscalerManager.Core/Components/UpscalerCatalog.cs), so
@@ -185,19 +231,23 @@ Open **Settings** to import:
   per install. fakenvapi needs no import: it is downloaded from the
   optiscaler/fakenvapi releases when selected.
 - **`OptiScaler.ini` profiles.** Import any `OptiScaler.ini`, tag it with a name,
-  and it becomes selectable in the Install dialog. Collect as many as you like;
+  and it becomes selectable on the Install screen. Collect as many as you like;
   delete them from Settings.
 - **Overlay / menu key.** OptiScaler's in-game overlay opens with **Insert** by
   default, but not every keyboard has that key. Pick another (Home, End, F1–F12, …)
   in **Settings** and it is forced as `[Menu] ShortcutKey` on **every** install,
   including the default `.ini`.
 
-When you click **Install OptiScaler**, the dialog lets you pick the backend
+![Settings](docs/screenshots/settings.png)
+
+When you click **Install OptiScaler**, the screen lets you pick the backend
 (OptiScaler default / INT8 community build / custom DLLs) and which `.ini`
 profile to write. The Manager always sets `[FSR] Fsr4Update = true` and the
 `[Upscalers]` selection per your Step-2 choice (these win over the chosen profile,
 matching what is written to disk). You always see the exact file and ini changes
 in the live preview first.
+
+![The install screen](docs/screenshots/install.png)
 
 ## Updating in place
 

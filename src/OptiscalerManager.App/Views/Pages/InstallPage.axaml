@@ -39,7 +39,7 @@
 
             <RadioButton Name="RbCustomMerged" GroupName="Fsr4" Content="Custom DLLs"
                          Foreground="{StaticResource BrTextPrimary}"
-                         ToolTip.Tip="Your imported custom DLLs overlaid on the OptiScaler install: names OptiScaler ships (e.g. the upscaler) are swapped in place, unknown names (e.g. amdxcffx64.dll) are added alongside. Import your DLLs in Settings; Revert removes everything. Note: OptiScaler can only hook FSR binaries it has patterns for — a mismatched upscaler build silently disables FSR 4."/>
+                         ToolTip.Tip="Your imported custom DLLs overlaid on the OptiScaler install: names OptiScaler ships (e.g. the upscaler) are swapped in place, unknown names (e.g. amdxcffx64.dll) are added alongside. Import your DLLs in Settings; Remove OptiScaler (on the game's details page) removes everything. Note: OptiScaler can only hook FSR binaries it has patterns for — a mismatched upscaler build silently disables FSR 4."/>
             <RadioButton Name="RbDefault" GroupName="Fsr4" Content="OptiScaler default (recommended)"
                          Foreground="{StaticResource BrTextPrimary}"
                          ToolTip.Tip="Install OptiScaler exactly as its release ships it — it already bundles the newest FSR upscaler that release can hook (4.1.1 since 0.9.4), so this alone enables FSR 4. No extra downloads or swaps."/>
@@ -54,12 +54,12 @@
           <StackPanel Spacing="6">
             <TextBlock Text="FSR 4 is always made available (Fsr4Update=true). This only decides whether it is pre-selected."
                        FontSize="11" Foreground="{StaticResource BrTextSecondary}" TextWrapping="Wrap"/>
-            <RadioButton Name="RbSelectNow" GroupName="Fsr4Select" Content="Select FSR 4 for me now (UpscalerIndex=0)"
+            <RadioButton Name="RbSelectNow" GroupName="Fsr4Select" Content="Select FSR 4 for me now"
                          Foreground="{StaticResource BrTextPrimary}" IsChecked="True"
-                         ToolTip.Tip="OptiScaler Manager sets [FSR] UpscalerIndex=0 so FSR 4 is active immediately."/>
-            <RadioButton Name="RbSelectInGame" GroupName="Fsr4Select" Content="I'll select it in-game (UpscalerIndex=auto)"
+                         ToolTip.Tip="Sets [Upscalers] Dx12Upscaler (and the DX11/Vulkan equivalents) to the FSR upscaler, so FSR 4 is active immediately. Without this the DX12 default is XeSS, and the FSR settings are never read."/>
+            <RadioButton Name="RbSelectInGame" GroupName="Fsr4Select" Content="I'll select it in-game"
                          Foreground="{StaticResource BrTextPrimary}"
-                         ToolTip.Tip="Leaves [FSR] UpscalerIndex=auto so you can choose the upscaler from OptiScaler's in-game overlay."/>
+                         ToolTip.Tip="Leaves [Upscalers] on auto so OptiScaler picks, and you choose the upscaler from its in-game overlay."/>
             <CheckBox Name="ChkForceInt8" Content="Force INT8 model on unsupported GPUs (Fsr4ForceEnableInt8)"
                       Foreground="{StaticResource BrTextPrimary}" FontSize="12"
                       ToolTip.Tip="FSR 4.1.1 officially supports only RDNA4 (FP8) and desktop RDNA3 (INT8); other GPUs silently fall back to FSR 3. This forces the SDK upscaler's INT8 capability check to pass on RDNA2 / mobile RDNA3 / Intel / Nvidia. It cannot make GPUs without INT8 support work, and RDNA2 Windows users are still recommended the INT8 community 4.0.2c build."/>
