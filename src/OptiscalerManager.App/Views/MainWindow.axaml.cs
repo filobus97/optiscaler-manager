@@ -10,6 +10,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using OptiscalerManager.App.Services;
+using OptiscalerManager.App.Views.Pages;
 using OptiscalerManager.App.ViewModels;
 using OptiscalerManager.Core.Services;
 
@@ -34,6 +35,9 @@ public partial class MainWindow : Window
         // would otherwise swallow the arrows we need for moving across a row.
         list.AddHandler(KeyDownEvent, OnGamesListKeyDown, RoutingStrategies.Tunnel);
         list.GotFocus += OnGamesListGotFocus;
+
+        // Bubbling, so inner controls get first refusal on Esc.
+        AddHandler(KeyDownEvent, OnWindowKeyDown);
     }
 
     public MainWindow(ManagerService manager) : this()
@@ -182,9 +186,107 @@ public partial class MainWindow : Window
 
     private async void OnSettingsClick(object? sender, RoutedEventArgs e)
     {
-        var win = new SettingsWindow(_manager);
-        await win.ShowDialog(this);
+        await ShowPageAsync(new SettingsPage(_manager));
         RefreshImportSummary();
+    }
+
+    private async void OnDetailsClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control { DataContext: GameRowViewModel row }) return;
+        await ShowGameDetailsAsync(row);
+    }
+
+    /// <summary>
+    /// Opens a game's details, then acts on whatever the user chose there. Reading the
+    /// outcome after the page closes keeps the install and revert flows exactly as they
+    /// were, instead of re-entering them from inside the page.
+    /// </summary>
+    private async Task ShowGameDetailsAsync(GameRowViewModel row)
+    {
+        var page = new GameDetailsPage(_manager, row);
+        await ShowPageAsync(page);
+
+        switch (page.Outcome)
+        {
+            case GameDetailsPage.DetailsOutcome.Install:
+                await InstallForRowAsync(row);
+                break;
+            case GameDetailsPage.DetailsOutcome.Revert:
+                await RevertRowAsync(row);
+                break;
+        }
+    }
+
+    // ── Page host ───────────────────────────────────────────────────────────────
+    // Pages replace the game list inside this window rather than opening windows of
+    // their own: gamescope (Steam's Gaming Mode) composites a single application
+    // surface, and one window also means the controller never has to guess where
+    // input should go.
+
+    private TaskCompletionSource<bool>? _pageResult;
+
+    /// <summary>True while a page is covering the game list.</summary>
+    private bool PageIsOpen => _pageResult is not null;
+
+    private Task<bool> ShowPageAsync(IHostedPage page)
+    {
+        var host = this.FindControl<ContentControl>("PageContent");
+        var pageView = this.FindControl<Grid>("PageView");
+        var homeView = this.FindControl<Grid>("HomeView");
+        var title = this.FindControl<TextBlock>("PageTitleText");
+        if (host is null || pageView is null || homeView is null) return Task.FromResult(false);
+
+        _pageResult = new TaskCompletionSource<bool>();
+        page.RequestClose = ClosePage;
+
+        if (title is not null) title.Text = page.Title;
+        host.Content = page;
+        homeView.IsVisible = false;
+        pageView.IsVisible = true;
+
+        // After layout, so the page's controls exist to receive focus.
+        Dispatcher.UIThread.Post(page.FocusFirst, DispatcherPriority.Loaded);
+        return _pageResult.Task;
+    }
+
+    private void ClosePage(bool result)
+    {
+        if (_pageResult is not { } pending) return;
+        _pageResult = null;
+
+        var host = this.FindControl<ContentControl>("PageContent");
+        if (host is not null) host.Content = null;
+        this.FindControl<Grid>("PageView")!.IsVisible = false;
+        this.FindControl<Grid>("HomeView")!.IsVisible = true;
+
+        RestoreHomeFocus();
+        pending.TrySetResult(result);
+    }
+
+    private void OnBackClick(object? sender, RoutedEventArgs e) => ClosePage(false);
+
+    /// <summary>
+    /// Esc (and B on a controller) leaves the page. Handled on the way *up* so a
+    /// control that wants Esc for itself — an open dropdown, say — still gets it first.
+    /// </summary>
+    private void OnWindowKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Handled || e.Key != Key.Escape || !PageIsOpen) return;
+        e.Handled = true;
+        ClosePage(false);
+    }
+
+    /// <summary>Puts focus back on the game the user came from.</summary>
+    private void RestoreHomeFocus()
+    {
+        var list = this.FindControl<ListBox>("GamesList");
+        if (list is null || list.ItemCount == 0)
+        {
+            this.FindControl<Button>("SettingsButton")?.Focus(NavigationMethod.Directional);
+            return;
+        }
+        if (list.SelectedIndex < 0) list.SelectedIndex = 0;
+        Dispatcher.UIThread.Post(() => FocusRowCell(list, list.SelectedIndex, 0), DispatcherPriority.Loaded);
     }
 
     // Each game row is a three-cell grid: the game card (0), Install (1), Revert (2).
@@ -294,8 +396,8 @@ public partial class MainWindow : Window
         if (!_vm.IsIdle || !row.IsIdle) return;   // a scan or another install is running
 
         // Configuration + transparent preview first — nothing is written until confirm.
-        var dialog = new InstallOptiScalerDialog(_manager, row.Game);
-        var confirmed = await dialog.ShowDialogFor(this);
+        var dialog = new InstallPage(_manager, row.Game) { TitleFor = row.Game.Name };
+        var confirmed = await ShowPageAsync(dialog);
         if (!confirmed) return;
 
         _vm.IsBusy = true;
@@ -328,10 +430,10 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void OnRevertClick(object? sender, RoutedEventArgs e)
+    /// <summary>Removes OptiScaler from a game. Reached from the game's details page.</summary>
+    private async Task RevertRowAsync(GameRowViewModel row)
     {
-        if (sender is not Control { DataContext: GameRowViewModel row }) return;
-        if (!_vm.IsIdle || !row.IsIdle) return;   // a scan or another install is running
+        if (!_vm.IsIdle || !row.IsIdle) return;
 
         // Give clear feedback instead of silently doing nothing when there is no install.
         if (!_manager.HasInstall(row.Game))
@@ -361,4 +463,5 @@ public partial class MainWindow : Window
             _vm.IsBusy = false;
         }
     }
+
 }

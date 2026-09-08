@@ -165,7 +165,7 @@ public sealed class GamepadNavigator : IDisposable
             // Nothing is focused: either the screen just opened, or the control that had
             // focus was disabled mid-action (pressing Rescan disables Rescan). Place
             // focus and stop there — a press must never activate whatever it happens to
-            // land on, or a stray Enter here would open the install dialog.
+            // land on, or a stray Enter here would start an install.
             SeedFocus(window);
             return;
         }

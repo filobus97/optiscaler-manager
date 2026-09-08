@@ -27,7 +27,10 @@
     </Style>
   </Window.Styles>
 
-  <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" Margin="20">
+  <Panel>
+  <!-- Home: the game list. Pages (details, settings, install) replace it in place
+       rather than opening windows — see IHostedPage. -->
+  <Grid Name="HomeView" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" Margin="20">
 
     <!-- Header -->
     <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto">
@@ -83,7 +86,7 @@
             CornerRadius="{StaticResource RadiusMedium}"
             Background="{StaticResource BrBgSurface}"
             BorderThickness="1" BorderBrush="{StaticResource BrBorderSubtle}"
-            ToolTip.Tip="Custom FSR components and OptiScaler.ini profiles you have imported. Select them per-install in the Install OptiScaler dialog.">
+            ToolTip.Tip="Custom FSR components and OptiScaler.ini profiles you have imported. Select them per-install on the Install OptiScaler screen.">
       <TextBlock Text="{Binding ImportSummary}" Foreground="{StaticResource BrTextSecondary}"
                  FontSize="12" TextWrapping="Wrap"/>
     </Border>
@@ -111,18 +114,36 @@
                                Foreground="{StaticResource BrTextPrimary}" TextTrimming="CharacterEllipsis"/>
                     <TextBlock Text="{Binding SubTitle}" FontSize="11"
                                Foreground="{StaticResource BrTextSecondary}" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock Text="{Binding StatusText}" FontSize="12"
-                               Foreground="{StaticResource BrAccent}"/>
+                    <!-- Status plus what the game already has, with versions: "FSR" alone
+                         says nothing, "FSR 4.1.1" answers the question. -->
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="{Binding StatusText}" FontSize="12" VerticalAlignment="Center"
+                                 Foreground="{StaticResource BrAccent}"/>
+                      <ItemsControl ItemsSource="{Binding TechBadges}">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="4"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="x:String">
+                            <Border Background="{StaticResource BrBgElevated}"
+                                    BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1"
+                                    CornerRadius="{StaticResource RadiusSmall}" Padding="6,1">
+                              <TextBlock Text="{Binding}" FontSize="10.5"
+                                         Foreground="{StaticResource BrTextSecondary}"/>
+                            </Border>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
                   </StackPanel>
 
                   <Button Grid.Column="1" Classes="BtnPrimary" Content="Install OptiScaler"
                           Margin="0,0,8,0" Click="OnInstallClick"
                           IsEnabled="{Binding IsIdle}"
-                          ToolTip.Tip="Download and install OptiScaler for this game. The next dialog lets you choose the version, backend, add-ons and OptiScaler.ini — and shows exactly what will change before anything is written."/>
-                  <Button Grid.Column="2" Classes="BtnDanger" Content="Revert"
-                          Click="OnRevertClick"
-                          IsEnabled="{Binding IsIdle}"
-                          ToolTip.Tip="Uninstall OptiScaler from this game: restore backed-up files and remove everything the install added. Reports if there is nothing to revert."/>
+                          ToolTip.Tip="Download and install OptiScaler for this game. The next screen lets you choose the version, backend, add-ons and OptiScaler.ini — and shows exactly what will change before anything is written."/>
+                  <Button Grid.Column="2" Content="Details  &#x203A;"
+                          Click="OnDetailsClick"
+                          ToolTip.Tip="What upscaling technology this game has and at which version, what OptiScaler is set to do, and the option to remove it."/>
                 </Grid>
               </Border>
             </DataTemplate>
@@ -145,4 +166,18 @@
       </StackPanel>
     </Border>
   </Grid>
+
+  <!-- Page host -->
+  <Grid Name="PageView" IsVisible="False" RowDefinitions="Auto,*" Margin="20">
+    <Grid Grid.Row="0" ColumnDefinitions="Auto,*" Margin="0,0,0,12">
+      <Button Grid.Column="0" Name="BackButton" Content="&#x2190;  Back" Click="OnBackClick"
+              Margin="0,0,12,0"
+              ToolTip.Tip="Return to the game list (Esc, or B on a controller)."/>
+      <TextBlock Grid.Column="1" Name="PageTitleText" VerticalAlignment="Center"
+                 FontSize="18" FontWeight="Bold" TextTrimming="CharacterEllipsis"
+                 Foreground="{StaticResource BrTextPrimary}"/>
+    </Grid>
+    <ContentControl Grid.Row="1" Name="PageContent"/>
+  </Grid>
+  </Panel>
 </Window>

@@ -1,4 +1,5 @@
 // OptiScaler Manager - GPL-3.0-or-later. See repository LICENSE.
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -9,9 +10,9 @@ using OptiscalerManager.App.Services;
 using OptiscalerManager.Core.Components;
 using OptiscalerManager.Core.Models;
 
-namespace OptiscalerManager.App.Views;
+namespace OptiscalerManager.App.Views.Pages;
 
-public partial class InstallOptiScalerDialog : Window
+public partial class InstallPage : UserControl, IHostedPage
 {
     private readonly ManagerService _manager = null!;
     private readonly Game _game = null!;
@@ -48,15 +49,22 @@ public partial class InstallOptiScalerDialog : Window
     public bool Fsr4Watermark { get; private set; }
 
     // Parameterless ctor for the XAML previewer only.
-    public InstallOptiScalerDialog() { InitializeComponent(); }
+    public InstallPage() { InitializeComponent(); }
 
-    public InstallOptiScalerDialog(ManagerService manager, Game game) : this()
+    public string Title => $"Install OptiScaler — {TitleFor}";
+
+    /// <summary>Game name shown in the page header.</summary>
+    public string TitleFor { get; set; } = string.Empty;
+    public Action<bool>? RequestClose { get; set; }
+
+    /// <summary>Starts on the recommended backend.</summary>
+    public void FocusFirst() =>
+        this.FindControl<RadioButton>("RbDefault")?.Focus(NavigationMethod.Directional);
+
+    public InstallPage(ManagerService manager, Game game) : this()
     {
         _manager = manager;
         _game = game;
-
-        var title = this.FindControl<TextBlock>("TitleText");
-        if (title is not null) title.Text = $"Install OptiScaler — {game.Name}";
 
         SetupBackendOptions();
         SetupProfiles();
@@ -64,9 +72,6 @@ public partial class InstallOptiScalerDialog : Window
 
         _ready = true;
         UpdatePreview();
-
-        // Start keyboard/controller focus on the recommended backend.
-        Opened += (_, _) => this.FindControl<RadioButton>("RbDefault")?.Focus(NavigationMethod.Directional);
 
         // INT8 is the default backend — reveal and load its version list on open.
         if (this.FindControl<RadioButton>("RbInt8")!.IsChecked == true)
@@ -310,11 +315,10 @@ public partial class InstallOptiScalerDialog : Window
         ForceInt8 = IsChecked("ChkForceInt8");
         Fsr4Watermark = IsChecked("ChkWatermark");
         SelectedOptiScalerVersion = CurrentOptiScalerVersion();
-        Close(true);
+        RequestClose?.Invoke(true);
     }
 
-    private void OnCancel(object? sender, RoutedEventArgs e) => Close(false);
+    private void OnCancel(object? sender, RoutedEventArgs e) => RequestClose?.Invoke(false);
 
     /// <summary>Shows the dialog modally and returns whether the user confirmed.</summary>
-    public Task<bool> ShowDialogFor(Window owner) => ShowDialog<bool>(owner);
 }

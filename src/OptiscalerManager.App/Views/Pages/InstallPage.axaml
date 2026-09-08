@@ -1,18 +1,12 @@
-<Window xmlns="https://github.com/avaloniaui"
+<UserControl xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        x:Class="OptiscalerManager.App.Views.InstallOptiScalerDialog"
-        Width="680" Height="760" MinWidth="560" MinHeight="480"
-        WindowStartupLocation="CenterOwner"
-        Background="{StaticResource BrBgBase}"
-        XYFocus.NavigationModes="Keyboard,Gamepad"
-        Icon="/Assets/icon-256.png"
-        Title="Install OptiScaler">
+        x:Class="OptiscalerManager.App.Views.Pages.InstallPage"
+        XYFocus.NavigationModes="Keyboard,Gamepad">
 
-  <Grid RowDefinitions="Auto,*,Auto" Margin="20">
+  <Grid RowDefinitions="Auto,*,Auto">
 
     <StackPanel Grid.Row="0" Spacing="4">
-      <TextBlock Name="TitleText" FontSize="18" FontWeight="Bold"
-                 Foreground="{StaticResource BrTextPrimary}"/>
+      <!-- The game name is in the page header bar; no need to repeat it here. -->
       <TextBlock Text="Choose the OptiScaler version, backend, add-ons and OptiScaler.ini. Nothing is written until you confirm — the preview below is exactly what will happen."
                  FontSize="12" Foreground="{StaticResource BrTextSecondary}" TextWrapping="Wrap"/>
     </StackPanel>
@@ -142,4 +136,4 @@
               ToolTip.Tip="Install exactly what the preview shows (Enter)."/>
     </StackPanel>
   </Grid>
-</Window>
+</UserControl>

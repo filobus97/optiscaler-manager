@@ -9,13 +9,24 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using OptiscalerManager.App.Services;
 
-namespace OptiscalerManager.App.Views;
+namespace OptiscalerManager.App.Views.Pages;
 
-public partial class SettingsWindow : Window
+public partial class SettingsPage : UserControl, IHostedPage
 {
     private readonly ManagerService _manager = null!;
 
-    public SettingsWindow() { InitializeComponent(); }
+    public SettingsPage() { InitializeComponent(); }
+
+    public string Title => "Settings";
+    public Action<bool>? RequestClose { get; set; }
+
+    /// <summary>Starts on the first control so a controller has somewhere to move from.</summary>
+    public void FocusFirst() => this.FindControl<ComboBox>("MenuKeyCombo")?.Focus(NavigationMethod.Directional);
+
+    /// <summary>File pickers hang off the window; a page has to ask for it.</summary>
+    private IStorageProvider StorageProvider =>
+        TopLevel.GetTopLevel(this)?.StorageProvider
+        ?? throw new InvalidOperationException("The Settings page is not attached to a window.");
 
     // Common overlay keys → OptiScaler [Menu] ShortcutKey virtual-key hex.
     private static readonly (string Label, string? Vk)[] MenuKeys =
@@ -33,7 +44,7 @@ public partial class SettingsWindow : Window
         ("F10 (0x79)", "0x79"), ("F11 (0x7A)", "0x7A"), ("F12 (0x7B)", "0x7B"),
     };
 
-    public SettingsWindow(ManagerService manager) : this()
+    public SettingsPage(ManagerService manager) : this()
     {
         _manager = manager;
         SetupMenuKey();
@@ -43,10 +54,6 @@ public partial class SettingsWindow : Window
         if (_manager.IsNukemFgCached) RefreshNukemUpdateStatusAsync(); // async: flag a newer Nukem release
         RefreshInventory();
         RefreshIniProfiles();
-
-        // Without this the page opens with nothing focused, and a controller's first
-        // D-pad press has no starting point to move from.
-        Opened += (_, _) => this.FindControl<ComboBox>("MenuKeyCombo")?.Focus(NavigationMethod.Directional);
     }
 
     private void SetupGamepadCard()
@@ -403,5 +410,5 @@ public partial class SettingsWindow : Window
         }
     }
 
-    private void OnClose(object? sender, RoutedEventArgs e) => Close();
+    private void OnClose(object? sender, RoutedEventArgs e) => RequestClose?.Invoke(false);
 }

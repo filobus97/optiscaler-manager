@@ -485,6 +485,48 @@ public sealed class ManagerService
 
     // ── Revert support ──────────────────────────────────────────────────────
     /// <summary>True when OptiScaler has a tracked install (backup/manifest) for this game.</summary>
+    /// <summary>
+    /// Where OptiScaler actually sits for this game. Usually the install folder, but
+    /// some games (UE5) put the executable — and therefore the mod and its ini — in a
+    /// nested Binaries folder, which the manifest recorded at install time.
+    /// </summary>
+    public string GetInstalledDirectory(Game game)
+    {
+        try
+        {
+            foreach (var dir in CandidateDirectories(game))
+            {
+                var manifest = _backupStore.LoadManifest(dir);
+                if (manifest?.InstalledGameDirectory is { Length: > 0 } recorded && Directory.Exists(recorded))
+                    return recorded;
+                if (manifest is not null) return dir;
+            }
+        }
+        catch { /* fall through to the install path */ }
+        return game.InstallPath;
+    }
+
+    private static IEnumerable<string> CandidateDirectories(Game game)
+    {
+        if (!string.IsNullOrEmpty(game.ExecutablePath))
+        {
+            var dir = Path.GetDirectoryName(game.ExecutablePath);
+            if (!string.IsNullOrEmpty(dir)) yield return dir;
+        }
+        if (!string.IsNullOrEmpty(game.InstallPath)) yield return game.InstallPath;
+    }
+
+    /// <summary>
+    /// Re-reads a game's folder, ignoring the cached result. The analyzer caches on the
+    /// folder's write stamp, which does not change when a file is edited in place, so
+    /// the details page offers this for anyone who has changed things by hand.
+    /// </summary>
+    public void RefreshGameAnalysis(Game game)
+    {
+        GameAnalyzerService.InvalidateCacheForPath(game.InstallPath);
+        new GameAnalyzerService().AnalyzeGame(game, forceRefresh: true);
+    }
+
     public bool HasInstall(Game game)
     {
         try

@@ -1,18 +1,11 @@
-<Window xmlns="https://github.com/avaloniaui"
+<UserControl xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        x:Class="OptiscalerManager.App.Views.SettingsWindow"
-        Width="620" Height="640" MinWidth="520" MinHeight="440"
-        WindowStartupLocation="CenterOwner"
-        Background="{StaticResource BrBgBase}"
-        XYFocus.NavigationModes="Keyboard,Gamepad"
-        Icon="/Assets/icon-256.png"
-        Title="Settings">
+        x:Class="OptiscalerManager.App.Views.Pages.SettingsPage"
+        XYFocus.NavigationModes="Keyboard,Gamepad">
 
-  <Grid RowDefinitions="Auto,*,Auto" Margin="20">
+  <Grid RowDefinitions="Auto,*,Auto">
 
     <StackPanel Grid.Row="0" Spacing="4">
-      <TextBlock Text="Settings" FontSize="18" FontWeight="Bold"
-                 Foreground="{StaticResource BrTextPrimary}"/>
       <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
                  Text="Set the overlay key, import your own DLLs and .ini profiles, and manage add-ons. Anything you bring your own — the proprietary AMD runtime is never downloaded, only supplied by you and kept in a private cache."/>
     </StackPanel>
@@ -134,8 +127,8 @@
     </ScrollViewer>
 
     <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-      <Button Content="Close" Click="OnClose" IsCancel="True"
-              ToolTip.Tip="Back to the main screen (Esc). Everything here saves as you change it."/>
+      <Button Content="Back to games" Click="OnClose" IsCancel="True"
+              ToolTip.Tip="Back to the game list (Esc, or B on a controller). Everything here saves as you change it."/>
     </StackPanel>
   </Grid>
-</Window>
+</UserControl>

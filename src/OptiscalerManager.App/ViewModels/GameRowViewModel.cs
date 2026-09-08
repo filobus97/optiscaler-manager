@@ -1,4 +1,6 @@
 // OptiScaler Manager - GPL-3.0-or-later. See repository LICENSE.
+using System;
+using System.Collections.Generic;
 using OptiscalerManager.Core.Models;
 
 namespace OptiscalerManager.App.ViewModels;
@@ -53,11 +55,42 @@ public sealed class GameRowViewModel : ViewModelBase
         set => SetField(ref _isInstalled, value);
     }
 
+    private IReadOnlyList<string> _techBadges = Array.Empty<string>();
+    /// <summary>
+    /// Short "what this game has" labels with versions, e.g. "FSR 4.1.1". The point of
+    /// showing the version here is that presence alone answers nothing — FSR 3.1 and
+    /// FSR 4.1 are the same badge but a completely different result.
+    /// </summary>
+    public IReadOnlyList<string> TechBadges
+    {
+        get => _techBadges;
+        private set => SetField(ref _techBadges, value);
+    }
+
     public void RefreshFromGame()
     {
         IsInstalled = Game.IsOptiscalerInstalled;
         StatusText = Game.IsOptiscalerInstalled
             ? $"FSR 4 enabled (OptiScaler {Game.OptiscalerVersion})"
             : "Not installed";
+        TechBadges = BuildBadges();
+    }
+
+    private IReadOnlyList<string> BuildBadges()
+    {
+        var badges = new List<string>();
+        void Add(string label, string? version)
+        {
+            if (version is null) return;
+            // Trailing ".0" groups are noise at a glance ("3.7.10.0" -> "3.7.10").
+            var trimmed = version.TrimEnd('.', '0');
+            badges.Add(string.IsNullOrEmpty(trimmed) ? label : $"{label} {trimmed}");
+        }
+
+        Add("DLSS", Game.DlssVersion);
+        Add("DLSS FG", Game.DlssFrameGenVersion);
+        Add("FSR", Game.FsrVersion);
+        Add("XeSS", Game.XessVersion);
+        return badges;
     }
 }

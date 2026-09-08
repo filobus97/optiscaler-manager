@@ -22,8 +22,8 @@ action per game, advanced options tucked away.
 - **One primary screen.** A detected-GPU banner and your game list. Per game, a
   single **Install OptiScaler** button downloads and installs the *real OptiScaler
   release from source* (`optiscaler/OptiScaler` on GitHub) — **latest by default,
-  or any older release from the version selector** at the top of the dialog. The
-  install dialog then decouples the independent choices:
+  or any older release from the version selector** at the top of the screen. The
+  install screen then decouples the independent choices:
 
   **Step 1 — Backend (which files to install):**
     - *OptiScaler default* (**recommended**): OptiScaler's release already bundles the
@@ -63,7 +63,7 @@ action per game, advanced options tucked away.
       (`dlssg_to_fsr3_amd_is_better.dll`, **bring-your-own** — import it once in
       Settings). Selecting it sets `[FrameGen] FGInput=nukems` and pulls fakenvapi in;
     - *Nvidia override* — for games that hide DLSS options on AMD/Intel. **Per game
-      only** (chosen in this dialog on each install; no global setting), with a
+      only** (chosen on this screen at each install; no global setting), with a
       **method selector**: *Default* uses OptiScaler's built-in DXGI spoofing
       (`[Spoofing] Dxgi=true`, adapter reports as an RTX 4090); *OptiPatcher*
       installs the `plugins/OptiPatcher.asi` plugin (`[Plugins] LoadAsiPlugins=true`),
@@ -73,13 +73,25 @@ action per game, advanced options tucked away.
   profiles. When you pick a custom `.ini`, the options above overwrite **only the keys
   they affect** (`Fsr4Update`, the `[Upscalers]` selection, the optional toggles above,
   and the menu key); the rest of your `.ini` is left exactly as you wrote it.
+- **A details page per game.** *Details* opens in place and answers "what is in this
+  game": every upscaling component found next to it — DLSS, FSR, XeSS, frame
+  generation, latency libraries and runtimes — **with the version actually on disk**,
+  what each one does in a sentence, and whether it shipped with the game or this app
+  added it. When OptiScaler is installed it also says, in plain language, what it is
+  set to do (which upscaler will really run, whether FSR 4 is on, frame generation,
+  the Nvidia override, the overlay key). **Removing OptiScaler lives here**, not in
+  the game list, so it is harder to hit by accident with a controller.
+- **One window, always.** Settings, the install screen and the details page replace
+  the game list in place rather than opening windows of their own — gamescope (Steam's
+  Gaming Mode) composites a single application surface, and one window also means the
+  controller never has to guess where input should go. **Esc / B** goes back.
 - **Transparent — no black boxes.** Before anything is written, a live
   **"What will happen"** preview lists the *exact files* that will be placed next
   to your game and the *exact `OptiScaler.ini` keys* that will change (updating as
   you change the options), so you can verify it or reproduce it by hand.
 - **Tooltip-rich.** Every control explains what it does.
-- **Reversible.** *Revert* restores backed-up files from an external per-game
-  backup store and reverts the ini keys.
+- **Reversible.** *Remove OptiScaler* (on a game's details page) restores backed-up
+  files from an external per-game backup store and reverts the ini keys.
 
 ### On AMD binaries
 
@@ -108,6 +120,10 @@ Both of these are *derived* from that registry, with no bespoke logic:
   automatically recognised as incompatible.
 - **The "What will happen" preview** — the file and ini-key lists you see are the
   exact data the installer acts on.
+
+The details page follows the same idea: what each upscaling file *is* lives in an
+[upscaler catalogue](src/OptiscalerManager.Core/Components/UpscalerCatalog.cs), so
+supporting a new technology is one row of data rather than changes in three places.
 
 ### Project layout
 
@@ -266,7 +282,7 @@ care you would any mod tool, and read the release notes before updating.
 
 The game list behaves like a grid: **up/down changes the highlighted game** (the list
 scrolls once you reach the last visible one), and **left/right moves across that game's
-row** — game, *Install OptiScaler*, *Revert*. Press **A** on the game itself to start
+row** — game, *Install OptiScaler*, *Details*. Press **A** on the game itself to start
 the install without stepping over to the button first, and keep going up to leave the
 list for *Rescan* and *Settings*. A bright focus ring always shows where you are.
 
