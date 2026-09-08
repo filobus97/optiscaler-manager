@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+using System.Collections.Generic;
+
 namespace OptiscalerManager.Core.Models;
 
 public enum GamePlatform
@@ -66,6 +68,12 @@ public class Game
     /// (amd_fidelityfx_upscaler_dx12.dll) installed into this game, or null.
     /// </summary>
     public string? CustomFsrSdkVersion { get; set; }
+
+    /// <summary>
+    /// Every upscaling/frame-gen component found next to the game, individually — the
+    /// summary fields above keep only the newest of each technology.
+    /// </summary>
+    public List<DetectedComponent> DetectedComponents { get; set; } = new();
 
     public bool HasUpscaler => DlssVersion != null || DlssFrameGenVersion != null || FsrVersion != null || XessVersion != null || IsOptiscalerInstalled;
 

@@ -21,6 +21,8 @@ namespace OptiscalerManager.Core.Models
     [JsonSerializable(typeof(KeyFileSnapshot))]
     [JsonSerializable(typeof(List<ManifestFileRecord>))]
     [JsonSerializable(typeof(List<KeyFileSnapshot>))]
+    [JsonSerializable(typeof(DetectedComponent))]
+    [JsonSerializable(typeof(List<DetectedComponent>))]
     [JsonSerializable(typeof(List<Game>))]
     [JsonSerializable(typeof(Game))]
     [JsonSerializable(typeof(List<string>))]

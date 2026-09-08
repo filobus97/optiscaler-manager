@@ -59,6 +59,9 @@ public class GameAnalyzerService
         foreach (var n in _dlssFrameGenNames) _allTargetFileNames.Add(n);
         foreach (var n in _fsrNames) _allTargetFileNames.Add(n);
         foreach (var n in _xessNames) _allTargetFileNames.Add(n);
+        // Everything the details view can describe — add-ons and runtimes included,
+        // not just the four technologies the game list summarises.
+        foreach (var n in Components.UpscalerCatalog.FileNames) _allTargetFileNames.Add(n);
     }
 
     public static void InvalidateCacheForPath(string? installPath)
@@ -113,6 +116,7 @@ public class GameAnalyzerService
         game.XessPath = null;
         game.IsOptiscalerInstalled = false;
         game.OptiscalerVersion = null; // Will be repopulated from manifest or log
+        game.DetectedComponents = new List<DetectedComponent>();
 
         HashSet<string> ignoredFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var blockHeuristicFallbackDetection = false;
@@ -299,6 +303,11 @@ public class GameAnalyzerService
             // XeSS
             FindBestVersionFromCollected(game, collectedFiles, _xessNames, ignoredFiles, (g, path, ver) => { g.XessPath = path; g.XessVersion = ver; });
 
+            // Everything, individually. The calls above collapse each technology to a
+            // single "best" version for the game list; the details view needs each file
+            // on its own, because one game can carry several FSR libraries at different
+            // versions and that difference is exactly what decides what you can enable.
+            game.DetectedComponents = DescribeComponents(game, collectedFiles, ignoredFiles);
         }
         catch (Exception ex)
         {
@@ -306,6 +315,61 @@ public class GameAnalyzerService
         }
 
         SaveAnalysisCache(game, normalizedInstallPath, directoryWriteStamp);
+    }
+
+    /// <summary>
+    /// Turns the collected files into the list the details view renders: what each one
+    /// is, the version on disk, and whether it came with the game or this app put it
+    /// there (files this app installed are recorded in <paramref name="managerFiles"/>).
+    /// </summary>
+    private static List<DetectedComponent> DescribeComponents(
+        Game game, Dictionary<string, List<string>> collectedFiles, HashSet<string> managerFiles)
+    {
+        var found = new List<DetectedComponent>();
+
+        foreach (var (fileName, paths) in collectedFiles)
+        {
+            var def = Components.UpscalerCatalog.For(fileName);
+            if (def is null) continue;   // manifests, logs, the ini — not components
+
+            foreach (var path in paths)
+            {
+                string fullPath;
+                try { fullPath = Path.GetFullPath(path); }
+                catch { fullPath = path; }
+
+                var version = GetFileVersion(path);
+                if (version == "0.0.0.0") version = null;   // no version resource
+
+                found.Add(new DetectedComponent
+                {
+                    Technology = def.Technology,
+                    FileName = fileName,
+                    Version = version,
+                    RelativePath = MakeRelative(game.InstallPath, fullPath),
+                    Role = def.Role,
+                    Vendor = def.Vendor,
+                    Explanation = def.Explanation,
+                    Source = managerFiles.Contains(fullPath) ? ComponentSource.Manager : ComponentSource.Game,
+                });
+            }
+        }
+
+        return found
+            .OrderBy(c => Components.UpscalerCatalog.RoleOrder(c.Role))
+            .ThenBy(c => c.Technology, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(c => c.RelativePath, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static string MakeRelative(string installPath, string fullPath)
+    {
+        try
+        {
+            var rel = Path.GetRelativePath(Path.GetFullPath(installPath), fullPath);
+            return rel.StartsWith("..", StringComparison.Ordinal) ? fullPath : rel;
+        }
+        catch { return fullPath; }
     }
 
     private static bool TryApplyCachedAnalysis(Game game, string installPath, DateTime directoryWriteStamp)
@@ -316,6 +380,11 @@ public class GameAnalyzerService
                 return false;
 
             if (cached.DirectoryWriteStampUtc != directoryWriteStamp)
+                return false;
+
+            // Entries written before component detection existed carry no list; treat
+            // them as stale so the details view is not empty until the folder changes.
+            if (cached.DetectedComponents is null)
                 return false;
 
             cached.ApplyTo(game);
@@ -581,6 +650,7 @@ public class GameAnalyzerService
         public string? XessPath { get; set; }
         public bool IsOptiscalerInstalled { get; set; }
         public string? OptiscalerVersion { get; set; }
+        public List<DetectedComponent>? DetectedComponents { get; set; }
 
         public static AnalysisCacheEntry FromGame(Game game, DateTime directoryWriteStampUtc)
         {
@@ -596,7 +666,8 @@ public class GameAnalyzerService
                 XessVersion = game.XessVersion,
                 XessPath = game.XessPath,
                 IsOptiscalerInstalled = game.IsOptiscalerInstalled,
-                OptiscalerVersion = game.OptiscalerVersion
+                OptiscalerVersion = game.OptiscalerVersion,
+                DetectedComponents = game.DetectedComponents
             };
         }
 
@@ -612,6 +683,7 @@ public class GameAnalyzerService
             game.XessPath = XessPath;
             game.IsOptiscalerInstalled = IsOptiscalerInstalled;
             game.OptiscalerVersion = OptiscalerVersion;
+            game.DetectedComponents = DetectedComponents ?? new List<DetectedComponent>();
         }
     }
 }

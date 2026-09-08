@@ -42,8 +42,14 @@ namespace OptiscalerManager.Core.Tests
             w.Write((byte)'P'); w.Write((byte)'E'); w.Write((byte)0); w.Write((byte)0);
 
             // COFF file header (20 bytes)
+            // A version resource needs a real .rsrc section for the reader to find it.
+            ushort numSections = string.IsNullOrEmpty(fileVersion) ? (ushort)0 : (ushort)1;
+            const uint RsrcRva = 0x1000;
+            const uint RsrcRawOffset = 0x400;
+            const uint RsrcRawSize = 0x200;
+
             w.Write(machine);              // Machine
-            w.Write((ushort)0);            // NumberOfSections
+            w.Write(numSections);          // NumberOfSections
             w.Write((uint)0);              // TimeDateStamp
             w.Write((uint)0);              // PointerToSymbolTable
             w.Write((uint)0);              // NumberOfSymbols
@@ -54,6 +60,16 @@ namespace OptiscalerManager.Core.Tests
             long optStart = ms.Position;
             // Optional header magic: 0x20B = PE32+, 0x10B = PE32
             w.Write((ushort)(pe32Plus ? 0x20B : 0x10B));
+
+            // Resource data directory (index 2) — how the version reader locates .rsrc.
+            if (numSections > 0)
+            {
+                long resourceDirPos = optStart + 112 + 2 * 8;
+                while (ms.Position < resourceDirPos) w.Write((byte)0);
+                w.Write(RsrcRva);
+                w.Write(RsrcRawSize);
+            }
+
             // Pad the optional header up to the security data directory.
             // Data directories start at offset 112 (PE32+) into the optional header;
             // the security dir is index 4 → +32 bytes.
@@ -72,25 +88,37 @@ namespace OptiscalerManager.Core.Tests
             // Pad to end of optional header
             while (ms.Position < optStart + optHeaderSize) w.Write((byte)0);
 
-            // Optional VS_FIXEDFILEINFO block (located by signature scan)
-            if (!string.IsNullOrEmpty(fileVersion))
+            // Section table, then the .rsrc payload holding VS_FIXEDFILEINFO.
+            if (numSections > 0)
             {
-                var parts = fileVersion.Split('.');
+                var parts = fileVersion!.Split('.');
                 ushort a = ushort.Parse(parts[0]);
                 ushort b = parts.Length > 1 ? ushort.Parse(parts[1]) : (ushort)0;
                 ushort c = parts.Length > 2 ? ushort.Parse(parts[2]) : (ushort)0;
                 ushort d = parts.Length > 3 ? ushort.Parse(parts[3]) : (ushort)0;
 
-                // Align to 4 bytes
-                while (ms.Position % 4 != 0) w.Write((byte)0);
+                // IMAGE_SECTION_HEADER (40 bytes)
+                foreach (var ch in ".rsrc\0\0\0") w.Write((byte)ch);
+                w.Write(RsrcRawSize);   // VirtualSize
+                w.Write(RsrcRva);       // VirtualAddress
+                w.Write(RsrcRawSize);   // SizeOfRawData
+                w.Write(RsrcRawOffset); // PointerToRawData
+                w.Write((uint)0);       // PointerToRelocations
+                w.Write((uint)0);       // PointerToLinenumbers
+                w.Write((ushort)0);     // NumberOfRelocations
+                w.Write((ushort)0);     // NumberOfLinenumbers
+                w.Write((uint)0x40000040); // Characteristics (initialised data, read)
+
+                while (ms.Position < RsrcRawOffset) w.Write((byte)0);
+
                 w.Write((uint)0xFEEF04BD);              // dwSignature
                 w.Write((uint)0x00010000);              // dwStrucVersion (1.0)
                 w.Write((uint)(((uint)a << 16) | b));   // dwFileVersionMS
                 w.Write((uint)(((uint)c << 16) | d));   // dwFileVersionLS
                 w.Write((uint)(((uint)a << 16) | b));   // dwProductVersionMS (mirror)
                 w.Write((uint)(((uint)c << 16) | d));   // dwProductVersionLS
-                // Trailing padding so the 24-byte read window is fully in range
-                for (int i = 0; i < 16; i++) w.Write((byte)0);
+
+                while (ms.Position < RsrcRawOffset + RsrcRawSize) w.Write((byte)0);
             }
 
             return ms.ToArray();
