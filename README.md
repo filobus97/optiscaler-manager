@@ -121,6 +121,10 @@ Building from source is in [Building & running](#building--running).
   to your game and the *exact `OptiScaler.ini` keys* that will change (updating as
   you change the options), so you can verify it or reproduce it by hand.
 - **Tooltip-rich.** Every control explains what it does.
+- **Your settings survive reinstalls.** Reinstalling (a newer OptiScaler, a different
+  backend) keeps the `OptiScaler.ini` you already have — including everything OptiScaler
+  writes back when you change settings in its in-game overlay — instead of resetting it
+  to the release defaults.
 - **Reversible.** *Remove OptiScaler* (on a game's details page) restores backed-up
   files from an external per-game backup store and reverts the ini keys.
 

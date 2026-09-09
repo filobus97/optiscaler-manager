@@ -342,14 +342,51 @@ namespace OptiscalerManager.Core.Services
 
             Log.Write($"[Install] Copied {additionalFileCount} additional files");
 
+            // Step 2.4: Keep the settings the player already has.
+            //
+            // Step 2 above copies the release's own OptiScaler.ini over the game folder.
+            // That file counts as "OptiScaler-created", so the backup-before-overwrite
+            // guard deliberately skips it — right for DLLs, wrong for a config the
+            // player has changed, including every setting OptiScaler itself writes back
+            // when they adjust something in the in-game overlay. Without this,
+            // reinstalling (a new OptiScaler version, a different backend) silently
+            // resets their configuration with no backup to restore from.
+            //
+            // So when reinstalling over an existing install and the caller has not
+            // supplied a profile of its own, snapshot what is on disk and let it win
+            // over the release defaults.
+            var effectiveProfile = profile;
+            if (priorManifest != null && (effectiveProfile == null || effectiveProfile.IniSettings.Count == 0))
+            {
+                var existingIni = Path.Combine(gameDir, "OptiScaler.ini");
+                if (File.Exists(existingIni))
+                {
+                    try
+                    {
+                        var preserved = new ProfileManagementService()
+                            .CreateProfileFromIni(existingIni, "__PreservedOnReinstall");
+                        if (preserved.IniSettings.Count > 0)
+                        {
+                            effectiveProfile = preserved;
+                            var keys = preserved.IniSettings.Sum(sec => sec.Value.Count);
+                            Log.Write($"[Install] Preserving {keys} existing OptiScaler.ini setting(s) across the reinstall");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Write($"[Install] Could not read the existing OptiScaler.ini to preserve it: {ex.Message}");
+                    }
+                }
+            }
+
             // Step 2.5: Generate OptiScaler.ini from profile if provided (skip for Default profile)
-            if (profile != null && profile.IniSettings.Count > 0)
+            if (effectiveProfile != null && effectiveProfile.IniSettings.Count > 0)
             {
                 try
                 {
                     var profileService = new ProfileManagementService();
-                    profileService.WriteOptiScalerIniToFile(gameDir, profile);
-                    Log.Write($"[Install] Generated OptiScaler.ini from profile: {profile.Name}");
+                    profileService.WriteOptiScalerIniToFile(gameDir, effectiveProfile);
+                    Log.Write($"[Install] Generated OptiScaler.ini from profile: {effectiveProfile.Name}");
                 }
                 catch (Exception ex)
                 {
@@ -1545,17 +1582,6 @@ namespace OptiscalerManager.Core.Services
                 return null;
             }
 
-            // Rule 2: If Phoenix folder is present, ignore step 1 and search inside Phoenix/Binaries/Win64
-            var phoenixPath = Path.Combine(game.InstallPath, "Phoenix", "Binaries", "Win64");
-            if (Directory.Exists(phoenixPath))
-            {
-                var phoenixExes = Directory.GetFiles(phoenixPath, "*.exe", SearchOption.TopDirectoryOnly);
-                if (phoenixExes.Length > 0)
-                {
-                    return phoenixPath;
-                }
-            }
-
             // Rule 1: Try to extract in the same folder as the main .exe, scan to find it.
             string[] allExes = Array.Empty<string>();
             try
@@ -1568,6 +1594,17 @@ namespace OptiscalerManager.Core.Services
             }
 
             string? bestMatchDir = null;
+
+            // Rule 2: Unreal Engine ships its real executables under "<Project>/Binaries/Win64".
+            // When any exist, only they are candidates — an engine-mandated layout beats the
+            // name/size/DLL heuristics below, which can be swayed by a launcher stub in the
+            // root. This used to be hardcoded to the "Phoenix" project name; that is just one
+            // instance of the same convention.
+            var unrealExes = allExes.Where(IsUnrealShippingPath).ToArray();
+            if (unrealExes.Length == 1)
+                return Path.GetDirectoryName(unrealExes[0]);
+            if (unrealExes.Length > 1)
+                allExes = unrealExes;
 
             if (allExes.Length > 0)
             {
@@ -1602,7 +1639,7 @@ namespace OptiscalerManager.Core.Services
                         }
                     }
 
-                    if (exePath.Contains(@"Binaries\Win64", StringComparison.OrdinalIgnoreCase))
+                    if (IsUnrealShippingPath(exePath))
                     {
                         score += 5;
                     }
@@ -1664,7 +1701,7 @@ namespace OptiscalerManager.Core.Services
                     }
                     else
                     {
-                        var binariesExes = allExes.Where(x => x.Contains(@"Binaries\Win64", StringComparison.OrdinalIgnoreCase)).ToList();
+                        var binariesExes = allExes.Where(IsUnrealShippingPath).ToList();
                         if (binariesExes.Count == 1)
                         {
                             bestMatchDir = Path.GetDirectoryName(binariesExes[0]);
@@ -2215,6 +2252,26 @@ namespace OptiscalerManager.Core.Services
             ModifyOptiScalerIniKey(gameDir, "Upscalers", "Dx11Upscaler", codes.Dx11);
             ModifyOptiScalerIniKey(gameDir, "Upscalers", "VulkanUpscaler", codes.Vulkan);
             Log.Write($"[FSR4] Selected the FSR 4 upscaler ([Upscalers] Dx12Upscaler={codes.Dx12}).");
+        }
+
+        /// <summary>
+        /// Whether an executable sits under Unreal Engine's shipping layout,
+        /// <c>&lt;Project&gt;/Binaries/Win64</c>.
+        ///
+        /// Compares path segments rather than matching the literal string
+        /// "Binaries\\Win64": enumeration returns '\\' on Windows but '/' on Linux, so a
+        /// substring check never matches on our primary platform — the heuristics that
+        /// relied on it were silently dead there.
+        /// </summary>
+        private static bool IsUnrealShippingPath(string exePath)
+        {
+            // Split on both separators rather than using Path: a path can arrive in
+            // Windows form even while running on Linux (game manifests inside a Proton
+            // prefix), and Path.GetDirectoryName does not treat '\\' as a separator there.
+            var parts = exePath.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+            return parts.Length >= 3
+                && parts[^2].Equals("Win64", StringComparison.OrdinalIgnoreCase)
+                && parts[^3].Equals("Binaries", StringComparison.OrdinalIgnoreCase);
         }
 
         public static void ModifyOptiScalerIniKey(string gameDir, string section, string key, string value)

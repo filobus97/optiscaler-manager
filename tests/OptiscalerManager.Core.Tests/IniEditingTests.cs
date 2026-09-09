@@ -216,5 +216,28 @@ UseFfxInputs=auto
             Assert.Equal("fsr31", codes!.Dx12);
         }
 
+        // ── Unreal shipping-layout detection (Linux path separators) ─────────────
+
+        [Theory]
+        // The layout Unreal always ships, with the separators each OS actually produces.
+        [InlineData("/games/MyGame/MyGame/Binaries/Win64/MyGame-Win64-Shipping.exe", true)]
+        [InlineData(@"C:\games\MyGame\MyGame\Binaries\Win64\MyGame-Win64-Shipping.exe", true)]
+        [InlineData("/games/MyGame/Phoenix/Binaries/Win64/Phoenix-Win64-Shipping.exe", true)]
+        // Not the shipping layout.
+        [InlineData("/games/MyGame/MyGame.exe", false)]
+        [InlineData("/games/MyGame/Binaries/Win32/Game.exe", false)]
+        [InlineData("/games/MyGame/Engine/Binaries/Win64/deeper/Tool.exe", false)]
+        public void RecognisesUnrealShippingPaths_OnEitherSeparator(string exePath, bool expected)
+        {
+            // Guards a Linux-only failure: the old check matched the literal string
+            // "Binaries\\Win64", which enumeration never produces on Linux, so every
+            // Unreal heuristic was silently dead on this app's primary platform.
+            var method = typeof(GameInstallationService).GetMethod(
+                "IsUnrealShippingPath",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Assert.NotNull(method);
+            Assert.Equal(expected, (bool)method!.Invoke(null, new object[] { exePath })!);
+        }
+
     }
 }
