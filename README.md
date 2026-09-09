@@ -246,6 +246,28 @@ Open **Settings** to import:
 
 ![Settings](docs/screenshots/settings.png)
 
+## Reclaiming disk space
+
+Nothing the Manager downloads is ever deleted automatically — every OptiScaler
+version you have installed, and every add-on, stays cached so it still works
+offline. **Settings → Manage storage** shows what that costs and lets you remove
+what you no longer want, grouped by how recoverable each thing is:
+
+| Group | Removable | Why |
+| --- | --- | --- |
+| Backups no longer in use | Yes | The game was reverted, or is gone from the machine. Nothing depends on them. |
+| Downloaded components | Yes | Normally downloadable again — though upstream does withdraw releases, especially betas and nightlies. |
+| Files you imported | Yes, with confirmation | These came from you and this is the only copy. |
+| Backups in use | **No** | The original files of a game that still has OptiScaler installed. |
+
+That last row is the one that matters. **Revert restores from those backups and
+has nowhere else to look**, so deleting one would strand the game in its modified
+state, recoverable only by verifying the game's files in Steam/Epic. The screen
+refuses to delete them and offers to revert the game instead — after which the
+backup moves into the first group and can be removed normally.
+
+![Managing storage](docs/screenshots/storage.png)
+
 When you click **Install OptiScaler**, the screen lets you pick the backend
 (OptiScaler default / INT8 community build / custom DLLs) and which `.ini`
 profile to write. The Manager always sets `[FSR] Fsr4Update = true` and the

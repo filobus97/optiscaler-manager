@@ -9,3 +9,7 @@ they stay in step with the actual UI rather than being mocked up by hand. Regene
 them after UI changes; reviewing them is also a cheap way to catch stale wording —
 the "DLSS 3.7.10 shown as 3.7.1" bug and several outdated tooltips were found exactly
 that way.
+
+`storage.png` is rendered against a **sample cache** instead: component versions,
+imported DLLs and per-game backups written to a scratch config directory, so the
+sizes and the live/spent split are produced by the real scan rather than invented.

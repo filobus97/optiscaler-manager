@@ -20,6 +20,21 @@ public partial class SettingsPage : UserControl, IHostedPage
     public string Title => "Settings";
     public Action<bool>? RequestClose { get; set; }
 
+    /// <summary>
+    /// Opens a page from inside this one. Supplied by the main window, which owns the
+    /// page stack — Back from there returns here rather than to the game list.
+    /// </summary>
+    public Func<IHostedPage, Task<bool>>? ShowPage { get; set; }
+
+    /// <summary>Passed through to the Storage page, which needs it for live backups.</summary>
+    public Func<string, Task<bool>>? RevertGame { get; set; }
+
+    private async void OnManageStorage(object? sender, RoutedEventArgs e)
+    {
+        if (ShowPage is null) return;
+        await ShowPage(new StoragePage(_manager, RevertGame));
+    }
+
     /// <summary>Starts on the first control so a controller has somewhere to move from.</summary>
     public void FocusFirst() => this.FindControl<ComboBox>("MenuKeyCombo")?.Focus(NavigationMethod.Directional);
 

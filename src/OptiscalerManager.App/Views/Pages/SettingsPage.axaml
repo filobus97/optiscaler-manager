@@ -103,6 +103,18 @@
           </StackPanel>
         </Border>
 
+        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Storage" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
+                       Text="Downloaded component versions, the files you imported, and per-game backups. Nothing is removed automatically, so this is where you see what is being kept and reclaim the space."/>
+            <Button Name="StorageButton" Content="Manage storage  &#x203A;" HorizontalAlignment="Left"
+                    Click="OnManageStorage"
+                    ToolTip.Tip="Shows everything the app has written to disk, with sizes, grouped by how safe each thing is to remove."/>
+          </StackPanel>
+        </Border>
+
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgSurface}"
                 BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="8">

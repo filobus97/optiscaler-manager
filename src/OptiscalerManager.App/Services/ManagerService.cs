@@ -53,6 +53,16 @@ public sealed class ManagerService
 
     public void DeleteCustomDll(string name) => _components.DeleteCustomDll(name);
 
+    // ── Storage ─────────────────────────────────────────────────────────────
+    private StorageInventoryService? _storage;
+    private StorageInventoryService Storage => _storage ??= new StorageInventoryService(_components.Config);
+
+    /// <summary>Everything the app is keeping on disk, grouped by how safe it is to remove.</summary>
+    public IReadOnlyList<StorageItem> ScanStorage() => Storage.Scan();
+
+    /// <summary>Removes one stored item. Backups a game still relies on are refused.</summary>
+    public bool DeleteStorageItem(StorageItem item) => Storage.Delete(item);
+
     /// <summary>Latest FSR 4 INT8 community version known from source, if a check has run.</summary>
     public string? LatestExtrasVersion => _components.LatestExtrasVersion;
 

@@ -1,5 +1,6 @@
 // OptiScaler Manager - GPL-3.0-or-later. See repository LICENSE.
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -186,7 +187,11 @@ public partial class MainWindow : Window
 
     private async void OnSettingsClick(object? sender, RoutedEventArgs e)
     {
-        await ShowPageAsync(new SettingsPage(_manager));
+        await ShowPageAsync(new SettingsPage(_manager)
+        {
+            ShowPage = ShowPageAsync,
+            RevertGame = RevertGameAtAsync,
+        });
         RefreshImportSummary();
     }
 
@@ -223,43 +228,68 @@ public partial class MainWindow : Window
     // surface, and one window also means the controller never has to guess where
     // input should go.
 
-    private TaskCompletionSource<bool>? _pageResult;
+    /// <summary>
+    /// The pages currently stacked over the game list, innermost last. A stack rather
+    /// than a single page because pages open pages — Settings opens Storage — and Back
+    /// has to return to the one underneath, not all the way home.
+    /// </summary>
+    private readonly List<(IHostedPage Page, TaskCompletionSource<bool> Result)> _pages = new();
 
     /// <summary>True while a page is covering the game list.</summary>
-    private bool PageIsOpen => _pageResult is not null;
+    private bool PageIsOpen => _pages.Count > 0;
 
     private Task<bool> ShowPageAsync(IHostedPage page)
     {
         var host = this.FindControl<ContentControl>("PageContent");
         var pageView = this.FindControl<Grid>("PageView");
         var homeView = this.FindControl<Grid>("HomeView");
-        var title = this.FindControl<TextBlock>("PageTitleText");
         if (host is null || pageView is null || homeView is null) return Task.FromResult(false);
 
-        _pageResult = new TaskCompletionSource<bool>();
+        var result = new TaskCompletionSource<bool>();
+        _pages.Add((page, result));
         page.RequestClose = ClosePage;
 
-        if (title is not null) title.Text = page.Title;
-        host.Content = page;
+        ShowTopPage();
         homeView.IsVisible = false;
         pageView.IsVisible = true;
+        return result.Task;
+    }
+
+    /// <summary>Puts the innermost page on screen and gives it focus.</summary>
+    private void ShowTopPage()
+    {
+        var page = _pages[^1].Page;
+        var host = this.FindControl<ContentControl>("PageContent");
+        var title = this.FindControl<TextBlock>("PageTitleText");
+
+        if (title is not null) title.Text = page.Title;
+        if (host is not null) host.Content = page;
 
         // After layout, so the page's controls exist to receive focus.
         Dispatcher.UIThread.Post(page.FocusFirst, DispatcherPriority.Loaded);
-        return _pageResult.Task;
     }
 
     private void ClosePage(bool result)
     {
-        if (_pageResult is not { } pending) return;
-        _pageResult = null;
+        if (_pages.Count == 0) return;
 
-        var host = this.FindControl<ContentControl>("PageContent");
-        if (host is not null) host.Content = null;
-        this.FindControl<Grid>("PageView")!.IsVisible = false;
-        this.FindControl<Grid>("HomeView")!.IsVisible = true;
+        var (_, pending) = _pages[^1];
+        _pages.RemoveAt(_pages.Count - 1);
 
-        RestoreHomeFocus();
+        if (_pages.Count > 0)
+        {
+            // Back into the page that opened this one.
+            ShowTopPage();
+        }
+        else
+        {
+            var host = this.FindControl<ContentControl>("PageContent");
+            if (host is not null) host.Content = null;
+            this.FindControl<Grid>("PageView")!.IsVisible = false;
+            this.FindControl<Grid>("HomeView")!.IsVisible = true;
+            RestoreHomeFocus();
+        }
+
         pending.TrySetResult(result);
     }
 
@@ -431,6 +461,32 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Removes OptiScaler from a game. Reached from the game's details page.</summary>
+    /// <summary>
+    /// Reverts whichever game is installed in this directory. The Storage screen knows a
+    /// backup's game only by its path — the directory recorded at install time, which for
+    /// some games is a nested Binaries folder rather than the game's root — so match on
+    /// the recorded directory first and fall back to the game containing it.
+    /// </summary>
+    private async Task<bool> RevertGameAtAsync(string gameDirectory)
+    {
+        var row = _vm.Games.FirstOrDefault(g =>
+                      PathsMatch(_manager.GetInstalledDirectory(g.Game), gameDirectory))
+                  ?? _vm.Games.FirstOrDefault(g => IsInside(gameDirectory, g.Game.InstallPath));
+
+        if (row is null) return false;
+
+        await RevertRowAsync(row);
+        return !row.Game.IsOptiscalerInstalled;
+    }
+
+    private static bool PathsMatch(string? a, string? b) =>
+        a is not null && b is not null &&
+        string.Equals(a.TrimEnd('/', '\\'), b.TrimEnd('/', '\\'), StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsInside(string? child, string? parent) =>
+        child is not null && parent is { Length: > 0 } &&
+        child.StartsWith(parent.TrimEnd('/', '\\'), StringComparison.OrdinalIgnoreCase);
+
     private async Task RevertRowAsync(GameRowViewModel row)
     {
         if (!_vm.IsIdle || !row.IsIdle) return;
