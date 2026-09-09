@@ -5,12 +5,10 @@ A deliberately **simple, AMD-focused** desktop frontend for the
 **install OptiScaler and get FSR 4 working in your games**, with almost no
 decisions to make.
 
-OptiScaler Manager is a sibling to
-[**OptiScaler Client Next**](https://github.com/filobus97/Optiscaler-Client)
-(a fork of OptiScaler Client by [Agustinm28](https://github.com/Agustinm28)). It
-**reuses that project's proven service layer** — the download/import, install and
-backup engines — but wraps it in a much smaller UI: one screen, one primary
-action per game, advanced options tucked away.
+It **reuses the proven service layer** of
+[**OptiScaler Client**](https://github.com/Optiscaler-Client/Optiscaler-Client) —
+the download/import, install and backup engines — but wraps it in a much smaller UI:
+one screen, one primary action per game, advanced options tucked away.
 
 > **Primary platform: Linux.** Windows is fully supported as the secondary
 > target; macOS at least runs the UI. Windows-only install paths are guarded.
@@ -428,10 +426,11 @@ A release can be cut three ways:
 
 OptiScaler Manager is built on the work of others and preserves their attribution:
 
-- The reused service layer comes from **OptiScaler Client** by
-  **[Agustín Montaña (Agustinm28)](https://github.com/Agustinm28)**, via the
-  **OptiScaler Client Next** fork
-  ([filobus97/Optiscaler-Client](https://github.com/filobus97/Optiscaler-Client)).
+- The reused service layer comes from
+  **[OptiScaler Client](https://github.com/Optiscaler-Client/Optiscaler-Client)**,
+  originally by **[Agustín Montaña (Agustinm28)](https://github.com/Agustinm28)**.
+  It was taken from a personal fork of that project, which has since been realigned
+  with upstream and carries nothing of its own.
 - The mod this app configures is **OptiScaler**, by the
   [upstream OptiScaler team](https://github.com/optiscaler/OptiScaler).
 
