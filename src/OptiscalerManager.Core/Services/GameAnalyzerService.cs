@@ -118,7 +118,13 @@ public class GameAnalyzerService
         game.OptiscalerVersion = null; // Will be repopulated from manifest or log
         game.DetectedComponents = new List<DetectedComponent>();
 
+        // Two sets that happen to hold the same paths but answer different questions, and
+        // must stay apart: ignoredFiles is version-detection hygiene (skip our own copies
+        // so the game's own FSR/XeSS version is reported), managerFiles is attribution
+        // (which files this app is responsible for). Sharing one variable for both is how
+        // the attribution bug went unnoticed.
         HashSet<string> ignoredFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> managerFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var blockHeuristicFallbackDetection = false;
 
         try
@@ -150,8 +156,20 @@ public class GameAnalyzerService
                                 game.IsOptiscalerInstalled = true;
                                 if (!string.IsNullOrEmpty(extManifest.OptiscalerVersion))
                                     game.OptiscalerVersion = extManifest.OptiscalerVersion;
+                                // InstalledFiles are relative to the directory the files were
+                                // actually written to — for nested layouts (…/SB/Binaries/Win64)
+                                // that is not the game root. Both consumers match on absolute
+                                // paths, so resolve them here or nothing ever matches.
+                                var installRoot = extManifest.InstalledGameDirectory is { Length: > 0 } recorded
+                                                  && Directory.Exists(recorded)
+                                    ? recorded
+                                    : candidate!;
                                 foreach (var f in extManifest.InstalledFiles)
-                                    ignoredFiles.Add(f);
+                                {
+                                    var absolute = Path.GetFullPath(Path.Combine(installRoot, f));
+                                    ignoredFiles.Add(absolute);
+                                    managerFiles.Add(absolute);
+                                }
                                 blockHeuristicFallbackDetection = true;
                                 Log.Write($"[Analyzer] Priority 0 (external store) detected OptiScaler {extManifest.OptiscalerVersion} for '{game.Name}'");
                                 goto detectOtherComponents;
@@ -226,7 +244,9 @@ public class GameAnalyzerService
                                 {
                                     foreach (var relFile in manifest.InstalledFiles)
                                     {
-                                        ignoredFiles.Add(Path.GetFullPath(Path.Combine(originDir, relFile)));
+                                        var absoluteLegacy = Path.GetFullPath(Path.Combine(originDir, relFile));
+                                        ignoredFiles.Add(absoluteLegacy);
+                                        managerFiles.Add(absoluteLegacy);
                                     }
                                 }
                             }
@@ -307,7 +327,7 @@ public class GameAnalyzerService
             // single "best" version for the game list; the details view needs each file
             // on its own, because one game can carry several FSR libraries at different
             // versions and that difference is exactly what decides what you can enable.
-            game.DetectedComponents = DescribeComponents(game, collectedFiles, ignoredFiles);
+            game.DetectedComponents = DescribeComponents(game, collectedFiles, managerFiles);
         }
         catch (Exception ex)
         {
@@ -319,8 +339,10 @@ public class GameAnalyzerService
 
     /// <summary>
     /// Turns the collected files into the list the details view renders: what each one
-    /// is, the version on disk, and whether it came with the game or this app put it
-    /// there (files this app installed are recorded in <paramref name="managerFiles"/>).
+    /// is, the version on disk, and whether this app is the reason it is there —
+    /// <paramref name="managerFiles"/> holds the absolute paths its manifest recorded.
+    /// Anything else is left unattributed rather than credited to the game, because a
+    /// file could equally have come from a mod, another tool, or the player.
     /// </summary>
     private static List<DetectedComponent> DescribeComponents(
         Game game, Dictionary<string, List<string>> collectedFiles, HashSet<string> managerFiles)
@@ -349,7 +371,7 @@ public class GameAnalyzerService
                     Role = def.Role,
                     Vendor = def.Vendor,
                     Explanation = def.Explanation,
-                    Source = managerFiles.Contains(fullPath) ? ComponentSource.Manager : ComponentSource.Game,
+                    Source = managerFiles.Contains(fullPath) ? ComponentSource.Manager : ComponentSource.Unattributed,
                 });
             }
         }

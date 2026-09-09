@@ -491,8 +491,17 @@ public sealed class ManagerService
         status?.Report($"Installing FSR 4 INT8 {version}…");
         // Keep the name the release ships as — newer INT8 builds are amdxcffx64.dll,
         // older ones amd_fidelityfx_upscaler_dx12.dll, and OptiScaler loads them by name.
-        var dest = Path.Combine(gameDir, Path.GetFileName(extrasDllPath));
-        File.Copy(extrasDllPath, dest, overwrite: true);
+        //
+        // Recorded in the manifest like every other installed file: without it revert had
+        // to fall back to the known-artifact list, and the details page could not tell
+        // this app had put the DLL there.
+        _install.InstallTrackedFile(game, extrasDllPath, Path.GetFileName(extrasDllPath), gameDir,
+            manifest =>
+            {
+                manifest.IncludesExtras = true;
+                manifest.ExtrasVersion = version;
+            },
+            logTag: "Fsr4Int8");
         game.Fsr4ExtraVersion = version;
     }
 

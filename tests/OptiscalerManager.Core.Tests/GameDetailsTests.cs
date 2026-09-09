@@ -160,7 +160,7 @@ namespace OptiscalerManager.Core.Tests
         public void FilesTheGameShippedAreNotCreditedToTheManager()
         {
             Place("nvngx_dlss.dll");
-            Assert.Equal(ComponentSource.Game,
+            Assert.Equal(ComponentSource.Unattributed,
                 Assert.Single(Analyze().DetectedComponents).Source);
         }
 

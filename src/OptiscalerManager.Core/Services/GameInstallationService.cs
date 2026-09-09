@@ -1652,6 +1652,89 @@ namespace OptiscalerManager.Core.Services
         }
 
         /// <summary>
+        /// Copies one file into a game that already has a tracked OptiScaler install, and
+        /// records it in the manifest so revert can undo it.
+        ///
+        /// The bookkeeping is the subtle part and is why every add-on shares this: never
+        /// re-backup a file already protected by an original backup, and never mistake a
+        /// file we placed earlier for a game original. <paramref name="previouslyOurs"/>
+        /// covers the case where an OptiScaler update rebuilt the manifest and lost this
+        /// component's records while its DLLs are still on disk.
+        /// </summary>
+        private void CopyFileIntoTrackedInstall(
+            InstallationManifest manifest, string storeKey, string gameDir,
+            string fileName, string sourcePath, bool previouslyOurs, string logTag)
+        {
+            var priorBackedUp = manifest.FilesOverwritten.Any(r => r.RelativePath.Equals(fileName, StringComparison.OrdinalIgnoreCase))
+                             || manifest.BackedUpFiles.Contains(fileName, StringComparer.OrdinalIgnoreCase);
+            var priorCreated = manifest.FilesCreated.Any(r => r.RelativePath.Equals(fileName, StringComparison.OrdinalIgnoreCase))
+                            || previouslyOurs;
+            var backupInStore = File.Exists(Path.Combine(_backupStore.GetFilesDir(storeKey), fileName));
+
+            var destPath = Path.Combine(gameDir, fileName);
+            var existedBefore = File.Exists(destPath);
+            string? preHash = null;
+
+            if (existedBefore && !priorBackedUp && !priorCreated)
+            {
+                preHash = ComputeSha256(destPath);
+                _backupStore.BackupFile(storeKey, gameDir, fileName);
+                manifest.BackedUpFiles.Add(fileName);
+                Log.Write($"[{logTag}] Backed up existing {fileName}");
+            }
+
+            // An original backup surviving in the store (from a previous install cycle)
+            // must keep its "overwritten" record so uninstall restores it.
+            var treatAsOriginal = (existedBefore && !priorCreated) || priorBackedUp || (priorCreated && backupInStore);
+            if (treatAsOriginal && !manifest.BackedUpFiles.Contains(fileName, StringComparer.OrdinalIgnoreCase) && backupInStore)
+                manifest.BackedUpFiles.Add(fileName);
+
+            File.Copy(sourcePath, destPath, overwrite: true);
+            if (!manifest.InstalledFiles.Contains(fileName, StringComparer.OrdinalIgnoreCase))
+                manifest.InstalledFiles.Add(fileName);
+            TrackManifestFileMutation(
+                manifest,
+                relativePath: fileName,
+                existedBefore: treatAsOriginal,
+                preInstallHash: preHash,
+                postInstallHash: ComputeSha256(destPath));
+        }
+
+        /// <summary>
+        /// Installs a single add-on file into a game that already has OptiScaler, tracked
+        /// in the manifest. Used by add-ons that run *after* the main install has been
+        /// committed, so they have to reopen the manifest and save it again.
+        ///
+        /// <paramref name="markManifest"/> records which component this file belongs to.
+        /// </summary>
+        public void InstallTrackedFile(
+            Game game, string sourcePath, string fileName, string gameDir,
+            Action<InstallationManifest>? markManifest = null, string logTag = "AddOn")
+        {
+            if (!File.Exists(sourcePath))
+                throw new FileNotFoundException($"The file to install was not found: {fileName}", sourcePath);
+
+            var storeKey = game.InstallPath;
+            var manifest = _backupStore.LoadManifest(storeKey);
+            if (manifest == null)
+            {
+                // No tracked install to attach to: place the file anyway rather than
+                // failing the install, and let the known-artifact list cover revert.
+                File.Copy(sourcePath, Path.Combine(gameDir, fileName), overwrite: true);
+                Log.Write($"[{logTag}] Installed {fileName} without a manifest to record it in.");
+                return;
+            }
+
+            CopyFileIntoTrackedInstall(manifest, storeKey, gameDir, fileName, sourcePath,
+                previouslyOurs: !string.IsNullOrEmpty(game.Fsr4ExtraVersion), logTag);
+
+            markManifest?.Invoke(manifest);
+            if (!manifest.ExpectedFinalMarkers.Contains(fileName, StringComparer.OrdinalIgnoreCase))
+                manifest.ExpectedFinalMarkers.Add(fileName);
+            _backupStore.SaveManifest(storeKey, manifest);
+        }
+
+        /// <summary>
         /// Install core for the bring-your-own-DLL overlay: the imported files replace
         /// the copies the installed OptiScaler release shipped, with the originals
         /// backed up so a revert puts them back.
@@ -1690,41 +1773,7 @@ namespace OptiscalerManager.Core.Services
                                  || !string.IsNullOrEmpty(game.Fsr4ExtraVersion);
 
             foreach (var (dllName, sourcePath) in files)
-            {
-                var priorBackedUp = manifest.FilesOverwritten.Any(r => r.RelativePath.Equals(dllName, StringComparison.OrdinalIgnoreCase))
-                                 || manifest.BackedUpFiles.Contains(dllName, StringComparer.OrdinalIgnoreCase);
-                var priorCreated = manifest.FilesCreated.Any(r => r.RelativePath.Equals(dllName, StringComparison.OrdinalIgnoreCase))
-                                || previouslyOurs;
-                var backupInStore = File.Exists(Path.Combine(_backupStore.GetFilesDir(storeKey), dllName));
-
-                var destPath = Path.Combine(gameDir, dllName);
-                var existedBefore = File.Exists(destPath);
-                string? preHash = null;
-
-                if (existedBefore && !priorBackedUp && !priorCreated)
-                {
-                    preHash = ComputeSha256(destPath);
-                    _backupStore.BackupFile(storeKey, gameDir, dllName);
-                    manifest.BackedUpFiles.Add(dllName);
-                    Log.Write($"[{logTag}] Backed up existing {dllName}");
-                }
-
-                // An original backup surviving in the store (from a previous install cycle)
-                // must keep its "overwritten" record so uninstall restores it.
-                var treatAsOriginal = (existedBefore && !priorCreated) || priorBackedUp || (priorCreated && backupInStore);
-                if (treatAsOriginal && !manifest.BackedUpFiles.Contains(dllName, StringComparer.OrdinalIgnoreCase) && backupInStore)
-                    manifest.BackedUpFiles.Add(dllName);
-
-                File.Copy(sourcePath, destPath, overwrite: true);
-                if (!manifest.InstalledFiles.Contains(dllName, StringComparer.OrdinalIgnoreCase))
-                    manifest.InstalledFiles.Add(dllName);
-                TrackManifestFileMutation(
-                    manifest,
-                    relativePath: dllName,
-                    existedBefore: treatAsOriginal,
-                    preInstallHash: preHash,
-                    postInstallHash: ComputeSha256(destPath));
-            }
+                CopyFileIntoTrackedInstall(manifest, storeKey, gameDir, dllName, sourcePath, previouslyOurs, logTag);
 
             // Engage FSR4: Fsr4Update lets OptiScaler upgrade FSR 3.x to FSR 4, and
             // [Upscalers] selects the FSR upscaler in the first place — without it the

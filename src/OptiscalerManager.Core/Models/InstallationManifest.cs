@@ -65,6 +65,11 @@ namespace OptiscalerManager.Core.Models
         public bool IncludesCustomFsrSdk { get; set; }
 
         /// <summary>
+        /// Version of the community FSR 4 INT8 build installed with this game, if any.
+        /// </summary>
+        public string? ExtrasVersion { get; set; }
+
+        /// <summary>
         /// Version label of the user-imported custom amdxcffx64.dll installed with this game, if any.
         /// </summary>
         public string? CustomFsr4DllVersion { get; set; }

@@ -12,6 +12,7 @@ namespace OptiscalerManager.Core.Tests;
 /// The tiers decide whether a delete button appears, so getting them wrong either
 /// hides reclaimable space or offers to strand a game in its modified state.
 /// </summary>
+[Collection(AppDataCollection.Name)]
 public class StorageInventoryTests
 {
     [Theory]

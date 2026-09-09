@@ -209,7 +209,7 @@ public sealed class GamepadNavigator : IDisposable
         if (elapsed <= TimeSpan.Zero || elapsed > TimeSpan.FromMilliseconds(250)) return;
 
         if (ActiveWindow() is not { } window) return;
-        if (FindScrollViewer(window) is not { } viewer) return;
+        if (FindScrollTarget(window) is not { } viewer) return;
 
         var step = MaxScrollPixelsPerSecond * elapsed.TotalSeconds;
         var maxX = Math.Max(0, viewer.Extent.Width - viewer.Viewport.Width);
@@ -221,10 +221,19 @@ public sealed class GamepadNavigator : IDisposable
 
     /// <summary>
     /// The scroller the stick should move: the one holding the focused control, so the
-    /// stick always scrolls what you are looking at. Falls back to the first scrollable
-    /// one in the window when focus is outside any of them.
+    /// stick always scrolls what you are looking at. When focus sits outside any of them
+    /// — the details page starts on its action buttons, which are below the scroll area —
+    /// it falls back to the first scrollable one that is actually on screen.
+    ///
+    /// "On screen" is the part that matters. Pages replace the game list by hiding it,
+    /// not by unloading it, so the hidden list keeps a scrollable extent from its last
+    /// layout. Without the visibility check the fallback returned that hidden list, and
+    /// the stick silently scrolled something the user could not see.
+    ///
+    /// Public so the UI harness can assert against the real thing rather than a copy of
+    /// this logic — a copy passes happily while this method is broken.
     /// </summary>
-    private static ScrollViewer? FindScrollViewer(Window window)
+    public static ScrollViewer? FindScrollTarget(Window window)
     {
         for (var v = window.FocusManager?.GetFocusedElement() as Visual; v is not null; v = v.GetVisualParent())
             if (v is ScrollViewer inner && CanScroll(inner))
@@ -234,7 +243,8 @@ public sealed class GamepadNavigator : IDisposable
     }
 
     private static bool CanScroll(ScrollViewer viewer) =>
-        viewer.Extent.Height > viewer.Viewport.Height || viewer.Extent.Width > viewer.Viewport.Width;
+        viewer.IsEffectivelyVisible &&
+        (viewer.Extent.Height > viewer.Viewport.Height || viewer.Extent.Width > viewer.Viewport.Width);
 
     /// <summary>
     /// Moves focus onto a window's first control. Used when a screen opens with nothing

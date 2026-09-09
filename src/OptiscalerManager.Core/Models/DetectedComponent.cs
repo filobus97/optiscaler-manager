@@ -14,12 +14,19 @@ public enum TechRole
     Runtime,
 }
 
-/// <summary>Where a file came from.</summary>
+/// <summary>
+/// Whether this app is responsible for a file being where it is.
+///
+/// Only <see cref="Manager"/> is something the app can actually prove, from its install
+/// manifest. Everything else is <see cref="Unattributed"/> — the file may have shipped
+/// with the game, or been put there by a mod, another tool, or the player. The app has
+/// no way to tell those apart, so it does not guess.
+/// </summary>
 public enum ComponentSource
 {
-    /// <summary>Shipped with the game.</summary>
-    Game,
-    /// <summary>Placed there by this app.</summary>
+    /// <summary>This app did not put the file here. Who did is unknown.</summary>
+    Unattributed,
+    /// <summary>Placed there by this app, according to the install manifest.</summary>
     Manager,
 }
 

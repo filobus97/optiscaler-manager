@@ -104,9 +104,11 @@ public partial class GameDetailsPage : UserControl, IHostedPage
             Foreground = Brush("BrTextPrimary"),
             VerticalAlignment = VerticalAlignment.Center,
         });
-        heading.Children.Add(SourceTag(c.Source == ComponentSource.Manager
-            ? "added by this app"
-            : "came with the game"));
+        // Only tagged when the manifest proves this app put the file here. Anything else
+        // gets no tag: the app cannot tell a file the game shipped from one a mod or the
+        // player dropped in, and "came with the game" was asserting exactly that.
+        if (c.Source == ComponentSource.Manager)
+            heading.Children.Add(SourceTag("added by this app"));
 
         var panel = new StackPanel { Spacing = 2 };
         panel.Children.Add(heading);
