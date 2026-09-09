@@ -1,6 +1,8 @@
 // OptiScaler Manager - tests
 // Licensed under GPL-3.0-or-later (see repository LICENSE).
 
+using System;
+using System.IO;
 using OptiscalerManager.Core.Services;
 using Xunit;
 
@@ -9,6 +11,83 @@ namespace OptiscalerManager.Core.Tests
     /// <summary>Pins the pure version-comparison logic of the app self-update check.</summary>
     public class AppUpdateServiceTests
     {
+        // ── Which executable did the payload bring? ─────────────────────────────
+        //
+        // This decides what gets restarted after an update. Guess wrong when the app is
+        // renamed and the updater restarts the version it just replaced, leaving the
+        // user on the old build with the update banner reappearing every launch.
+
+        private static string PayloadDir(params string[] fileNames)
+        {
+            var dir = Path.Combine(Path.GetTempPath(), "osm_payload_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            foreach (var name in fileNames)
+                File.WriteAllText(Path.Combine(dir, name), "x");
+            return dir;
+        }
+
+        [Fact]
+        public void APayloadKeepingTheSameNameIsRecognised()
+        {
+            var dir = PayloadDir("OptiscalerManager", "update.sh", "config.json", "VERSION");
+            try
+            {
+                Assert.Equal("OptiscalerManager",
+                    AppUpdateService.FindPayloadExecutableName(dir, "OptiscalerManager"));
+            }
+            finally { Directory.Delete(dir, true); }
+        }
+
+        [Fact]
+        public void ARenamedPayloadIsFoundByElimination()
+        {
+            var dir = PayloadDir("UpscalerManager", "update.sh", "update.ps1", "config.json", "VERSION");
+            try
+            {
+                Assert.Equal("UpscalerManager",
+                    AppUpdateService.FindPayloadExecutableName(dir, "OptiscalerManager"));
+            }
+            finally { Directory.Delete(dir, true); }
+        }
+
+        [Fact]
+        public void LooseNativeLibrariesAreNotMistakenForTheApp()
+        {
+            var dir = PayloadDir("UpscalerManager", "libSkiaSharp.so", "libHarfBuzzSharp.so",
+                                 "update.sh", "config.json", "VERSION", "README.md");
+            try
+            {
+                Assert.Equal("UpscalerManager",
+                    AppUpdateService.FindPayloadExecutableName(dir, "OptiscalerManager"));
+            }
+            finally { Directory.Delete(dir, true); }
+        }
+
+        [Fact]
+        public void TheWindowsExecutableIsFound()
+        {
+            var dir = PayloadDir("UpscalerManager.exe", "update.ps1", "config.json", "VERSION");
+            try
+            {
+                Assert.Equal("UpscalerManager.exe",
+                    AppUpdateService.FindPayloadExecutableName(dir, "OptiscalerManager.exe"));
+            }
+            finally { Directory.Delete(dir, true); }
+        }
+
+        [Fact]
+        public void AnAmbiguousPayloadIsNotGuessedAt()
+        {
+            // Two plausible executables: better to keep the current name than to pick
+            // one at random and restart something that is not the app.
+            var dir = PayloadDir("UpscalerManager", "SomethingElse", "update.sh");
+            try
+            {
+                Assert.Null(AppUpdateService.FindPayloadExecutableName(dir, "OptiscalerManager"));
+            }
+            finally { Directory.Delete(dir, true); }
+        }
+
         [Theory]
         [InlineData("v0.6.0", "0.6.0")]
         [InlineData("0.6.0", "0.6.0")]

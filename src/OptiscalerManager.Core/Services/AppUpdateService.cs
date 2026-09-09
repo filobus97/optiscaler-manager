@@ -295,7 +295,11 @@ namespace OptiscalerManager.Core.Services
                 System.IO.Compression.ZipFile.ExtractToDirectory(zip, extract, overwriteFiles: true);
 
                 report?.Invoke("Applying the update…");
-                SwapFilesIntoPlace(extract, dir, Path.GetFileName(self));
+                // The payload may carry a differently-named executable (the app gets
+                // renamed); restart whatever was actually installed, not the name we
+                // happen to be running under, or we would relaunch the version we just
+                // replaced and re-offer the same update forever.
+                self = SwapFilesIntoPlace(extract, dir, Path.GetFileName(self));
 
                 // Clean the staging dir now — after exec we're gone.
                 try { Directory.Delete(staging, true); } catch { }
@@ -343,17 +347,70 @@ namespace OptiscalerManager.Core.Services
         /// swapped LAST, so a mid-way failure never leaves us re-execing a half-written
         /// binary (every other file is same-filesystem-atomic).
         /// </summary>
-        private static void SwapFilesIntoPlace(string extractDir, string installDir, string exeName)
+        /// <summary>
+        /// Moves an extracted payload over the install directory and returns the path of
+        /// the executable now installed — which is not necessarily the one we are running
+        /// from, because a release may rename the application.
+        ///
+        /// The executable is moved last: it is the file this process was started from.
+        /// </summary>
+        private static string SwapFilesIntoPlace(string extractDir, string installDir, string currentExeName)
         {
+            var payloadExeName = FindPayloadExecutableName(extractDir, currentExeName) ?? currentExeName;
+
             string? exeSource = null;
             foreach (var src in Directory.GetFiles(extractDir, "*", SearchOption.AllDirectories))
             {
                 var rel = Path.GetRelativePath(extractDir, src);
-                if (string.Equals(rel, exeName, StringComparison.Ordinal)) { exeSource = src; continue; }
+                if (string.Equals(rel, payloadExeName, StringComparison.Ordinal)) { exeSource = src; continue; }
                 MoveOverwrite(src, Path.Combine(installDir, rel));
             }
-            if (exeSource is not null)
-                MoveOverwrite(exeSource, Path.Combine(installDir, exeName));
+
+            var installedExe = Path.Combine(installDir, payloadExeName);
+            if (exeSource is not null) MoveOverwrite(exeSource, installedExe);
+
+            // A renamed application would otherwise leave its previous executable behind,
+            // still runnable and still the old version.
+            if (!string.Equals(payloadExeName, currentExeName, StringComparison.Ordinal))
+            {
+                Log.Write($"[AppUpdate] The application was renamed: {currentExeName} -> {payloadExeName}");
+                try { File.Delete(Path.Combine(installDir, currentExeName)); } catch { }
+            }
+
+            return installedExe;
+        }
+
+        /// <summary>Files that travel beside the executable and are never the app itself.</summary>
+        private static readonly string[] NonExecutableNames =
+            { "update.sh", "update.ps1", "config.json", "VERSION" };
+
+        private static readonly string[] NonExecutableExtensions =
+            { ".json", ".so", ".dylib", ".dll", ".pdb", ".txt", ".md", ".sh", ".ps1", ".config" };
+
+        /// <summary>
+        /// The application executable inside an extracted payload: the single top-level
+        /// file that is not one of the things shipped alongside it. Prefers an exact match
+        /// on the current name, so an ordinary same-name update never has to guess.
+        /// </summary>
+        internal static string? FindPayloadExecutableName(string extractDir, string currentExeName)
+        {
+            if (File.Exists(Path.Combine(extractDir, currentExeName))) return currentExeName;
+
+            string? candidate = null;
+            foreach (var path in Directory.GetFiles(extractDir))
+            {
+                var name = Path.GetFileName(path);
+                if (NonExecutableNames.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
+
+                var extension = Path.GetExtension(name);
+                if (!string.IsNullOrEmpty(extension) &&
+                    NonExecutableExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase)) continue;
+
+                // More than one plausible executable: too ambiguous to act on.
+                if (candidate is not null) return null;
+                candidate = name;
+            }
+            return candidate;
         }
 
         private static void MoveOverwrite(string src, string dest)

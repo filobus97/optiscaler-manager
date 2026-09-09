@@ -31,8 +31,24 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Repo = 'filobus97/optiscaler-manager'
-$AssetPrefix = 'OptiscalerManager'
-$ExeName = 'OptiscalerManager.exe'
+
+# Fallback only. The executable is discovered from the payload rather than assumed, so
+# renaming the application does not strand users: the updater shipped with the *old*
+# release performs the renaming update, and a hardcoded name would relaunch the very
+# version it just replaced.
+$LegacyExeName = 'OptiscalerManager.exe'
+$script:ExeName = $LegacyExeName
+
+# The application executable in a folder: the one .exe that is not something we ship
+# beside it.
+function Find-AppExe([string]$Folder) {
+    if (-not (Test-Path $Folder)) { return $null }
+    $candidate = Get-ChildItem -Path $Folder -Filter *.exe -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -notmatch '^(update|unins)' } |
+        Select-Object -First 1
+    if ($candidate) { return $candidate.Name }
+    return $null
+}
 
 # Install dir = -Dir, else this script's folder. Resolved first so the relaunch
 # in the outer finally always knows where the exe lives.
@@ -85,11 +101,13 @@ function Invoke-Update {
     }
 
     $asset = $release.assets | Where-Object { $_.name -like "*-$Rid.zip" } | Select-Object -First 1
-    if (-not $asset) { throw "No asset for $Rid in release $latest (expected $AssetPrefix-$latestNum-$Rid.zip)." }
+    if (-not $asset) { throw "No asset for $Rid in release $latest (expected an asset ending in -$Rid.zip)." }
 
     # If the app is (still) running, its .exe is locked. Interactive flow only —
     # the in-app flow already waited above.
-    $procName = [IO.Path]::GetFileNameWithoutExtension($ExeName)
+    $installedExe = Find-AppExe $Dir
+    if ($installedExe) { $script:ExeName = $installedExe }
+    $procName = [IO.Path]::GetFileNameWithoutExtension($script:ExeName)
     $running = Get-Process -Name $procName -ErrorAction SilentlyContinue
     if ($running -and $WaitPid -eq 0) {
         $answer = Read-Host "OptiScaler Manager is running and must be closed to update. Close it now? [y/N]"
@@ -113,10 +131,22 @@ function Invoke-Update {
         Expand-Archive -Path $zip -DestinationPath $extract -Force
 
         Write-Host "Installing to $Dir ..."
-        # Copy the new payload over the install dir. User data lives in
-        # %APPDATA%\OptiscalerManager, so this only replaces the program itself,
-        # its bundled config.json template and these scripts.
+        # Resolve both names before copying: if the application was renamed between
+        # these releases the old .exe must go, or it lingers beside the new one and
+        # anything pointing at the old name keeps starting the previous version.
+        $oldExe = Find-AppExe $Dir
+        $newExe = Find-AppExe $extract
+        if ($newExe) { $script:ExeName = $newExe } elseif ($oldExe) { $script:ExeName = $oldExe }
+
+        # Copy the new payload over the install dir. User data lives in the app-data
+        # folder, so this only replaces the program itself, its bundled config.json
+        # template and these scripts.
         Copy-Item -Path (Join-Path $extract '*') -Destination $Dir -Recurse -Force
+
+        if ($oldExe -and $newExe -and ($oldExe -ne $newExe)) {
+            Write-Host "The application was renamed: $oldExe -> $newExe"
+            Remove-Item -Path (Join-Path $Dir $oldExe) -Force -ErrorAction SilentlyContinue
+        }
 
         Write-Host "Done. Updated to $latest. Your settings, profiles, DLLs and backups were untouched." -ForegroundColor Green
     }
@@ -137,9 +167,11 @@ finally {
     # In-app flow: bring the app back regardless of how the update went, so the
     # user is never left with nothing after "Update now".
     if ($Relaunch) {
-        $exe = Join-Path $Dir $ExeName
+        $launch = Find-AppExe $Dir
+        if (-not $launch) { $launch = $script:ExeName }
+        $exe = Join-Path $Dir $launch
         if (Test-Path $exe) {
-            Write-Host "Relaunching $ExeName ..."
+            Write-Host "Relaunching $launch ..."
             Start-Process -FilePath $exe -WorkingDirectory $Dir
         }
     }

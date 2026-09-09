@@ -24,24 +24,58 @@
 # which makes it safe for the update to overwrite this very file mid-run.
 
 REPO="filobus97/optiscaler-manager"
-ASSET_PREFIX="OptiscalerManager"
+
+# Fallback only. The app binary is discovered from the payload rather than assumed,
+# so that renaming the application does not strand users: the updater shipped with the
+# *old* release is the one that performs the renaming update, and if it relaunches a
+# hardcoded name it restarts the version it just replaced — forever re-offering the
+# same update.
+LEGACY_APP_NAME="OptiscalerManager"
 
 RELAUNCH=0
 INSTALL_DIR=""
+APP_BIN=""          # resolved once the payload is extracted
 COPY_STATE="none"   # none | started | done — lets cleanup warn on an interrupted copy
+
+# Echoes the name of the application executable inside a directory: the one file that
+# is executable and is not one of the things we ship beside it.
+discover_app_binary() {
+    dir="$1"
+    [ -d "$dir" ] || return 0
+    for f in "$dir"/*; do
+        [ -f "$f" ] || continue
+        [ -x "$f" ] || continue
+        name=$(basename "$f")
+        case "$name" in
+            update.sh|update.ps1|config.json|VERSION|*.json|*.so|*.dylib|*.dll) continue ;;
+        esac
+        echo "$name"
+        return 0
+    done
+}
+
+# The binary to start: whatever we just installed, else whatever is already there,
+# else the name this app used to have.
+app_to_launch() {
+    if [ -n "$APP_BIN" ]; then echo "$APP_BIN"; return 0; fi
+    found=$(discover_app_binary "$INSTALL_DIR")
+    if [ -n "$found" ]; then echo "$found"; return 0; fi
+    echo "$LEGACY_APP_NAME"
+}
 
 # Runs from the EXIT trap: remove the temp dir (if any) then bring the app back
 # regardless of how the update went (so the in-app flow never strands the user).
 cleanup() {
     [ -n "${TMP:-}" ] && rm -rf "$TMP"
-    if [ "$RELAUNCH" -eq 1 ] && [ -x "$INSTALL_DIR/$ASSET_PREFIX" ]; then
+    launch=$(app_to_launch)
+    if [ "$RELAUNCH" -eq 1 ] && [ -n "$launch" ] && [ -x "$INSTALL_DIR/$launch" ]; then
         # If the file copy was interrupted, the binary may be half-written — we still
         # relaunch (better than leaving the user with nothing) but say so clearly.
         [ "$COPY_STATE" = "started" ] && \
             echo "WARNING: the update was interrupted while copying files; the install may be incomplete. Re-run the updater." >&2
-        echo "Relaunching $ASSET_PREFIX …"
+        echo "Relaunching $launch …"
         # Detach fully so the app outlives this script.
-        (cd "$INSTALL_DIR" && nohup "./$ASSET_PREFIX" >/dev/null 2>&1 &)
+        (cd "$INSTALL_DIR" && nohup "./$launch" >/dev/null 2>&1 &)
     fi
 }
 
@@ -122,7 +156,7 @@ main() {
         URL=$(printf '%s' "$JSON" | tr ',{}' '\n' \
             | grep 'browser_download_url' | grep -- "-$RID\.zip" | head -n1 \
             | sed -E 's/.*(https:[^"]+).*/\1/')
-        [ -n "$URL" ] || die "No asset for $RID in release $LATEST (expected ${ASSET_PREFIX}-${LATEST_NUM}-${RID}.zip)."
+        [ -n "$URL" ] || die "No asset for $RID in release $LATEST (expected an asset ending in -${RID}.zip)."
     fi
 
     CURRENT=""
@@ -145,6 +179,13 @@ main() {
     mkdir -p "$TMP/extract"
     unzip -oq "$TMP/pkg.zip" -d "$TMP/extract" || die "Extraction failed (corrupt download?)."
 
+    # Resolve both names before copying: if the application was renamed between these
+    # two releases, the old executable has to be removed or it lingers next to the new
+    # one and anything pointing at the old name keeps starting the previous version.
+    OLD_BIN=$(discover_app_binary "$INSTALL_DIR")
+    APP_BIN=$(discover_app_binary "$TMP/extract")
+    [ -n "$APP_BIN" ] || APP_BIN="$OLD_BIN"
+
     echo "Installing to $INSTALL_DIR …"
     # Copy the new payload over the install dir. User data is elsewhere, so this
     # only replaces the program, its bundled config.json template and these scripts.
@@ -152,9 +193,14 @@ main() {
     cp -a "$TMP/extract/." "$INSTALL_DIR/" || die "Copy failed. Is the app closed and the folder writable?"
     COPY_STATE="done"
 
+    if [ -n "$OLD_BIN" ] && [ -n "$APP_BIN" ] && [ "$OLD_BIN" != "$APP_BIN" ]; then
+        echo "The application was renamed: $OLD_BIN -> $APP_BIN"
+        rm -f "$INSTALL_DIR/$OLD_BIN" || true
+    fi
+
     # Ensure the app and updater stay executable.
-    for f in "$ASSET_PREFIX" update.sh; do
-        [ -f "$INSTALL_DIR/$f" ] && chmod +x "$INSTALL_DIR/$f" 2>/dev/null || true
+    for f in "$APP_BIN" update.sh; do
+        [ -n "$f" ] && [ -f "$INSTALL_DIR/$f" ] && chmod +x "$INSTALL_DIR/$f" 2>/dev/null || true
     done
 
     echo "Done. Updated to $LATEST. Your settings, profiles, DLLs and backups were untouched."

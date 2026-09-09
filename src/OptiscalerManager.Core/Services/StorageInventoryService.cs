@@ -71,9 +71,8 @@ public sealed class StorageInventoryService
 
     public StorageInventoryService(AppConfiguration config)
     {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        _baseDir = Path.Combine(appData, "OptiscalerManager");
-        _cacheDir = Path.Combine(_baseDir, "Cache");
+        _baseDir = AppDataPaths.Root;
+        _cacheDir = AppDataPaths.Cache;
         _config = config;
     }
 

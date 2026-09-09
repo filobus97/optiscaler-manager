@@ -151,9 +151,8 @@ namespace OptiscalerManager.Core.Services
         public ComponentManagementService(IManualComponentProvider? manualProvider)
         {
             _manualProvider = manualProvider ?? new NullManualComponentProvider();
-            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            _baseDir = Path.Combine(appData, "OptiscalerManager");
-            _cacheDir = Path.Combine(_baseDir, "Cache");
+            _baseDir = AppDataPaths.Root;
+            _cacheDir = AppDataPaths.Cache;
             _versionFile = Path.Combine(_baseDir, "versions.json");
             _configFile = Path.Combine(_baseDir, "config.json");
             _releasesCacheFile = Path.Combine(_baseDir, "releases_cache.json");
@@ -228,21 +227,18 @@ namespace OptiscalerManager.Core.Services
                         }
                     }
 
-                    // Migration: configs inherited from OptiScaler Client (or written by
-                    // older Manager versions) either leave the App repo empty or point it
-                    // at the Client repos. This app's own releases live in
-                    // filobus97/optiscaler-manager — retarget once so the in-app update
-                    // check queries the right repository.
-                    if (string.IsNullOrWhiteSpace(_config.App.RepoOwner) ||
-                        string.IsNullOrWhiteSpace(_config.App.RepoName) ||
-                        _config.App.RepoName.Equals("Optiscaler-Client", StringComparison.OrdinalIgnoreCase))
+                    // The App repo is written to the user's config on first run and never
+                    // refreshed from the template, so a repository rename would leave every
+                    // existing install querying a name we no longer publish to. Retarget
+                    // whenever the stored name is one we have moved away from.
+                    if (AppRepository.NeedsRetargeting(_config.App))
                     {
-                        _config.App = new RepositoryConfig { RepoOwner = "filobus97", RepoName = "optiscaler-manager" };
+                        _config.App = AppRepository.Current;
                         try
                         {
                             var json = JsonSerializer.Serialize(_config, OptimizerContext.Default.AppConfiguration);
                             File.WriteAllText(_configFile, json);
-                            Log.Write("[Config] Retargeted App update repo to filobus97/optiscaler-manager.");
+                            Log.Write($"[Config] Retargeted App update repo to {AppRepository.Current.RepoOwner}/{AppRepository.Current.RepoName}.");
                         }
                         catch (Exception ex)
                         {

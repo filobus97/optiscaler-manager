@@ -42,9 +42,10 @@ public class GameAnalyzerService
     private static readonly string[] _xessNames = new[] { "libxess.dll" };
 
     private static readonly HashSet<string> _allTargetFileNames;
-    private static readonly string _diskCachePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "OptiscalerManager", "analysis_cache.json");
+    // A property, not a static readonly field: as a field the path was resolved once at
+    // type initialisation, so it kept pointing at wherever the app data happened to be
+    // when the type was first touched.
+    private static string _diskCachePath => Path.Combine(AppDataPaths.Root, "analysis_cache.json");
     private static volatile bool _diskCacheLoaded = false;
 
     static GameAnalyzerService()

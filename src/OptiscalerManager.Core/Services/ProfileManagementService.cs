@@ -19,8 +19,7 @@ namespace OptiscalerManager.Core.Services
 
         public ProfileManagementService()
         {
-            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            _profilesDir = Path.Combine(appData, "OptiscalerManager", "Profiles");
+            _profilesDir = AppDataPaths.Profiles;
             _builtInProfilesDir = Path.Combine(_profilesDir, "builtin");
             _customProfilesDir = Path.Combine(_profilesDir, "custom");
 
