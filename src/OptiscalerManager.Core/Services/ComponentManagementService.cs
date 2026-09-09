@@ -2378,21 +2378,5 @@ namespace OptiscalerManager.Core.Services
             return VersionOrder.Newest(versions);
         }
 
-        private static CustomFsr4DllInfo? ReadUserDllInfo(string versionDir, string logTag)
-        {
-            var infoPath = Path.Combine(versionDir, "dll_info.json");
-            if (!File.Exists(infoPath)) return null;
-            try
-            {
-                var json = File.ReadAllText(infoPath);
-                return JsonSerializer.Deserialize(json, OptimizerContext.Default.CustomFsr4DllInfo);
-            }
-            catch (Exception ex)
-            {
-                Log.Write($"[{logTag}] Failed to read dll_info.json: {ex.Message}");
-                return null;
-            }
-        }
-
     }
 }

@@ -1648,16 +1648,17 @@ namespace OptiscalerManager.Core.Services
                 throw new InvalidOperationException(
                     "No amd_fidelityfx_upscaler_dx12.dll found in the game folder to swap. Install OptiScaler first — the custom SDK only replaces OptiScaler's own FSR files in place.");
 
-            InstallUserDllSet(game, files, versionLabel, overrideGameDir, isSdk: true);
+            InstallUserDllSet(game, files, versionLabel, overrideGameDir);
         }
 
         /// <summary>
-        /// Shared install core for the two bring-your-own-DLL components.
-        /// isSdk selects the FSR SDK package (one or more DLLs) vs amdxcffx64.dll.
+        /// Install core for the bring-your-own-DLL overlay: the imported files replace
+        /// the copies the installed OptiScaler release shipped, with the originals
+        /// backed up so a revert puts them back.
         /// </summary>
-        private void InstallUserDllSet(Game game, List<(string name, string path)> files, string versionLabel, string? overrideGameDir, bool isSdk)
+        private void InstallUserDllSet(Game game, List<(string name, string path)> files, string versionLabel, string? overrideGameDir)
         {
-            string logTag = isSdk ? "CustomFsrSdk" : "CustomFsr4";
+            const string logTag = "CustomFsrSdk";
 
             foreach (var (name, path) in files)
                 if (!File.Exists(path))
@@ -1685,9 +1686,8 @@ namespace OptiscalerManager.Core.Services
             // while the DLLs we placed earlier are still on disk. For the SDK set, an
             // installed FSR4 INT8 Extras version also means the upscaler file is not a
             // game original (Extras installs the same file).
-            var previouslyOurs = isSdk
-                ? !string.IsNullOrEmpty(game.CustomFsrSdkVersion) || !string.IsNullOrEmpty(game.Fsr4ExtraVersion)
-                : !string.IsNullOrEmpty(game.CustomFsr4DllVersion);
+            var previouslyOurs = !string.IsNullOrEmpty(game.CustomFsrSdkVersion)
+                                 || !string.IsNullOrEmpty(game.Fsr4ExtraVersion);
 
             foreach (var (dllName, sourcePath) in files)
             {
@@ -1732,32 +1732,19 @@ namespace OptiscalerManager.Core.Services
             ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4Update", "true");
             SelectFsr4Upscaler(gameDir, true);
 
-            if (isSdk)
-            {
-                manifest.IncludesCustomFsrSdk = true;
-                manifest.CustomFsrSdkVersion = versionLabel;
-            }
-            else
-            {
-                manifest.IncludesCustomFsr4Dll = true;
-                manifest.CustomFsr4DllVersion = versionLabel;
-            }
+            manifest.IncludesCustomFsrSdk = true;
+            manifest.CustomFsrSdkVersion = versionLabel;
             foreach (var (dllName, _) in files)
                 if (!manifest.ExpectedFinalMarkers.Contains(dllName, StringComparer.OrdinalIgnoreCase))
                     manifest.ExpectedFinalMarkers.Add(dllName);
             _backupStore.SaveManifest(storeKey, manifest);
 
-            if (isSdk)
-            {
-                game.CustomFsrSdkVersion = versionLabel;
-                // The custom SDK replaces whatever the Extras component installed.
-                game.Fsr4ExtraVersion = null;
-            }
-            else
-            {
-                game.CustomFsr4DllVersion = versionLabel;
-            }
-            Log.Write($"[{logTag}] Installed v{versionLabel} and updated OptiScaler.ini ([FSR] UpscalerIndex=0, Fsr4Update=true)");
+            game.CustomFsrSdkVersion = versionLabel;
+            // The custom SDK replaces whatever the Extras component installed.
+            game.Fsr4ExtraVersion = null;
+
+            Log.Write($"[{logTag}] Installed v{versionLabel} and updated OptiScaler.ini " +
+                      "([FSR] Fsr4Update=true, and [Upscalers] set to the FSR upscaler)");
         }
 
         /// <summary>
