@@ -223,7 +223,12 @@ public static class ComponentRegistry
         if (fsr4Watermark)
             iniKeys.Add(new IniKeyChange("FSR", "Fsr4EnableWatermark", "true"));
         if (addNukemFg)
+        {
+            // Enabled too: OptiScaler defaults it to false, so setting only the input
+            // deploys the DLL and leaves frame generation switched off.
+            iniKeys.Add(new IniKeyChange("FrameGen", "Enabled", "true"));
             iniKeys.Add(new IniKeyChange("FrameGen", "FGInput", "nukems"));
+        }
         if (spoofMethod == SpoofMethod.Dxgi)
             iniKeys.Add(new IniKeyChange("Spoofing", "Dxgi", "true"));
         if (spoofMethod == SpoofMethod.OptiPatcher)
@@ -249,7 +254,9 @@ public static class ComponentRegistry
             Id = ComponentIds.Fsr4Extras,
             DisplayName = "FSR 4 INT8 community build",
             Description = "A community FSR 4.x INT8 upscaler build (amd_fidelityfx_upscaler_dx12.dll) from github.com/Agustinm28/OptiScaler-Extras (third-party, not the official OptiScaler project), at a version you pick. No proprietary AMD binary is bundled.",
-            TargetFiles = new[] { "amd_fidelityfx_upscaler_dx12.dll" },
+            // Either name: the build was renamed between releases, and exclusion with
+            // custom DLLs is derived from these.
+            TargetFiles = Fsr4Int8Build.KnownDllNames,
             IniKeys = new[]
             {
                 new IniKeyChange("FSR", "Fsr4Update", "true"),
@@ -299,7 +306,11 @@ public static class ComponentRegistry
             TargetFiles = new[] { "dlssg_to_fsr3_amd_is_better.dll" },
             // OptiScaler 0.9.x selects Nukem's mod via [FrameGen] FGInput (the legacy
             // sectionless FGType key is no longer read).
-            IniKeys = new[] { new IniKeyChange("FrameGen", "FGInput", "nukems") },
+            IniKeys = new[]
+            {
+                new IniKeyChange("FrameGen", "Enabled", "true"),
+                new IniKeyChange("FrameGen", "FGInput", "nukems"),
+            },
             Requires = new[] { ComponentIds.OptiScaler },
             IsBringYourOwn = true,
         },

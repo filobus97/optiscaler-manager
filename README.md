@@ -85,7 +85,9 @@ Building from source is in [Building & running](#building--running).
       (auto-downloaded). Translates Nvidia Reflex into **AMD Anti-Lag 2 / LatencyFlex**;
     - *Nukem DLSSG-to-FSR3* — frame generation for games with DLSS-G
       (`dlssg_to_fsr3_amd_is_better.dll`, **bring-your-own** — import it once in
-      Settings). Selecting it sets `[FrameGen] FGInput=nukems` and pulls fakenvapi in;
+      Settings). Selecting it sets `[FrameGen] Enabled=true` and `FGInput=nukems`
+      (OptiScaler defaults frame generation to off, so both are needed) and pulls
+      fakenvapi in;
     - *Nvidia override* — for games that hide DLSS options on AMD/Intel. **Per game
       only** (chosen on this screen at each install; no global setting), with a
       **method selector**: *Default* uses OptiScaler's built-in DXGI spoofing
@@ -130,9 +132,11 @@ OptiScaler Manager downloads OptiScaler releases (which bundle AMD's signed,
 openly-distributed FFX DLLs) and community FSR 4 INT8 builds from the third-party
 [`Agustinm28/OptiScaler-Extras`](https://github.com/Agustinm28/OptiScaler-Extras)
 repository. It **never downloads, bundles, or links to the
-proprietary FSR 4 driver runtime `amdxcffx64.dll`**: that one is strictly
-**bring-your-own**, supplied from a local file/folder/archive you already possess and
-copied into a private cache. See [Importing your own DLLs](#importing-your-own-dlls-and-ini-profiles).
+proprietary FSR 4 driver runtime**: AMD's own binary is strictly **bring-your-own**,
+supplied from a local file/folder/archive you already possess and copied into a private
+cache. Note that recent community INT8 builds ship *under the same filename*
+(`amdxcffx64.dll`) — that is a community-built replacement occupying the same slot, not
+AMD's binary, and it only arrives if you explicitly choose that backend. See [Importing your own DLLs](#importing-your-own-dlls-and-ini-profiles).
 
 ---
 
@@ -294,10 +298,10 @@ no other download host, and nothing is fetched from a URL you cannot see here:
 | OptiScaler itself | [`optiscaler/OptiScaler`](https://github.com/optiscaler/OptiScaler) | official project |
 | OptiPatcher (Nvidia override) | [`optiscaler/OptiPatcher`](https://github.com/optiscaler/OptiPatcher) | official project |
 | fakenvapi (Reflex → Anti-Lag 2) | [`optiscaler/fakenvapi`](https://github.com/optiscaler/fakenvapi) | official project |
-| **FSR 4 INT8 community builds** | [`Agustinm28/OptiScaler-Extras`](https://github.com/Agustinm28/OptiScaler-Extras) | **third-party**, not the official project |
+| **FSR 4 INT8 community builds** | [`Agustinm28/OptiScaler-Extras`](https://github.com/Agustinm28/OptiScaler-Extras) | **third-party**, not the official project (recent releases ship as `amdxcffx64.dll`) |
 | This app's own updates | [`filobus97/optiscaler-manager`](https://github.com/filobus97/optiscaler-manager) | this project |
 | Nukem's DLSSG-to-FSR3 | — | **not downloaded**: you import it yourself |
-| `amdxcffx64.dll` (AMD FSR 4 runtime) | — | **never downloaded**: bring your own |
+| AMD's own FSR 4 runtime binary | — | **never downloaded**: bring your own |
 
 Two of those deserve a second look. Despite the name, **OptiScaler-Extras is a personal
 repository, not part of the official OptiScaler project** — the INT8 builds are community

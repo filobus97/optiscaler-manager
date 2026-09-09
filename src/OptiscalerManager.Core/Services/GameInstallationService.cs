@@ -461,8 +461,13 @@ namespace OptiscalerManager.Core.Services
 
                         // Select Nukem's mod as the FG input. OptiScaler 0.9.x reads
                         // [FrameGen] FGInput; the legacy sectionless FGType key is dead.
+                        // Enabled is required as well: OptiScaler defaults it to false,
+                        // so setting only the input deploys the DLL but never actually
+                        // turns frame generation on. FGOutput follows FGInput=nukems
+                        // automatically inside OptiScaler.
+                        ModifyOptiScalerIniKey(gameDir, "FrameGen", "Enabled", "true");
                         ModifyOptiScalerIniKey(gameDir, "FrameGen", "FGInput", "nukems");
-                        Log.Write($"[Install] Set [FrameGen] FGInput=nukems for NukemFG");
+                        Log.Write($"[Install] Set [FrameGen] Enabled=true, FGInput=nukems for NukemFG");
                     }
                 }
 

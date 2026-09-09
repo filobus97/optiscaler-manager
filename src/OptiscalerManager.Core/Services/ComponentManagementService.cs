@@ -1110,19 +1110,21 @@ namespace OptiscalerManager.Core.Services
         /// Returns true if the DLL for the given Extras version is already cached.
         /// </summary>
         public bool IsExtrasDllCached(string version)
-            => File.Exists(Path.Combine(GetExtrasDllCachePath(version), "amd_fidelityfx_upscaler_dx12.dll"));
+            => Components.Fsr4Int8Build.FindIn(GetExtrasDllCachePath(version)) is not null;
 
         /// <summary>
-        /// Downloads the Extras zip for the given version and extracts amd_fidelityfx_upscaler_dx12.dll
-        /// into the per-version cache folder. Returns the path to the DLL file.
+        /// Downloads the Extras zip for the given version and extracts its INT8 DLL into
+        /// the per-version cache folder. Returns the path to the DLL file, which keeps
+        /// whichever name the release ships (see <see cref="Components.Fsr4Int8Build"/>).
         /// </summary>
         public async Task<string> DownloadExtrasDllAsync(string version, IProgress<double>? progress = null)
         {
             var extractDir = GetExtrasDllCachePath(version);
-            var dllPath = Path.Combine(extractDir, "amd_fidelityfx_upscaler_dx12.dll");
+            var cached = Components.Fsr4Int8Build.FindIn(extractDir);
 
-            if (File.Exists(dllPath))
+            if (cached is not null)
             {
+                var dllPath = cached;
                 Log.Write($"[ExtrasDownload] DLL for v{version} already cached at {dllPath}");
                 return dllPath;
             }
@@ -1188,16 +1190,16 @@ namespace OptiscalerManager.Core.Services
                     using var archive = SharpCompress.Archives.ArchiveFactory.Open(tempZip);
                     foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
                     {
-                        if (Path.GetFileName(entry.Key ?? "").Equals("amd_fidelityfx_upscaler_dx12.dll",
-                            StringComparison.OrdinalIgnoreCase))
-                        {
-                            var dest = SafeDestinationPath(extractDir, "amd_fidelityfx_upscaler_dx12.dll");
-                            using var entryStream = entry.OpenEntryStream();
-                            using var outStream = File.Create(dest);
-                            entryStream.CopyTo(outStream, 81920);
-                            Log.Write($"[ExtrasDownload] Extracted DLL to {dest}");
-                            break;
-                        }
+                        var name = Path.GetFileName(entry.Key ?? "");
+                        if (!Components.Fsr4Int8Build.IsKnown(name)) continue;
+
+                        // Keep the name the release ships: it is what OptiScaler loads.
+                        var dest = SafeDestinationPath(extractDir, name);
+                        using var entryStream = entry.OpenEntryStream();
+                        using var outStream = File.Create(dest);
+                        entryStream.CopyTo(outStream, 81920);
+                        Log.Write($"[ExtrasDownload] Extracted {name} to {dest}");
+                        break;
                     }
                 });
             }
@@ -1206,23 +1208,26 @@ namespace OptiscalerManager.Core.Services
                 try { if (File.Exists(tempZip)) File.Delete(tempZip); } catch { }
             }
 
-            if (!File.Exists(dllPath))
-                throw new Exception("amd_fidelityfx_upscaler_dx12.dll not found inside the downloaded archive.");
+            var extracted = Components.Fsr4Int8Build.FindIn(extractDir);
+            if (extracted is null)
+                throw new Exception(
+                    "No FSR 4 INT8 DLL found inside the downloaded archive (expected " +
+                    string.Join(" or ", Components.Fsr4Int8Build.KnownDllNames) + ").");
 
             // Same check a DLL you import by hand gets. A download is not more
             // trustworthy than a local file, so do not let it skip validation: a
             // truncated transfer or a wrong-architecture build should fail here rather
             // than next to the game's exe.
-            var pe = PeFileInspector.Inspect(dllPath);
+            var pe = PeFileInspector.Inspect(extracted);
             if (!pe.IsValidPe || !pe.Is64Bit)
             {
-                try { File.Delete(dllPath); } catch { }
+                try { File.Delete(extracted); } catch { }
                 throw new Exception(
-                    $"The downloaded amd_fidelityfx_upscaler_dx12.dll is not a valid 64-bit DLL " +
+                    $"The downloaded {Path.GetFileName(extracted)} is not a valid 64-bit DLL " +
                     $"(from {downloadUrl}). Nothing was installed.");
             }
 
-            return dllPath;
+            return extracted;
         }
 
         // ── AMD FidelityFX SDK (official, open-source) ────────────────────────────

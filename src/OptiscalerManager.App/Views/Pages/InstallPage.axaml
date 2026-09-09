@@ -80,7 +80,7 @@
                       ToolTip.Tip="Installs nvapi64.dll + fakenvapi.ini (downloaded from the optiscaler/fakenvapi releases). Translates Nvidia Reflex calls into AMD Anti-Lag 2 or LatencyFlex, and is required for Nukem's frame-gen mod on AMD/Intel GPUs."/>
             <CheckBox Name="ChkNukemFg" Content="Nukem DLSSG-to-FSR3 (frame generation)"
                       Foreground="{StaticResource BrTextPrimary}" FontSize="12"
-                      ToolTip.Tip="Installs dlssg_to_fsr3_amd_is_better.dll (your imported copy) and sets [FrameGen] FGInput=nukems. For games with DLSS Frame Generation; needs fakenvapi on AMD/Intel, so selecting this also selects fakenvapi."/>
+                      ToolTip.Tip="Installs dlssg_to_fsr3_amd_is_better.dll (your imported copy) and sets [FrameGen] Enabled=true and FGInput=nukems — OptiScaler defaults frame generation to off, so both are needed. For games with DLSS Frame Generation; needs fakenvapi on AMD/Intel, so selecting this also selects fakenvapi."/>
             <CheckBox Name="ChkSpoofNvidia" Content="Nvidia override — make this game see an Nvidia GPU"
                       Foreground="{StaticResource BrTextPrimary}" FontSize="12"
                       ToolTip.Tip="For games that hide DLSS/DLSS-G options on AMD/Intel. Per game only — chosen here on each install. Pick the method below."/>

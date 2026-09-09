@@ -1,6 +1,8 @@
 // OptiScaler Manager - tests
 // Licensed under GPL-3.0-or-later (see repository LICENSE).
 
+using System;
+using System.IO;
 using System.Linq;
 using OptiscalerManager.Core.Components;
 using OptiscalerManager.Core.Services;
@@ -217,5 +219,67 @@ namespace OptiscalerManager.Core.Tests
                 Assert.Empty(preview.Conflicts);
             }
         }
+        // ── Regressions found by reviewing upstream OptiScaler Client ────────────
+
+        [Fact]
+        public void Int8Build_IsRecognisedUnderEitherName()
+        {
+            // The community INT8 build was renamed between releases. Accepting only the
+            // old name made every recent release fail to install.
+            Assert.True(Fsr4Int8Build.IsKnown("amd_fidelityfx_upscaler_dx12.dll"));
+            Assert.True(Fsr4Int8Build.IsKnown("AMDXCFFX64.DLL"));
+            Assert.False(Fsr4Int8Build.IsKnown("nvngx_dlss.dll"));
+            Assert.False(Fsr4Int8Build.IsKnown(null));
+        }
+
+        [Fact]
+        public void Int8Build_FindsTheShippedDll_PreferringTheCurrentName()
+        {
+            var dir = Path.Combine(Path.GetTempPath(), "osm_int8_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                Assert.Null(Fsr4Int8Build.FindIn(dir));
+
+                File.WriteAllText(Path.Combine(dir, Fsr4Int8Build.LegacyDllName), "x");
+                Assert.EndsWith(Fsr4Int8Build.LegacyDllName, Fsr4Int8Build.FindIn(dir));
+
+                File.WriteAllText(Path.Combine(dir, Fsr4Int8Build.CurrentDllName), "x");
+                Assert.EndsWith(Fsr4Int8Build.CurrentDllName, Fsr4Int8Build.FindIn(dir));
+            }
+            finally { try { Directory.Delete(dir, true); } catch { } }
+        }
+
+        [Fact]
+        public void Int8Backend_ConflictsWithCustomDlls_UnderEitherName()
+        {
+            // Exclusion is derived from the files a component writes, so the renamed
+            // build must still be recognised as claiming the same slot.
+            var def = ComponentRegistry.All.Single(d => d.Id == ComponentIds.Fsr4Extras);
+            Assert.Contains(Fsr4Int8Build.CurrentDllName, def.TargetFiles);
+            Assert.Contains(Fsr4Int8Build.LegacyDllName, def.TargetFiles);
+            Assert.True(ComponentRegistry.AreMutuallyExclusive(
+                ComponentIds.CustomMerged, ComponentIds.Fsr4Extras));
+        }
+
+        [Fact]
+        public void NukemFrameGen_IsActuallyTurnedOn()
+        {
+            // OptiScaler defaults [FrameGen] Enabled to false, so setting only the input
+            // deployed the DLL and left frame generation off.
+            var preview = ComponentRegistry.BuildInstallPreview(
+                Fsr4Backend.Default, selectFsr4: true, addNukemFg: true);
+
+            Assert.Contains(preview.IniKeys, k => k.Section == "FrameGen" && k.Key == "Enabled" && k.Value == "true");
+            Assert.Contains(preview.IniKeys, k => k.Section == "FrameGen" && k.Key == "FGInput" && k.Value == "nukems");
+        }
+
+        [Fact]
+        public void FrameGen_IsNotTouchedWhenNukemIsNotSelected()
+        {
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selectFsr4: true);
+            Assert.DoesNotContain(preview.IniKeys, k => k.Section == "FrameGen");
+        }
+
     }
 }

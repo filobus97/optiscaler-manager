@@ -461,7 +461,8 @@ public sealed class ManagerService
 
     /// <summary>
     /// Downloads a community FSR 4 INT8 build from the OptiScaler-Extras repo (at the
-    /// chosen version, or latest) and installs its upscaler DLL next to the game exe.
+    /// chosen version, or latest) and installs its DLL next to the game exe, under
+    /// whichever name that release ships.
     /// The FSR ini keys are forced centrally by <see cref="ApplyForcedIniKeys"/>.
     /// Revert removes the DLL via the known-artifact list in <see cref="GameInstallationService"/>.
     /// </summary>
@@ -478,7 +479,9 @@ public sealed class ManagerService
             throw new FileNotFoundException("The downloaded INT8 build is incomplete.", extrasDllPath);
 
         status?.Report($"Installing FSR 4 INT8 {version}…");
-        var dest = Path.Combine(gameDir, "amd_fidelityfx_upscaler_dx12.dll");
+        // Keep the name the release ships as — newer INT8 builds are amdxcffx64.dll,
+        // older ones amd_fidelityfx_upscaler_dx12.dll, and OptiScaler loads them by name.
+        var dest = Path.Combine(gameDir, Path.GetFileName(extrasDllPath));
         File.Copy(extrasDllPath, dest, overwrite: true);
         game.Fsr4ExtraVersion = version;
     }
