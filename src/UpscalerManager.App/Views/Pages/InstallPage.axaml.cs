@@ -1,0 +1,322 @@
+// Upscaler Manager - GPL-3.0-or-later. See repository LICENSE.
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using UpscalerManager.App.Services;
+using UpscalerManager.Core.Components;
+using UpscalerManager.Core.Models;
+
+namespace UpscalerManager.App.Views.Pages;
+
+public partial class InstallPage : UserControl, IHostedPage
+{
+    private readonly ManagerService _manager = null!;
+    private readonly Game _game = null!;
+    private bool _ready;
+
+    /// <summary>The backend the user confirmed.</summary>
+    public Fsr4Backend SelectedBackend { get; private set; } = Fsr4Backend.Default;
+
+    /// <summary>Whether the Manager selects the FSR 4 upscaler ([Upscalers]) vs leaving it auto.</summary>
+    public bool SelectFsr4 { get; private set; } = true;
+
+    /// <summary>The INT8 community build version the user confirmed (null unless INT8 chosen).</summary>
+    public string? SelectedInt8Version { get; private set; }
+
+    /// <summary>The OptiScaler.ini profile the user confirmed (built-in default = OptiScaler's own config).</summary>
+    public OptiScalerProfile? SelectedProfile { get; private set; }
+
+    /// <summary>Install the fakenvapi add-on (nvapi64.dll + fakenvapi.ini).</summary>
+    public bool AddFakenvapi { get; private set; }
+
+    /// <summary>Install Nukem's DLSSG-to-FSR3 mod (imported DLL + FGInput=nukems).</summary>
+    public bool AddNukemFg { get; private set; }
+
+    /// <summary>Nvidia override method for this game (null = no override).</summary>
+    public SpoofMethod? SelectedSpoofMethod { get; private set; }
+
+    /// <summary>The OptiScaler release version to install (null = latest).</summary>
+    public string? SelectedOptiScalerVersion { get; private set; }
+
+    /// <summary>Force [FSR] Fsr4ForceEnableInt8=true.</summary>
+    public bool ForceInt8 { get; private set; }
+
+    /// <summary>Force [FSR] Fsr4EnableWatermark=true.</summary>
+    public bool Fsr4Watermark { get; private set; }
+
+    // Parameterless ctor for the XAML previewer only.
+    public InstallPage() { InitializeComponent(); }
+
+    public string Title => $"Install OptiScaler — {TitleFor}";
+
+    /// <summary>Game name shown in the page header.</summary>
+    public string TitleFor { get; set; } = string.Empty;
+    public Action<bool>? RequestClose { get; set; }
+
+    /// <summary>Starts on the recommended backend.</summary>
+    public void FocusFirst() =>
+        this.FindControl<RadioButton>("RbDefault")?.Focus(NavigationMethod.Directional);
+
+    public InstallPage(ManagerService manager, Game game) : this()
+    {
+        _manager = manager;
+        _game = game;
+
+        SetupBackendOptions();
+        SetupProfiles();
+        SetupOptiScalerVersions();
+
+        _ready = true;
+        UpdatePreview();
+
+        // INT8 is the default backend — reveal and load its version list on open.
+        if (this.FindControl<RadioButton>("RbInt8")!.IsChecked == true)
+            OnInt8CheckedChanged(this, new RoutedEventArgs());
+    }
+
+    private void SetupBackendOptions()
+    {
+        var int8 = this.FindControl<RadioButton>("RbInt8")!;
+        var customMerged = this.FindControl<RadioButton>("RbCustomMerged")!;
+        var def = this.FindControl<RadioButton>("RbDefault")!;
+
+        customMerged.IsEnabled = _manager.HasCustomDlls;
+        if (!customMerged.IsEnabled) customMerged.Content = "Custom DLLs — none imported (Settings)";
+
+        // Pre-select Default: OptiScaler's own release already bundles a working
+        // FSR 4.x upscaler, so the zero-decision path delivers FSR 4 out of the box.
+        def.IsChecked = true;
+
+        int8.IsCheckedChanged += OnInt8CheckedChanged;
+        int8.IsCheckedChanged += OnOptionChanged;
+        customMerged.IsCheckedChanged += OnOptionChanged;
+        def.IsCheckedChanged += OnOptionChanged;
+
+        // Step 2 radios drive the [Upscalers] selection in the preview.
+        this.FindControl<RadioButton>("RbSelectNow")!.IsCheckedChanged += OnOptionChanged;
+        this.FindControl<RadioButton>("RbSelectInGame")!.IsCheckedChanged += OnOptionChanged;
+
+        // Step 2 toggles + Step 3 add-ons all feed the live preview.
+        this.FindControl<CheckBox>("ChkForceInt8")!.IsCheckedChanged += OnOptionChanged;
+        this.FindControl<CheckBox>("ChkWatermark")!.IsCheckedChanged += OnOptionChanged;
+        this.FindControl<CheckBox>("ChkFakenvapi")!.IsCheckedChanged += OnOptionChanged;
+
+        // Nvidia override: checkbox reveals the method combo (DXGI spoofing / OptiPatcher).
+        var spoof = this.FindControl<CheckBox>("ChkSpoofNvidia")!;
+        var methodPanel = this.FindControl<StackPanel>("SpoofMethodPanel")!;
+        var methodCombo = this.FindControl<ComboBox>("SpoofMethodCombo")!;
+        methodCombo.ItemsSource = new[]
+        {
+            "Default — DXGI spoofing ([Spoofing] Dxgi=true)",
+            "OptiPatcher plugin (plugins/OptiPatcher.asi)",
+        };
+        methodCombo.SelectedIndex = 0;
+        methodCombo.SelectionChanged += OnOptionChanged;
+        spoof.IsCheckedChanged += (_, e) =>
+        {
+            methodPanel.IsVisible = spoof.IsChecked == true;
+            OnOptionChanged(spoof, e);
+        };
+
+        var nukem = this.FindControl<CheckBox>("ChkNukemFg")!;
+        if (!_manager.IsNukemFgCached)
+        {
+            nukem.IsEnabled = false;
+            nukem.Content = "Nukem DLSSG-to-FSR3 — DLL not imported (Settings)";
+        }
+        nukem.IsCheckedChanged += (_, e) =>
+        {
+            // Nukem's mod needs fakenvapi on AMD/Intel — selecting it pulls fakenvapi in.
+            if (nukem.IsChecked == true)
+                this.FindControl<CheckBox>("ChkFakenvapi")!.IsChecked = true;
+            OnOptionChanged(nukem, e);
+        };
+    }
+
+    // Reveal and lazily populate the INT8 version list when INT8 is selected.
+    private bool _int8Loaded;
+    private async void OnInt8CheckedChanged(object? sender, RoutedEventArgs e)
+    {
+        var panel = this.FindControl<StackPanel>("Int8VersionPanel")!;
+        var int8 = this.FindControl<RadioButton>("RbInt8")!;
+        panel.IsVisible = int8.IsChecked == true;
+        if (int8.IsChecked != true || _int8Loaded) return;
+
+        _int8Loaded = true;
+        var combo = this.FindControl<ComboBox>("Int8VersionCombo")!;
+        combo.ItemsSource = new System.Collections.Generic.List<ComboBoxItem> { new() { Content = "Loading…" } };
+        combo.SelectedIndex = 0;
+        var releases = await _manager.GetInt8ReleasesAsync();
+        combo.ItemsSource = releases.Count > 0
+            ? releases.Select(r => new ComboBoxItem
+              {
+                  // Mark the ones upstream has not declared stable — the list is every
+                  // release the repo publishes, pre-releases included.
+                  Content = r.IsPreRelease ? $"{r.Version}  •  pre-release" : r.Version,
+                  Tag = r.Version,
+              }).ToList()
+            : new System.Collections.Generic.List<ComboBoxItem> { new() { Content = "(none available)" } };
+        combo.SelectedIndex = 0;
+        combo.SelectionChanged += OnOptionChanged;
+        UpdatePreview();
+    }
+
+    private void SetupProfiles()
+    {
+        var combo = this.FindControl<ComboBox>("ProfileCombo")!;
+        var items = new System.Collections.Generic.List<ComboBoxItem>();
+        foreach (var p in _manager.GetIniProfiles())
+        {
+            var label = p.IsBuiltIn ? "OptiScaler default (no custom .ini)" : p.Name;
+            items.Add(new ComboBoxItem { Content = label, Tag = p });
+        }
+        combo.ItemsSource = items;
+        combo.SelectedIndex = 0;
+        combo.SelectionChanged += OnOptionChanged;
+    }
+
+    // Lazily populate the OptiScaler version list; "Latest" stays selected until the
+    // fetch completes so the dialog is usable immediately (and offline). Stable
+    // releases and pre-releases are grouped under non-selectable separators.
+    private async void SetupOptiScalerVersions()
+    {
+        var combo = this.FindControl<ComboBox>("OptiScalerVersionCombo")!;
+        ComboBoxItem Selectable(string label, string? version) => new() { Content = label, Tag = version };
+        ComboBoxItem Separator(string label) => new()
+        {
+            Content = label,
+            IsEnabled = false,
+            FontSize = 11,
+            Foreground = new SolidColorBrush(Color.Parse("#8A8AAA")),
+        };
+
+        combo.ItemsSource = new[] { Selectable("Latest stable (recommended)", null) };
+        combo.SelectedIndex = 0;
+
+        var versions = await _manager.GetOptiScalerVersionsAsync();
+        var stables = versions.Where(v => !_manager.IsBetaOptiScalerVersion(v)).ToList();
+        var betas = versions.Where(_manager.IsBetaOptiScalerVersion).ToList();
+
+        var items = new System.Collections.Generic.List<ComboBoxItem>
+        {
+            Selectable("Latest stable (recommended)", null),
+        };
+        if (stables.Count > 0)
+        {
+            items.Add(Separator("— Stable releases —"));
+            items.AddRange(stables.Select(v => Selectable(v, v)));
+        }
+        if (betas.Count > 0)
+        {
+            items.Add(Separator("— Pre-releases / betas —"));
+            items.AddRange(betas.Select(v => Selectable(v, v)));
+        }
+        combo.ItemsSource = items;
+        combo.SelectedIndex = 0;
+        combo.SelectionChanged += OnOptionChanged;
+    }
+
+    private string? CurrentOptiScalerVersion()
+    {
+        var combo = this.FindControl<ComboBox>("OptiScalerVersionCombo")!;
+        return (combo.SelectedItem as ComboBoxItem)?.Tag as string;
+    }
+
+    private SpoofMethod? CurrentSpoofMethod()
+    {
+        if (!IsChecked("ChkSpoofNvidia")) return null;
+        var combo = this.FindControl<ComboBox>("SpoofMethodCombo")!;
+        return combo.SelectedIndex == 1 ? SpoofMethod.OptiPatcher : SpoofMethod.Dxgi;
+    }
+
+    private Fsr4Backend CurrentBackend()
+    {
+        if (this.FindControl<RadioButton>("RbInt8")!.IsChecked == true) return Fsr4Backend.Int8Community;
+        if (this.FindControl<RadioButton>("RbCustomMerged")!.IsChecked == true) return Fsr4Backend.CustomMerged;
+        return Fsr4Backend.Default;
+    }
+
+    private bool CurrentSelectFsr4()
+        => this.FindControl<RadioButton>("RbSelectInGame")!.IsChecked != true;
+
+    private string? CurrentInt8Version()
+    {
+        var combo = this.FindControl<ComboBox>("Int8VersionCombo")!;
+        // Tag carries the raw tag; Content may be decorated with "pre-release".
+        return (combo.SelectedItem as ComboBoxItem)?.Tag as string;
+    }
+
+    private OptiScalerProfile? CurrentProfile()
+    {
+        var combo = this.FindControl<ComboBox>("ProfileCombo")!;
+        return (combo.SelectedItem as ComboBoxItem)?.Tag as OptiScalerProfile;
+    }
+
+    private void OnOptionChanged(object? sender, RoutedEventArgs e) => UpdatePreview();
+    private void OnOptionChanged(object? sender, SelectionChangedEventArgs e) => UpdatePreview();
+
+    private bool IsChecked(string name) => this.FindControl<CheckBox>(name)!.IsChecked == true;
+
+    private void UpdatePreview()
+    {
+        if (!_ready) return;
+        var preview = _manager.BuildInstallPreview(_game, CurrentBackend(), CurrentSelectFsr4(),
+            addFakenvapi: IsChecked("ChkFakenvapi"), addNukemFg: IsChecked("ChkNukemFg"),
+            spoofMethod: CurrentSpoofMethod(), forceInt8: IsChecked("ChkForceInt8"),
+            fsr4Watermark: IsChecked("ChkWatermark"));
+
+        var files = this.FindControl<StackPanel>("FilesList")!;
+        var ini = this.FindControl<StackPanel>("IniList")!;
+        files.Children.Clear();
+        ini.Children.Clear();
+
+        foreach (var f in preview.Files) files.Children.Add(Mono(f));
+        if (preview.IniKeys.Count == 0)
+            ini.Children.Add(Mono("(no ini changes)", FontWeight.Normal, "#8A8AAA"));
+        foreach (var k in preview.IniKeys) ini.Children.Add(Mono(k.ToString()));
+
+        // Make clear the Manager only overrides these keys; the rest comes from the ini.
+        var profile = CurrentProfile();
+        var iniName = (profile is null || profile.IsBuiltIn) ? "OptiScaler's default .ini" : $"your \"{profile.Name}\" profile";
+        ini.Children.Add(Mono($"…everything else comes from {iniName} (left untouched).", FontWeight.Normal, "#8A8AAA"));
+
+        var conflictBox = this.FindControl<Border>("ConflictBox")!;
+        var conflictList = this.FindControl<StackPanel>("ConflictList")!;
+        conflictList.Children.Clear();
+        conflictBox.IsVisible = preview.Conflicts.Count > 0;
+        foreach (var c in preview.Conflicts)
+            conflictList.Children.Add(Mono("⚠ " + c, FontWeight.Normal, "#E06060"));
+    }
+
+    private static TextBlock Mono(string text, FontWeight weight = FontWeight.Normal, string color = "#E4E4EF")
+        => new()
+        {
+            Text = text,
+            FontFamily = new FontFamily("Cascadia Code, Consolas, monospace"),
+            FontSize = 12,
+            FontWeight = weight,
+            Foreground = new SolidColorBrush(Color.Parse(color)),
+            TextWrapping = TextWrapping.Wrap,
+        };
+
+    private void OnConfirm(object? sender, RoutedEventArgs e)
+    {
+        SelectedBackend = CurrentBackend();
+        SelectFsr4 = CurrentSelectFsr4();
+        SelectedInt8Version = SelectedBackend == Fsr4Backend.Int8Community ? CurrentInt8Version() : null;
+        SelectedProfile = CurrentProfile();
+        AddFakenvapi = IsChecked("ChkFakenvapi");
+        AddNukemFg = IsChecked("ChkNukemFg");
+        SelectedSpoofMethod = CurrentSpoofMethod();
+        ForceInt8 = IsChecked("ChkForceInt8");
+        Fsr4Watermark = IsChecked("ChkWatermark");
+        SelectedOptiScalerVersion = CurrentOptiScalerVersion();
+        RequestClose?.Invoke(true);
+    }
+
+    private void OnCancel(object? sender, RoutedEventArgs e) => RequestClose?.Invoke(false);
+}

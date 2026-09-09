@@ -1,9 +1,17 @@
-# OptiScaler Manager
+# Upscaler Manager
 
-A deliberately **simple, AMD-focused** desktop frontend for the
-[OptiScaler](https://github.com/optiscaler/OptiScaler) mod. It does one job well:
-**install OptiScaler and get FSR 4 working in your games**, with almost no
-decisions to make.
+<img src="assets/icons/icon-128.png" width="96" align="right" alt="">
+
+A deliberately **simple** desktop frontend for managing the upscalers in your games.
+
+Sometimes a game just needs [**OptiScaler**](https://github.com/optiscaler/OptiScaler),
+which lets its existing DLSS option drive FSR or XeSS instead. Sometimes all it needs
+is a **newer DLL** — a later DLSS, FSR or XeSS build dropped in place. The app installs
+OptiScaler today, and always tells you exactly what it is about to change.
+
+> **Swapping DLLs directly is not built yet.** It is the next thing being added, and
+> the reason the app is no longer called OptiScaler Manager. Until then this manages
+> OptiScaler installs, and reports the upscaler DLLs it finds in each game.
 
 It **reuses the proven service layer** of
 [**OptiScaler Client**](https://github.com/Optiscaler-Client/Optiscaler-Client) —
@@ -28,11 +36,11 @@ install, nothing written outside the folder you unpacked and your config directo
 
 ```bash
 # Linux
-unzip OptiscalerManager-<version>-linux-x64.zip -d ~/Apps/OptiscalerManager
-cd ~/Apps/OptiscalerManager && chmod +x OptiscalerManager && ./OptiscalerManager
+unzip UpscalerManager-<version>-linux-x64.zip -d ~/Apps/UpscalerManager
+cd ~/Apps/UpscalerManager && chmod +x UpscalerManager && ./UpscalerManager
 ```
 
-On Windows, unpack and run `OptiscalerManager.exe`. On a **Steam Deck**, add it as a
+On Windows, unpack and run `UpscalerManager.exe`. On a **Steam Deck**, add it as a
 non-Steam game — it is fully usable from Gaming Mode with a controller, updates
 included. See [Couch / Steam Deck use](#couch--steam-deck-bazzite-use).
 
@@ -128,17 +136,25 @@ Building from source is in [Building & running](#building--running).
 - **Reversible.** *Remove OptiScaler* (on a game's details page) restores backed-up
   files from an external per-game backup store and reverts the ini keys.
 
-### On AMD binaries
+### Which binaries this app will fetch, and which it will not
 
-OptiScaler Manager downloads OptiScaler releases (which bundle AMD's signed,
-openly-distributed FFX DLLs) and community FSR 4 INT8 builds from the third-party
+The line is **redistributable or not**, not proprietary or not. Vendors publish DLSS,
+FSR and XeSS SDK libraries precisely so they can ship inside games, and OptiScaler
+releases bundle AMD's signed FFX DLLs on the same basis — those are fine to download
+for you.
+
+What is **never** downloaded, bundled or linked to is a binary its owner does not
+distribute separately. AMD's FSR 4 driver runtime is the current example: it ships
+inside the Adrenalin driver package, so it is strictly **bring-your-own**, supplied
+from a local file, folder or archive you already possess and copied into a private
+cache.
+
+Community builds are downloaded only when you explicitly pick them — currently the
+FSR 4 INT8 builds from the third-party
 [`Agustinm28/OptiScaler-Extras`](https://github.com/Agustinm28/OptiScaler-Extras)
-repository. It **never downloads, bundles, or links to the
-proprietary FSR 4 driver runtime**: AMD's own binary is strictly **bring-your-own**,
-supplied from a local file/folder/archive you already possess and copied into a private
-cache. Note that recent community INT8 builds ship *under the same filename*
+repository. Note that recent INT8 builds ship *under the same filename*
 (`amdxcffx64.dll`) — that is a community-built replacement occupying the same slot, not
-AMD's binary, and it only arrives if you explicitly choose that backend. See [Importing your own DLLs](#importing-your-own-dlls-and-ini-profiles).
+AMD's binary. See [Importing your own DLLs](#importing-your-own-dlls-and-ini-profiles).
 
 ---
 
@@ -148,7 +164,7 @@ The interesting design choice is that **components are modelled as data**, not a
 per-screen glue. Each component (OptiScaler core, the FSR 4 INT8 backend, your
 custom DLLs, fakenvapi, Nukem frame-gen, OptiPatcher) declares its **id, target
 files, ini keys, and conflicts** in a small
-[component registry](src/OptiscalerManager.Core/Components/ComponentRegistry.cs).
+[component registry](src/UpscalerManager.Core/Components/ComponentRegistry.cs).
 
 Both of these are *derived* from that registry, with no bespoke logic:
 
@@ -174,23 +190,23 @@ it picks which FSR version the FSR upscaler uses, its default is already `0`, an
 only read from inside the FSR upscaler.)
 
 The details page follows the same idea: what each upscaling file *is* lives in an
-[upscaler catalogue](src/OptiscalerManager.Core/Components/UpscalerCatalog.cs), so
+[upscaler catalogue](src/UpscalerManager.Core/Components/UpscalerCatalog.cs), so
 supporting a new technology is one row of data rather than changes in three places.
 
 ### Project layout
 
 | Project | What it is |
 | --- | --- |
-| `src/OptiscalerManager.Core` | UI-agnostic service layer ported from OptiScaler Client + the component registry. No Avalonia dependency. |
-| `src/OptiscalerManager.App` | The Avalonia UI: one screen, the preview dialog, the import settings. |
-| `tests/OptiscalerManager.Core.Tests` | xUnit tests for the pure logic (PE inspection, ini editing, version gate, FSR SDK scan) and the registry. |
+| `src/UpscalerManager.Core` | UI-agnostic service layer ported from OptiScaler Client + the component registry. No Avalonia dependency. |
+| `src/UpscalerManager.App` | The Avalonia UI: one screen, the preview dialog, the import settings. |
+| `tests/UpscalerManager.Core.Tests` | xUnit tests for the pure logic (PE inspection, ini editing, version gate, FSR SDK scan) and the registry. |
 
 The Core layer was decoupled from the source project's two UI touchpoints:
 
-- `DebugWindow.Log` → an injected [`ILog`](src/OptiscalerManager.Core/Logging/ILog.cs)
+- `DebugWindow.Log` → an injected [`ILog`](src/UpscalerManager.Core/Logging/ILog.cs)
   via a small static `Log` facade.
 - the in-service NukemFG file dialog → an
-  [`IManualComponentProvider`](src/OptiscalerManager.Core/Prompts/IManualComponentProvider.cs)
+  [`IManualComponentProvider`](src/UpscalerManager.Core/Prompts/IManualComponentProvider.cs)
   callback the host implements.
 
 ---
@@ -201,19 +217,19 @@ Requires the **.NET 10 SDK**.
 
 ```bash
 # Build everything
-dotnet build OptiscalerManager.slnx -c Release
+dotnet build UpscalerManager.slnx -c Release
 
 # Run the tests
-dotnet test tests/OptiscalerManager.Core.Tests/OptiscalerManager.Core.Tests.csproj -c Release
+dotnet test tests/UpscalerManager.Core.Tests/UpscalerManager.Core.Tests.csproj -c Release
 
 # Run the app (framework-dependent, for development)
-dotnet run --project src/OptiscalerManager.App/OptiscalerManager.App.csproj
+dotnet run --project src/UpscalerManager.App/UpscalerManager.App.csproj
 ```
 
 To produce a self-contained single-file build for your platform:
 
 ```bash
-dotnet publish src/OptiscalerManager.App/OptiscalerManager.App.csproj \
+dotnet publish src/UpscalerManager.App/UpscalerManager.App.csproj \
   -c Release -r linux-x64 --self-contained true -o publish
 # RIDs: linux-x64 (primary), win-x64, osx-x64, osx-arm64
 ```
@@ -292,9 +308,14 @@ offline it stays silent.
   (a running `.exe` is locked, so it can't swap in place).
 
 Your data is never touched — all settings, imported DLLs, `.ini` profiles, backups and
-the download cache live in your OS config directory (`%APPDATA%\OptiscalerManager` on
-Windows, `~/.config/OptiscalerManager` on Linux,
-`~/Library/Application Support/OptiscalerManager` on macOS), *outside* the install folder.
+the download cache live in your OS config directory (`%APPDATA%\UpscalerManager` on
+Windows, `~/.config/UpscalerManager` on Linux,
+`~/Library/Application Support/UpscalerManager` on macOS), *outside* the install folder.
+
+> Upgrading from **OptiScaler Manager**? That folder used to be named after the old
+> product. It is moved across automatically on first launch, so settings, imported
+> DLLs, `.ini` profiles and — most importantly — the per-game backups that *Remove
+> OptiScaler* restores from all carry over.
 
 You can also run the bundled updater by hand (e.g. to update a closed app). From the
 install folder:
@@ -308,7 +329,7 @@ powershell -ExecutionPolicy Bypass -File update.ps1   # -Force / -Dir <path>
 ```
 
 The script detects your platform, compares the bundled `VERSION` with the latest
-release, downloads the matching `OptiscalerManager-<version>-<rid>.zip`, and swaps the
+release, downloads the matching `UpscalerManager-<version>-<rid>.zip`, and swaps the
 files in place. The scripts live in [`scripts/`](scripts/) if you want to run them
 standalone.
 
@@ -378,7 +399,7 @@ off. On Steam Deck, add the app as a **non-Steam game** and it is fully usable f
 Gaming Mode, *Update now* included.
 
 On first run under Linux the app registers a desktop entry
-(`~/.local/share/applications/OptiscalerManager.desktop`) and its icons under
+(`~/.local/share/applications/UpscalerManager.desktop`) and its icons under
 `~/.local/share/icons/hicolor/`. That is what puts it in the application menu with a
 proper taskbar icon — Wayland compositors take the icon from the desktop entry rather
 than from the window, so without it the taskbar can only show a placeholder. Delete
@@ -395,7 +416,7 @@ those two paths to undo it.
 **Controller not responding?** Run the built-in diagnostic from the install folder:
 
 ```bash
-./OptiscalerManager --gamepad-test
+./UpscalerManager --gamepad-test
 ```
 
 It lists every input device, marks the ones that report as controllers, shows the axes
@@ -410,8 +431,8 @@ when you are in a Wayland session. Avalonia's native Wayland backend is availabl
 `OSM_BACKEND=wayland`:
 
 ```bash
-OSM_BACKEND=wayland ./OptiscalerManager   # native Wayland (no app icon, see below)
-OSM_BACKEND=x11     ./OptiscalerManager   # force X11 (the default)
+OSM_BACKEND=wayland ./UpscalerManager   # native Wayland (no app icon, see below)
+OSM_BACKEND=x11     ./UpscalerManager   # force X11 (the default)
 ```
 
 **Why X11 is the default:** the native Wayland backend is *experimental* upstream and,
@@ -432,14 +453,14 @@ again.
 CI (`.github/workflows/ci.yml`) builds and tests on `linux-x64` and `win-x64` for
 every push/PR to `main`. Releases (`.github/workflows/release.yml`) publish
 self-contained single-file builds for **`linux-x64`, `win-x64`, `osx-x64`,
-`osx-arm64`**, zip each as `OptiscalerManager-<version>-<rid>.zip`, and attach
+`osx-arm64`**, zip each as `UpscalerManager-<version>-<rid>.zip`, and attach
 them to an auto-created GitHub Release.
 
 A release can be cut three ways:
 
 1. **Push a tag** `v<version>` (e.g. `v0.1.0`).
 2. **Push to `main` with `[release]`** in the commit message — the version is
-   read from `src/OptiscalerManager.App/OptiscalerManager.App.csproj`, and the
+   read from `src/UpscalerManager.App/UpscalerManager.App.csproj`, and the
    tag is created for you. (Useful when the environment blocks direct tag pushes.)
 3. **Run the *Release* workflow manually** (`workflow_dispatch`) and pass the
    version.
@@ -450,7 +471,7 @@ A release can be cut three ways:
 
 **License: [GPL-3.0-or-later](LICENSE).**
 
-OptiScaler Manager is built on the work of others and preserves their attribution:
+Upscaler Manager is built on the work of others and preserves their attribution:
 
 - The reused service layer comes from
   **[OptiScaler Client](https://github.com/Optiscaler-Client/Optiscaler-Client)**,

@@ -1,9 +1,0 @@
-<Solution>
-  <Folder Name="/src/">
-    <Project Path="src/OptiscalerManager.App/OptiscalerManager.App.csproj" />
-    <Project Path="src/OptiscalerManager.Core/OptiscalerManager.Core.csproj" />
-  </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/OptiscalerManager.Core.Tests/OptiscalerManager.Core.Tests.csproj" />
-  </Folder>
-</Solution>

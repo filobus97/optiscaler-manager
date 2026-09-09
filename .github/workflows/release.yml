@@ -68,7 +68,7 @@ jobs:
             echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           else
             # [release]-marked push to main: the csproj is the source of truth.
-            v=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' src/OptiscalerManager.App/OptiscalerManager.App.csproj | head -1)
+            v=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' src/UpscalerManager.App/UpscalerManager.App.csproj | head -1)
             echo "version=$v" >> "$GITHUB_OUTPUT"
           fi
 
@@ -76,7 +76,7 @@ jobs:
       # (Avalonia + reflection paths are not verified trim-safe).
       - name: Publish
         run: >
-          dotnet publish src/OptiscalerManager.App/OptiscalerManager.App.csproj
+          dotnet publish src/UpscalerManager.App/UpscalerManager.App.csproj
           -c Release
           -r ${{ matrix.rid }}
           --self-contained true
@@ -85,7 +85,7 @@ jobs:
       - name: Create zip (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Compress-Archive -Path publish/* -DestinationPath "OptiscalerManager-${{ steps.version.outputs.version }}-${{ matrix.rid }}.zip"
+        run: Compress-Archive -Path publish/* -DestinationPath "UpscalerManager-${{ steps.version.outputs.version }}-${{ matrix.rid }}.zip"
 
       # zip (not Compress-Archive) on Unix so the executable bit survives.
       - name: Create zip (Unix)
@@ -93,13 +93,13 @@ jobs:
         shell: bash
         run: |
           cd publish
-          zip -r "../OptiscalerManager-${{ steps.version.outputs.version }}-${{ matrix.rid }}.zip" .
+          zip -r "../UpscalerManager-${{ steps.version.outputs.version }}-${{ matrix.rid }}.zip" .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
-          name: OptiscalerManager-${{ matrix.rid }}
-          path: OptiscalerManager-*.zip
+          name: UpscalerManager-${{ matrix.rid }}
+          path: UpscalerManager-*.zip
           if-no-files-found: error
 
   release:
@@ -118,7 +118,7 @@ jobs:
           elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
             echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           else
-            v=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' src/OptiscalerManager.App/OptiscalerManager.App.csproj | head -1)
+            v=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' src/UpscalerManager.App/UpscalerManager.App.csproj | head -1)
             echo "version=$v" >> "$GITHUB_OUTPUT"
           fi
 

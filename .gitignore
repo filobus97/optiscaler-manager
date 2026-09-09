@@ -5,3 +5,7 @@ obj/
 .idea/
 publish/
 artifacts/
+
+# Python bytecode from tools/
+__pycache__/
+*.pyc

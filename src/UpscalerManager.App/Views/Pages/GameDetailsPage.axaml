@@ -1,0 +1,58 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="UpscalerManager.App.Views.Pages.GameDetailsPage">
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- Where the game lives -->
+    <TextBlock Grid.Row="0" Name="SubtitleText" TextWrapping="Wrap" FontSize="12"
+               Foreground="{StaticResource BrTextSecondary}"/>
+
+    <ScrollViewer Grid.Row="1" Margin="0,14,0,0">
+      <StackPanel Spacing="16">
+
+        <!-- What the game has -->
+        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="10">
+            <TextBlock Text="Upscaling technology in this game" FontWeight="SemiBold"
+                       Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
+                       Text="Everything found next to the game, with the version actually on disk. A game can carry several at once."/>
+            <StackPanel Name="ComponentsList" Spacing="12"/>
+            <TextBlock Name="NoComponentsText" IsVisible="False" TextWrapping="Wrap" FontSize="12"
+                       Foreground="{StaticResource BrTextSecondary}"
+                       Text="No upscaling technology found. Installing OptiScaler adds it."/>
+          </StackPanel>
+        </Border>
+
+        <!-- OptiScaler -->
+        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="10">
+            <TextBlock Text="OptiScaler" FontWeight="SemiBold"
+                       Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock Name="OptiScalerSummaryText" TextWrapping="Wrap" FontSize="12"
+                       Foreground="{StaticResource BrTextSecondary}"/>
+            <StackPanel Name="ConfigList" Spacing="8"/>
+          </StackPanel>
+        </Border>
+
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Actions -->
+    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10" Margin="0,16,0,0">
+      <Button Name="InstallButton" Classes="BtnPrimary" Content="Install OptiScaler"
+              Click="OnInstallClick"
+              ToolTip.Tip="Choose the version, backend and add-ons, and see exactly what will change before anything is written."/>
+      <Button Name="RevertButton" Classes="BtnDanger" Content="Remove OptiScaler"
+              Click="OnRevertClick"
+              ToolTip.Tip="Restore the files that were here before and remove everything the install added."/>
+      <Button Name="RescanButton" Content="Re-scan this game" Click="OnRescanClick"
+              ToolTip.Tip="Read the game folder again — use this after changing files by hand."/>
+      <Button Content="Back to games" Click="OnCloseClick" IsCancel="True"
+              ToolTip.Tip="Back to the game list (Esc, or B on a controller)."/>
+    </StackPanel>
+  </Grid>
+</UserControl>

@@ -1,0 +1,26 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="UpscalerManager.App.Views.Pages.StoragePage"
+        XYFocus.NavigationModes="Keyboard,Gamepad">
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <StackPanel Grid.Row="0" Spacing="4">
+      <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
+                 Text="Everything this app has written to disk. Nothing here is removed automatically — every version you have ever installed is kept — so this is where you reclaim the space."/>
+      <TextBlock Name="TotalText" FontSize="12" FontWeight="SemiBold"
+                 Foreground="{StaticResource BrTextPrimary}"/>
+    </StackPanel>
+
+    <ScrollViewer Grid.Row="1" Margin="0,14,0,0">
+      <StackPanel Name="GroupsPanel" Spacing="16"/>
+    </ScrollViewer>
+
+    <Border Grid.Row="2" Name="StatusBar" IsVisible="False" Margin="0,12,0,0" Padding="12,8"
+            CornerRadius="{StaticResource RadiusMedium}"
+            Background="{StaticResource BrBgSurface}">
+      <TextBlock Name="StatusText" FontSize="12" TextWrapping="Wrap"
+                 Foreground="{StaticResource BrTextSecondary}"/>
+    </Border>
+  </Grid>
+</UserControl>

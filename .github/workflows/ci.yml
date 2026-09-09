@@ -39,15 +39,15 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Restore
-        run: dotnet restore src/OptiscalerManager.App/OptiscalerManager.App.csproj -r ${{ matrix.rid }}
+        run: dotnet restore src/UpscalerManager.App/UpscalerManager.App.csproj -r ${{ matrix.rid }}
 
       - name: Build app
         run: >
-          dotnet build src/OptiscalerManager.App/OptiscalerManager.App.csproj
+          dotnet build src/UpscalerManager.App/UpscalerManager.App.csproj
           -c Release -r ${{ matrix.rid }} --no-restore
 
       # Unit tests guard the risky pure logic ported into Core (PE inspection,
       # section-aware ini editing, custom-FSR4 version gate, FSR SDK-package scan)
       # plus the component registry (mutual exclusion + preview).
       - name: Test
-        run: dotnet test tests/OptiscalerManager.Core.Tests/OptiscalerManager.Core.Tests.csproj -c Release
+        run: dotnet test tests/UpscalerManager.Core.Tests/UpscalerManager.Core.Tests.csproj -c Release

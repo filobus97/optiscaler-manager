@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/UpscalerManager.App/UpscalerManager.App.csproj" />
+    <Project Path="src/UpscalerManager.Core/UpscalerManager.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/UpscalerManager.Core.Tests/UpscalerManager.Core.Tests.csproj" />
+  </Folder>
+</Solution>
