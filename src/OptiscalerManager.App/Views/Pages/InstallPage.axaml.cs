@@ -319,6 +319,4 @@ public partial class InstallPage : UserControl, IHostedPage
     }
 
     private void OnCancel(object? sender, RoutedEventArgs e) => RequestClose?.Invoke(false);
-
-    /// <summary>Shows the dialog modally and returns whether the user confirmed.</summary>
 }

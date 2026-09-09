@@ -27,14 +27,6 @@ namespace OptiscalerManager.Core.Services;
 /// </summary>
 public static class PlatformServiceFactory
 {
-    /// <summary>Returns the <see cref="IShellService"/> for the current OS.</summary>
-    public static IShellService CreateShellService()
-    {
-        if (OperatingSystem.IsWindows())
-            return new WindowsShellService();
-        return new XdgShellService();
-    }
-
     /// <summary>Returns the <see cref="IGpuDetectionService"/> for the current OS,
     /// or <c>null</c> on unsupported platforms.</summary>
     public static IGpuDetectionService? CreateGpuDetectionService()

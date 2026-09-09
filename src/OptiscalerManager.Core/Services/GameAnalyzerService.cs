@@ -338,8 +338,7 @@ public class GameAnalyzerService
                 try { fullPath = Path.GetFullPath(path); }
                 catch { fullPath = path; }
 
-                var version = GetFileVersion(path);
-                if (version == "0.0.0.0") version = null;   // no version resource
+                var version = DeclaredVersion(GetFileVersion(path));
 
                 found.Add(new DetectedComponent
                 {
@@ -401,7 +400,7 @@ public class GameAnalyzerService
         }
     }
 
-    private static void FindBestVersionFromCollected(Game game, Dictionary<string, List<string>> collectedFiles, string[] filePatterns, HashSet<string> ignoredFiles, Action<Game, string, string> updateAction)
+    private static void FindBestVersionFromCollected(Game game, Dictionary<string, List<string>> collectedFiles, string[] filePatterns, HashSet<string> ignoredFiles, Action<Game, string, string?> updateAction)
     {
         var highestVer = new Version(0, 0);
         string? bestPath = null;
@@ -433,8 +432,24 @@ public class GameAnalyzerService
             }
         }
 
-        if (bestPath != null && bestVerStr != null)
-            updateAction(game, bestPath, bestVerStr);
+        if (bestPath != null)
+            updateAction(game, bestPath, DeclaredVersion(bestVerStr));
+    }
+
+    /// <summary>
+    /// The version a file actually declares, or null when it declares none.
+    ///
+    /// A DLL with no version resource reads back as 0.0.0.0, and passing that through
+    /// puts "DLSS 0.0" next to a game — a version the file does not claim and the user
+    /// cannot act on. The technology is still detected; only the number is dropped.
+    /// </summary>
+    private static string? DeclaredVersion(string? version)
+    {
+        if (string.IsNullOrWhiteSpace(version)) return null;
+        var numeric = version.Split(' ')[0].TrimStart('v', 'V');
+        return Version.TryParse(numeric, out var parsed) && parsed == new Version(0, 0, 0, 0)
+            ? null
+            : version;
     }
 
     private static Dictionary<string, List<string>> CollectRelevantFiles(string path)

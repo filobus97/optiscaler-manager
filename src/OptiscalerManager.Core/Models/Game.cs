@@ -75,7 +75,7 @@ public class Game
     /// </summary>
     public List<DetectedComponent> DetectedComponents { get; set; } = new();
 
-    public bool HasUpscaler => DlssVersion != null || DlssFrameGenVersion != null || FsrVersion != null || XessVersion != null || IsOptiscalerInstalled;
+    public bool HasUpscaler => DlssPath != null || DlssFrameGenPath != null || FsrPath != null || XessPath != null || IsOptiscalerInstalled;
 
     // UI customization (not set by scanner)
     public bool IsHidden { get; set; } = false;

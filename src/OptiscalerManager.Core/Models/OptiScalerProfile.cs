@@ -14,25 +14,6 @@ namespace OptiscalerManager.Core.Models
         
         public Dictionary<string, Dictionary<string, string>> IniSettings { get; set; } = new();
 
-        public OptiScalerProfile Clone()
-        {
-            var clone = new OptiScalerProfile
-            {
-                Name = Name,
-                Description = Description,
-                IsBuiltIn = false,
-                CreatedBy = CreatedBy,
-                CreatedDate = DateTime.Now
-            };
-
-            foreach (var section in IniSettings)
-            {
-                clone.IniSettings[section.Key] = new Dictionary<string, string>(section.Value);
-            }
-
-            return clone;
-        }
-
         public static OptiScalerProfile CreateDefault()
         {
             return new OptiScalerProfile
@@ -45,17 +26,5 @@ namespace OptiscalerManager.Core.Models
             };
         }
 
-        public static OptiScalerProfile CreateEmpty()
-        {
-            return new OptiScalerProfile
-            {
-                Name = "New Profile",
-                Description = "",
-                IsBuiltIn = false,
-                CreatedBy = "User",
-                CreatedDate = DateTime.Now,
-                IniSettings = new Dictionary<string, Dictionary<string, string>>()
-            };
-        }
     }
 }

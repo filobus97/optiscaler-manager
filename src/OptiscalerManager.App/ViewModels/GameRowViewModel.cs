@@ -80,16 +80,19 @@ public sealed class GameRowViewModel : ViewModelBase
     private IReadOnlyList<string> BuildBadges()
     {
         var badges = new List<string>();
-        void Add(string label, string? version)
+
+        // Presence comes from having found the file; the version is extra. Some DLLs
+        // carry no version resource, and "DLSS" alone beats claiming "DLSS 0.0".
+        void Add(string label, string? path, string? version)
         {
-            if (version is null) return;
-            badges.Add($"{label} {VersionLabel.Short(version)}".TrimEnd());
+            if (path is null) return;
+            badges.Add(version is null ? label : $"{label} {VersionLabel.Short(version)}");
         }
 
-        Add("DLSS", Game.DlssVersion);
-        Add("DLSS FG", Game.DlssFrameGenVersion);
-        Add("FSR", Game.FsrVersion);
-        Add("XeSS", Game.XessVersion);
+        Add("DLSS", Game.DlssPath, Game.DlssVersion);
+        Add("DLSS FG", Game.DlssFrameGenPath, Game.DlssFrameGenVersion);
+        Add("FSR", Game.FsrPath, Game.FsrVersion);
+        Add("XeSS", Game.XessPath, Game.XessVersion);
         return badges;
     }
 }

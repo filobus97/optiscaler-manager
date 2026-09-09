@@ -942,58 +942,6 @@ namespace OptiscalerManager.Core.Services
             return entries;
         }
 
-        // Legacy helper kept for CheckComponentUpdateAsync compatibility
-        private async Task<(System.Collections.Generic.List<string> versions, string? latestVersion)> FetchAllComponentVersionsAsync(RepositoryConfig config)
-        {
-            var versions = new System.Collections.Generic.List<string>();
-            string? latestVersion = null;
-            var repoLabel = $"{config.RepoOwner}/{config.RepoName}";
-            try
-            {
-                if (string.IsNullOrEmpty(config.RepoOwner) || string.IsNullOrEmpty(config.RepoName))
-                {
-                    Log.Write($"[FetchVersions] Skipping {repoLabel}: empty config");
-                    return (versions, latestVersion);
-                }
-
-                var url = $"https://api.github.com/repos/{config.RepoOwner}/{config.RepoName}/releases?per_page=30";
-                Log.Write($"[FetchVersions] GET {url}");
-                var response = await GetWithRetryAsync(() => _httpClient, url);
-                Log.Write($"[FetchVersions] {repoLabel} → HTTP {(int)response.StatusCode}");
-                response.EnsureSuccessStatusCode();
-
-                var json = await response.Content.ReadAsStringAsync();
-                using var doc = JsonDocument.Parse(json);
-                foreach (var element in doc.RootElement.EnumerateArray())
-                {
-                    if (element.TryGetProperty("tag_name", out var tagName))
-                    {
-                        var version = tagName.GetString();
-                        if (version != null)
-                        {
-                            if (version.StartsWith("v", StringComparison.OrdinalIgnoreCase))
-                                version = version.Substring(1);
-                            versions.Add(version);
-
-                            // Check if this is marked as latest release
-                            if (latestVersion == null && element.TryGetProperty("prerelease", out var prerelease) && !prerelease.GetBoolean())
-                            {
-                                latestVersion = version;
-                                Log.Write($"[FetchVersions] {repoLabel} → Latest stable: {latestVersion}");
-                            }
-                        }
-                    }
-                }
-                Log.Write($"[FetchVersions] {repoLabel} → {versions.Count} version(s): [{string.Join(", ", versions)}]");
-            }
-            catch (Exception ex)
-            {
-                Log.Write($"[FetchVersions] {repoLabel} → ERROR: {ex.Message}");
-            }
-
-            return (versions, latestVersion);
-        }
-
         // ── OptiScaler Extras (FSR4 INT8) ────────────────────────────────────────
 
         /// <summary>
@@ -1093,12 +1041,6 @@ namespace OptiscalerManager.Core.Services
         /// </summary>
         public string GetExtrasDllCachePath(string version)
             => Path.Combine(_cacheDir, "Extras", version);
-
-        /// <summary>
-        /// Returns true if the DLL for the given Extras version is already cached.
-        /// </summary>
-        public bool IsExtrasDllCached(string version)
-            => Components.Fsr4Int8Build.FindIn(GetExtrasDllCachePath(version)) is not null;
 
         /// <summary>
         /// Downloads the Extras zip for the given version and extracts its INT8 DLL into
@@ -1253,9 +1195,6 @@ namespace OptiscalerManager.Core.Services
         // only compatible AMD files are exactly the ones each OptiScaler release
         // already bundles (e.g. 0.9.3 hooks ≤4.1.0, 0.9.4 hooks 4.1.1) — downloading
         // them again added nothing. Custom DLLs now overlay the installed files.
-
-        /// <summary>Legacy cache root of the removed signedbin downloads (cleanup only).</summary>
-        public string GetFidelityFxSdkCachePath() => Path.Combine(_cacheDir, "FidelityFxSdk");
 
         // ── OptiPatcher cache ─────────────────────────────────────────────────────
 
@@ -1498,15 +1437,6 @@ namespace OptiscalerManager.Core.Services
             return VersionOrder.Newest(versions);
         }
 
-        public void DeleteFakenvapiCache(string version)
-        {
-            var cachePath = GetFakenvapiCachePath(version);
-            if (Directory.Exists(cachePath))
-            {
-                Directory.Delete(cachePath, true);
-            }
-        }
-
         /// <summary>
         /// Fetches all releases from the OptiPatcher repo. Looks for the OptiPatcher.asi asset.
         /// </summary>
@@ -1599,12 +1529,6 @@ namespace OptiscalerManager.Core.Services
             => Path.Combine(_cacheDir, "OptiPatcher", version);
 
         /// <summary>
-        /// Returns true if OptiPatcher.asi for the given version is already cached.
-        /// </summary>
-        public bool IsOptiPatcherCached(string version)
-            => File.Exists(Path.Combine(GetOptiPatcherCachePath(version), "OptiPatcher.asi"));
-
-        /// <summary>
         /// Downloads OptiPatcher.asi for the given version into the per-version cache folder.
         /// Returns the full path to the cached OptiPatcher.asi file.
         /// </summary>
@@ -1646,51 +1570,6 @@ namespace OptiscalerManager.Core.Services
                 return true;
 
             return localVersion != remoteVersion;
-        }
-
-        public async Task DownloadAndExtractAllAsync()
-        {
-            var errors = new System.Collections.Generic.List<string>();
-
-            // Try to download each component independently
-            try
-            {
-                // We no longer auto-download OptiScaler here. It's fetched per-version on demand.
-            }
-            catch (Exception ex)
-            {
-                errors.Add($"OptiScaler: {ex.Message}");
-            }
-
-            try
-            {
-                await DownloadAndExtractFakenvapiAsync();
-            }
-            catch (Exception ex)
-            {
-                errors.Add($"Fakenvapi: {ex.Message}");
-            }
-
-            // NukemFG is never downloaded automatically — it is always provided manually.
-            // If the DLL is not present yet, we prompt the user here.
-            if (!IsNukemFGInstalled)
-            {
-                bool provided = await ProvideNukemFGManuallyAsync(isUpdate: false);
-                if (!provided)
-                    errors.Add("NukemFG: Manual download was skipped.");
-            }
-
-            // If all failed, throw
-            if (errors.Count == 3)
-            {
-                throw new Exception($"All downloads failed:\n{string.Join("\n", errors)}");
-            }
-
-            // If some failed, store in LastError but don't throw
-            if (errors.Count > 0)
-            {
-                LastError = new Exception($"Some downloads failed:\n{string.Join("\n", errors)}");
-            }
         }
 
         public async Task<string> DownloadOptiScalerAsync(string version, IProgress<double>? progress = null)
@@ -1902,28 +1781,6 @@ namespace OptiscalerManager.Core.Services
             }
         }
 
-        public static bool IsOptiScalerDownloadActive(string version)
-        {
-            if (string.IsNullOrWhiteSpace(version)) return false;
-            lock (_downloadLock)
-            {
-                return _activeOptiDownloads.Contains(version);
-            }
-        }
-
-        public async Task DownloadAndExtractFakenvapiAsync()
-        {
-            var version = _cachedLatestFakenvapiVersion ?? _remoteVersions.FakenvapiVersion;
-            if (version == null)
-                throw new Exception("No remote version available for Fakenvapi");
-
-            await DownloadFakenvapiAsync(version);
-
-            _localVersions.FakenvapiVersion = version;
-            SaveLocalVersions();
-            OnStatusChanged?.Invoke();
-        }
-
         /// <summary>
         /// NukemFG cannot be downloaded automatically from GitHub.
         /// This method shows the manual file picker dialog so the user can
@@ -1962,98 +1819,6 @@ namespace OptiscalerManager.Core.Services
             {
                 LastError = ex;
                 return false;
-            }
-        }
-
-        private async Task DownloadAndExtractComponentAsync(
-            string componentName,
-            RepositoryConfig config,
-            string version,
-            string cacheSubDir)
-        {
-            LastError = null;
-            try
-            {
-                // Get release info (with retry)
-                var url = $"https://api.github.com/repos/{config.RepoOwner}/{config.RepoName}/releases/latest";
-                var response = await GetWithRetryAsync(() => _httpClient, url);
-                response.EnsureSuccessStatusCode();
-
-                var json = await response.Content.ReadAsStringAsync();
-                var doc = JsonDocument.Parse(json);
-
-                // Find download URL
-                string? downloadUrl = null;
-                if (doc.RootElement.TryGetProperty("assets", out var assets))
-                {
-                    foreach (var asset in assets.EnumerateArray())
-                    {
-                        if (asset.TryGetProperty("browser_download_url", out var urlProp))
-                        {
-                            var assetUrl = urlProp.GetString();
-                            if (assetUrl != null &&
-                                (assetUrl.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ||
-                                 assetUrl.EndsWith(".7z", StringComparison.OrdinalIgnoreCase)))
-                            {
-                                downloadUrl = assetUrl;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // Fallback to zipball_url if no assets found
-                if (downloadUrl == null && doc.RootElement.TryGetProperty("zipball_url", out var zipballProp))
-                    downloadUrl = zipballProp.GetString();
-
-                if (downloadUrl == null)
-                    throw new Exception($"No downloadable asset found for {componentName}. Check if the repository has releases with downloadable files.");
-
-                var tempZip = Path.Combine(Path.GetTempPath(), $"{componentName}_{Guid.NewGuid()}.zip");
-                var extractPath = Path.Combine(_cacheDir, cacheSubDir);
-                try
-                {
-                    // Stream download with retry and per-attempt timeout
-                    Log.Write($"[Download] Streaming {componentName} from {Path.GetFileName(downloadUrl)}");
-                    await StreamToFileAsync(() => _httpClient, downloadUrl, tempZip);
-
-                    // Extract with path traversal validation
-                    if (Directory.Exists(extractPath))
-                        Directory.Delete(extractPath, true);
-                    Directory.CreateDirectory(extractPath);
-
-                    await Task.Run(() =>
-                    {
-                        using var archive = ArchiveFactory.Open(tempZip);
-                        foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
-                        {
-                            var destPath = SafeDestinationPath(extractPath, entry.Key ?? string.Empty);
-                            var destDir = Path.GetDirectoryName(destPath);
-                            if (destDir != null && !Directory.Exists(destDir))
-                                Directory.CreateDirectory(destDir);
-                            using var entryStream = entry.OpenEntryStream();
-                            using var fileStream = File.Create(destPath);
-                            entryStream.CopyTo(fileStream, 81920);
-                        }
-                    });
-                }
-                catch (HttpRequestException httpEx)
-                {
-                    throw new Exception($"Failed to download {componentName}: {httpEx.Message}", httpEx);
-                }
-                catch (IOException ioEx)
-                {
-                    throw new Exception($"Failed to extract {componentName}: {ioEx.Message}", ioEx);
-                }
-                finally
-                {
-                    try { if (File.Exists(tempZip)) File.Delete(tempZip); } catch { }
-                }
-            }
-            catch (Exception ex)
-            {
-                LastError = ex;
-                throw;
             }
         }
 
@@ -2113,140 +1878,9 @@ namespace OptiscalerManager.Core.Services
             return VersionOrder.Newest(versions);
         }
 
-        public void DeleteOptiScalerCache(string version)
-        {
-            var cachePath = Path.Combine(_cacheDir, "OptiScaler", version);
-            if (Directory.Exists(cachePath))
-            {
-                Directory.Delete(cachePath, true);
-            }
-            // Also remove from custom versions list if present
-            if (_config.CustomOptiScalerVersions.Remove(version))
-                SaveConfiguration();
-            // Keep static cache in sync
-            _cachedOptiScalerVersions?.Remove(version);
-            if (_localVersions.OptiScalerVersion == version)
-            {
-                _localVersions.OptiScalerVersion = GetDownloadedOptiScalerVersions().FirstOrDefault();
-                SaveLocalVersions();
-            }
-        }
-
         /// <summary>Returns the set of custom OptiScaler version names imported by the user.</summary>
         public System.Collections.Generic.HashSet<string> CustomVersions
             => new(_config.CustomOptiScalerVersions, StringComparer.OrdinalIgnoreCase);
-
-        /// <summary>
-        /// Imports a custom OptiScaler version from a 7z archive.
-        /// Extracts to Cache/OptiScaler/{versionName}/ and registers it.
-        /// </summary>
-        public async Task<string> ImportCustomOptiScalerVersionAsync(string archivePath)
-        {
-            var fileName = Path.GetFileNameWithoutExtension(archivePath);
-            // Sanitize to produce a safe directory name
-            var versionName = "custom-" + SanitizeVersionName(fileName);
-            var targetDir = Path.Combine(_cacheDir, "OptiScaler", versionName);
-
-            if (Directory.Exists(targetDir))
-                Directory.Delete(targetDir, true);
-            Directory.CreateDirectory(targetDir);
-
-            try
-            {
-                await Task.Run(() =>
-                {
-                    using var stream = File.OpenRead(archivePath);
-                    using var archive = SharpCompress.Archives.ArchiveFactory.Open(stream);
-                    var fileEntries = archive.Entries.Where(e => !e.IsDirectory).ToList();
-                    var commonPrefix = FindCommonArchivePrefix(fileEntries.Select(e => e.Key).ToList());
-
-                    // Use ExtractAllEntries (sequential reader) which works for all formats
-                    // including solid RAR/7z where random OpenEntryStream() can fail.
-                    using var reader = archive.ExtractAllEntries();
-                    while (reader.MoveToNextEntry())
-                    {
-                        if (reader.Entry.IsDirectory) continue;
-                        ExtractEntry(reader.Entry.Key, targetDir, commonPrefix,
-                            dest => reader.WriteEntryTo(dest));
-                    }
-                });
-            }
-            catch
-            {
-                // Clean up partial extraction so the empty dir doesn't appear as a ghost version
-                try { if (Directory.Exists(targetDir)) Directory.Delete(targetDir, true); }
-                catch { /* best effort */ }
-                throw;
-            }
-
-            // Register as custom version
-            if (!_config.CustomOptiScalerVersions.Contains(versionName, StringComparer.OrdinalIgnoreCase))
-            {
-                _config.CustomOptiScalerVersions.Add(versionName);
-                SaveConfiguration();
-            }
-            // Update static cache so other windows see the new version immediately
-            if (_cachedOptiScalerVersions != null && !_cachedOptiScalerVersions.Contains(versionName, StringComparer.OrdinalIgnoreCase))
-                _cachedOptiScalerVersions.Add(versionName);
-            return versionName;
-        }
-
-        private static void ExtractEntry(string? key, string targetDir, string commonPrefix, Action<Stream> writeAction)
-        {
-            var entryKey = (key ?? "").Replace('/', Path.DirectorySeparatorChar);
-            if (!string.IsNullOrEmpty(commonPrefix) && entryKey.StartsWith(commonPrefix, StringComparison.OrdinalIgnoreCase))
-                entryKey = entryKey.Substring(commonPrefix.Length);
-            if (string.IsNullOrEmpty(entryKey)) return;
-
-            // Guard against path traversal
-            var destPath = Path.GetFullPath(Path.Combine(targetDir, entryKey));
-            if (!destPath.StartsWith(Path.GetFullPath(targetDir) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                return;
-
-            var destDir = Path.GetDirectoryName(destPath);
-            if (!string.IsNullOrEmpty(destDir))
-                Directory.CreateDirectory(destDir);
-
-            using var fileStream = File.Create(destPath);
-            writeAction(fileStream);
-        }
-
-        private static string SanitizeVersionName(string name)
-        {
-            var invalid = Path.GetInvalidFileNameChars();
-            var sb = new System.Text.StringBuilder(name.Length);
-            foreach (var c in name)
-                sb.Append(invalid.Contains(c) ? '_' : c);
-            return sb.ToString();
-        }
-
-        private static string FindCommonArchivePrefix(System.Collections.Generic.List<string?> keys)
-        {
-            if (keys.Count == 0) return "";
-            var normalizedKeys = keys.Select(k => (k ?? "").Replace('/', Path.DirectorySeparatorChar)).ToList();
-            var firstSep = normalizedKeys[0].IndexOf(Path.DirectorySeparatorChar);
-            if (firstSep < 0) return "";
-            var candidate = normalizedKeys[0].Substring(0, firstSep + 1);
-            if (normalizedKeys.All(k => k.StartsWith(candidate, StringComparison.OrdinalIgnoreCase)))
-                return candidate;
-            return "";
-        }
-
-        public string GetVersionString()
-        {
-            var parts = new System.Collections.Generic.List<string>();
-
-            if (!string.IsNullOrEmpty(OptiScalerVersion))
-                parts.Add($"OptiScaler {OptiScalerVersion}");
-
-            if (!string.IsNullOrEmpty(FakenvapiVersion))
-                parts.Add($"Fakenvapi {FakenvapiVersion}");
-
-            if (!string.IsNullOrEmpty(NukemFGVersion))
-                parts.Add($"NukemFG {NukemFGVersion}");
-
-            return parts.Count > 0 ? string.Join(" | ", parts) : "Not installed";
-        }
 
         public System.Collections.Generic.List<string> GetDownloadedExtrasVersions()
         {
@@ -2280,65 +1914,6 @@ namespace OptiscalerManager.Core.Services
             return VersionOrder.Newest(versions);
         }
 
-        public void DeleteOptiPatcherCache(string version)
-        {
-            var cachePath = Path.Combine(_cacheDir, "OptiPatcher", version);
-            if (Directory.Exists(cachePath))
-            {
-                Directory.Delete(cachePath, true);
-            }
-        }
-
-        public void DeleteExtrasCache(string version)
-        {
-            var cachePath = Path.Combine(_cacheDir, "Extras", version);
-            if (Directory.Exists(cachePath))
-            {
-                Directory.Delete(cachePath, true);
-            }
-        }
-
-        /// <summary>
-        /// Returns a list of locally-cached NukemFG version names (subdirectory names under Cache/NukemFG/).
-        /// Also migrates the legacy flat cache layout to the new versioned layout if needed.
-        /// </summary>
-        public List<string> GetDownloadedNukemFGVersions()
-        {
-            var versions = new List<string>();
-            var nukemDir = GetNukemFGCachePath();
-            if (!Directory.Exists(nukemDir)) return versions;
-
-            // Legacy migration: if dlssg_to_fsr3_amd_is_better.dll exists directly in NukemFG/,
-            // move it into a "default" subdirectory.
-            var legacyDll = Path.Combine(nukemDir, "dlssg_to_fsr3_amd_is_better.dll");
-            if (File.Exists(legacyDll))
-            {
-                var defaultDir = Path.Combine(nukemDir, "default");
-                Directory.CreateDirectory(defaultDir);
-                File.Move(legacyDll, Path.Combine(defaultDir, "dlssg_to_fsr3_amd_is_better.dll"), true);
-                Log.Write("[NukemFG] Migrated legacy flat cache to versioned layout (default).");
-            }
-
-            foreach (var dir in Directory.GetDirectories(nukemDir))
-            {
-                var dll = Path.Combine(dir, "dlssg_to_fsr3_amd_is_better.dll");
-                if (File.Exists(dll))
-                {
-                    versions.Add(Path.GetFileName(dir));
-                }
-            }
-            return VersionOrder.Newest(versions);
-        }
-
-        public void DeleteNukemFGCache(string version)
-        {
-            var cachePath = GetNukemFGCachePath(version);
-            if (Directory.Exists(cachePath))
-            {
-                Directory.Delete(cachePath, true);
-            }
-        }
-
         // ── Custom FSR 4.x amdxcffx64.dll (bring-your-own DLL) ───────────────────
         //
         // This component is strictly local-file based: the app NEVER downloads,
@@ -2368,28 +1943,6 @@ namespace OptiscalerManager.Core.Services
         public List<string> GetDownloadedCustomFsr4Versions()
             => GetUserDllVersions(GetCustomFsr4CachePath(), CustomFsr4DllName);
 
-        /// <summary>Loads the stored metadata for an imported custom FSR4 DLL version, or null.</summary>
-        public CustomFsr4DllInfo? GetCustomFsr4DllInfo(string version)
-            => ReadUserDllInfo(GetCustomFsr4CachePath(version), "CustomFsr4");
-
-        /// <summary>
-        /// Imports a user-supplied amdxcffx64.dll into the local component cache.
-        /// Validates the file is a 64-bit PE, reads its version resource, computes
-        /// the SHA-256, and stores everything under Cache/CustomFsr4/{version}/.
-        /// Re-importing the same version overwrites the previous copy.
-        /// Returns the metadata of the imported DLL.
-        /// </summary>
-        public Task<CustomFsr4DllInfo> ImportCustomFsr4DllAsync(string sourcePath)
-            => ImportUserDllAsync(sourcePath, CustomFsr4DllName, GetCustomFsr4CachePath, "CustomFsr4");
-
-        /// <summary>Deletes an imported custom FSR4 DLL version from the cache.</summary>
-        public void DeleteCustomFsr4Cache(string version)
-        {
-            var cachePath = GetCustomFsr4CachePath(version);
-            if (Directory.Exists(cachePath))
-                Directory.Delete(cachePath, true);
-        }
-
         // ── Custom FSR SDK amd_fidelityfx_upscaler_dx12.dll (bring-your-own DLL) ─
         //
         // Companion to the custom amdxcffx64.dll component: lets the user swap in a
@@ -2409,27 +1962,12 @@ namespace OptiscalerManager.Core.Services
         /// <summary>Returns the cache directory for a specific custom FSR SDK DLL version.</summary>
         public string GetCustomFsrSdkCachePath(string version) => Path.Combine(GetCustomFsrSdkCachePath(), version);
 
-        /// <summary>Returns the full path of the cached SDK DLL for a specific version.</summary>
-        public string GetCustomFsrSdkDllPath(string version) => Path.Combine(GetCustomFsrSdkCachePath(version), CustomFsrSdkDllName);
-
         /// <summary>
         /// Returns the locally-imported custom FSR SDK DLL version labels
         /// (subdirectory names under Cache/CustomFsrSdk/ that contain the DLL).
         /// </summary>
         public List<string> GetDownloadedCustomFsrSdkVersions()
             => GetUserDllVersions(GetCustomFsrSdkCachePath(), CustomFsrSdkDllName);
-
-        /// <summary>Loads the stored metadata for an imported custom FSR SDK DLL version, or null.</summary>
-        public CustomFsr4DllInfo? GetCustomFsrSdkDllInfo(string version)
-            => ReadUserDllInfo(GetCustomFsrSdkCachePath(version), "CustomFsrSdk");
-
-        /// <summary>Deletes an imported custom FSR SDK DLL version from the cache.</summary>
-        public void DeleteCustomFsrSdkCache(string version)
-        {
-            var cachePath = GetCustomFsrSdkCachePath(version);
-            if (Directory.Exists(cachePath))
-                Directory.Delete(cachePath, true);
-        }
 
         // ── Unified custom-DLL library (bring your own, one or more) ─────────────
         //
@@ -2824,79 +2362,6 @@ namespace OptiscalerManager.Core.Services
             }
         }
 
-        /// <summary>
-        /// Imports a scanned FSR SDK package into Cache/CustomFsrSdk/{version}/.
-        /// The upscaler DLL is required; all other found DLLs are imported alongside
-        /// it. The version label comes from the upscaler's FileVersion. The caller
-        /// owns the scan's staging cleanup.
-        /// </summary>
-        public async Task<CustomFsr4DllInfo> ImportCustomFsrSdkPackageAsync(FsrSdkScanResult scan)
-        {
-            if (!scan.HasUpscaler)
-                throw new InvalidDataException(
-                    $"The selected source does not contain {CustomFsrSdkDllName} (64-bit). The upscaler DLL is required.");
-
-            return await Task.Run(() =>
-            {
-                var upscalerPath = scan.FoundFiles[CustomFsrSdkDllName];
-                var upscalerPe = scan.UpscalerPe ?? PeFileInspector.Inspect(upscalerPath);
-
-                string upscalerSha;
-                using (var sha = System.Security.Cryptography.SHA256.Create())
-                using (var stream = File.OpenRead(upscalerPath))
-                    upscalerSha = Convert.ToHexString(sha.ComputeHash(stream));
-
-                var versionLabel = !string.IsNullOrEmpty(upscalerPe.FileVersion) && upscalerPe.FileVersion != "0.0.0.0"
-                    ? upscalerPe.FileVersion
-                    : $"unknown-{upscalerSha[..8].ToLowerInvariant()}";
-                versionLabel = SanitizeVersionName(versionLabel);
-
-                var targetDir = GetCustomFsrSdkCachePath(versionLabel);
-                if (Directory.Exists(targetDir))
-                    Directory.Delete(targetDir, true); // re-import replaces the whole package
-                Directory.CreateDirectory(targetDir);
-
-                var info = new CustomFsr4DllInfo
-                {
-                    VersionLabel = versionLabel,
-                    FileVersion = upscalerPe.FileVersion,
-                    ProductVersion = upscalerPe.ProductVersion,
-                    Sha256 = upscalerSha,
-                    HasAuthenticodeSignature = upscalerPe.HasAuthenticodeSignature,
-                    OriginalFileName = Path.GetFileName(scan.SourcePath),
-                    ImportedAtUtc = DateTime.UtcNow.ToString("O")
-                };
-
-                foreach (var (dllName, sourceFile) in scan.FoundFiles)
-                {
-                    File.Copy(sourceFile, Path.Combine(targetDir, dllName), overwrite: true);
-
-                    var pe = dllName.Equals(CustomFsrSdkDllName, StringComparison.OrdinalIgnoreCase)
-                        ? upscalerPe
-                        : PeFileInspector.Inspect(sourceFile);
-                    string fileSha;
-                    using (var sha = System.Security.Cryptography.SHA256.Create())
-                    using (var stream = File.OpenRead(sourceFile))
-                        fileSha = Convert.ToHexString(sha.ComputeHash(stream));
-
-                    info.Files.Add(new CustomDllFileEntry
-                    {
-                        Name = dllName,
-                        FileVersion = pe.FileVersion,
-                        Sha256 = fileSha,
-                        HasAuthenticodeSignature = pe.HasAuthenticodeSignature
-                    });
-                }
-
-                var json = JsonSerializer.Serialize(info, OptimizerContext.Default.CustomFsr4DllInfo);
-                File.WriteAllText(Path.Combine(targetDir, "dll_info.json"), json);
-
-                Log.Write($"[CustomFsrSdk] Imported package '{versionLabel}' with {info.Files.Count} DLL(s): " +
-                                string.Join(", ", info.Files.Select(f => f.Name)));
-                return info;
-            });
-        }
-
         // ── Shared bring-your-own-DLL helpers ─────────────────────────────────────
 
         private static List<string> GetUserDllVersions(string cacheRoot, string dllName)
@@ -2929,124 +2394,5 @@ namespace OptiscalerManager.Core.Services
             }
         }
 
-        /// <summary>
-        /// Shared import core for user-supplied DLL components: validates the file is
-        /// a 64-bit PE, reads its version resource, computes the SHA-256, and stores
-        /// DLL + metadata under {cache}/{versionLabel}/. Never downloads anything.
-        /// </summary>
-        private static async Task<CustomFsr4DllInfo> ImportUserDllAsync(
-            string sourcePath, string dllName, Func<string, string> versionDirFor, string logTag)
-        {
-            if (!File.Exists(sourcePath))
-                throw new FileNotFoundException("Selected file does not exist.", sourcePath);
-
-            return await Task.Run(() =>
-            {
-                PeFileInfo pe;
-                try
-                {
-                    pe = PeFileInspector.Inspect(sourcePath);
-                }
-                catch (Exception ex)
-                {
-                    throw new InvalidDataException($"Could not read the selected file: {ex.Message}", ex);
-                }
-
-                if (!pe.IsValidPe)
-                    throw new InvalidDataException("The selected file is not a valid Windows DLL (missing PE header).");
-                if (!pe.Is64Bit)
-                    throw new InvalidDataException($"The selected DLL is not a 64-bit (x64) binary. OptiScaler requires the 64-bit {dllName}.");
-
-                string sha256;
-                using (var sha = System.Security.Cryptography.SHA256.Create())
-                using (var stream = File.OpenRead(sourcePath))
-                    sha256 = Convert.ToHexString(sha.ComputeHash(stream));
-
-                // Version label = detected FileVersion, falling back to a hash prefix
-                // so two unknown builds never collide in the cache.
-                var versionLabel = !string.IsNullOrEmpty(pe.FileVersion) && pe.FileVersion != "0.0.0.0"
-                    ? pe.FileVersion
-                    : $"unknown-{sha256[..8].ToLowerInvariant()}";
-                versionLabel = SanitizeVersionName(versionLabel);
-
-                var targetDir = versionDirFor(versionLabel);
-                Directory.CreateDirectory(targetDir);
-                File.Copy(sourcePath, Path.Combine(targetDir, dllName), overwrite: true);
-
-                var info = new CustomFsr4DllInfo
-                {
-                    VersionLabel = versionLabel,
-                    FileVersion = pe.FileVersion,
-                    ProductVersion = pe.ProductVersion,
-                    Sha256 = sha256,
-                    HasAuthenticodeSignature = pe.HasAuthenticodeSignature,
-                    OriginalFileName = Path.GetFileName(sourcePath),
-                    ImportedAtUtc = DateTime.UtcNow.ToString("O")
-                };
-
-                var json = JsonSerializer.Serialize(info, OptimizerContext.Default.CustomFsr4DllInfo);
-                File.WriteAllText(Path.Combine(targetDir, "dll_info.json"), json);
-
-                Log.Write($"[{logTag}] Imported '{info.OriginalFileName}' as version '{versionLabel}' " +
-                                $"(FileVersion={pe.FileVersion ?? "?"}, signed={pe.HasAuthenticodeSignature}, sha256={sha256[..16]}…)");
-                return info;
-            });
-        }
-
-        /// <summary>
-        /// Imports a NukemFG version from a .zip archive.
-        /// Extracts the archive, locates dlssg_to_fsr3_amd_is_better.dll, and caches it
-        /// under Cache/NukemFG/{archiveName}/.
-        /// </summary>
-        public async Task<string> ImportNukemFGArchiveAsync(string archivePath)
-        {
-            var archiveName = Path.GetFileNameWithoutExtension(archivePath);
-            // Sanitize folder name
-            foreach (var c in Path.GetInvalidFileNameChars())
-                archiveName = archiveName.Replace(c, '_');
-
-            var versionDir = GetNukemFGCachePath(archiveName);
-            Directory.CreateDirectory(versionDir);
-
-            var tempExtractDir = Path.Combine(Path.GetTempPath(), "OptiScaler_NukemFG_" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(tempExtractDir);
-
-            try
-            {
-                await Task.Run(() =>
-                {
-                    using var archive = SharpCompress.Archives.ArchiveFactory.Open(archivePath);
-                    foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
-                    {
-                        entry.WriteToDirectory(tempExtractDir, new SharpCompress.Common.ExtractionOptions
-                        {
-                            ExtractFullPath = true,
-                            Overwrite = true
-                        });
-                    }
-                });
-
-                // Find the target DLL anywhere in the extracted tree
-                var dllFiles = Directory.GetFiles(tempExtractDir, "dlssg_to_fsr3_amd_is_better.dll", SearchOption.AllDirectories);
-                if (dllFiles.Length == 0)
-                {
-                    // Cleanup on failure
-                    if (Directory.Exists(versionDir)) Directory.Delete(versionDir, true);
-                    throw new FileNotFoundException("The archive does not contain 'dlssg_to_fsr3_amd_is_better.dll'.");
-                }
-
-                File.Copy(dllFiles[0], Path.Combine(versionDir, "dlssg_to_fsr3_amd_is_better.dll"), true);
-                Log.Write($"[NukemFG] Imported version '{archiveName}' from archive.");
-                return archiveName;
-            }
-            finally
-            {
-                // Cleanup temp extraction directory
-                if (Directory.Exists(tempExtractDir))
-                {
-                    try { Directory.Delete(tempExtractDir, true); } catch { /* best-effort */ }
-                }
-            }
-        }
     }
 }

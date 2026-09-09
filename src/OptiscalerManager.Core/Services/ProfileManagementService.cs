@@ -402,7 +402,5 @@ namespace OptiscalerManager.Core.Services
             return sanitized;
         }
 
-        public string GetProfilesDirectory() => _profilesDir;
-        public string GetCustomProfilesDirectory() => _customProfilesDir;
     }
 }
