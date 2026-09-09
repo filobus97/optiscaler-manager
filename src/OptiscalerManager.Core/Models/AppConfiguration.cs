@@ -16,6 +16,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace OptiscalerManager.Core.Models
 {
@@ -217,16 +218,41 @@ namespace OptiscalerManager.Core.Models
     /// Local cache of OptiScaler release metadata fetched from GitHub.
     /// Updated on each successful API call and merged with existing entries.
     /// </summary>
-    public class OptiScalerReleasesCache
+    /// <summary>
+    /// The release caches all have the same shape — a timestamp and a list of releases —
+    /// and are loaded and saved by the same pair of helpers. This is what those helpers
+    /// need to know about them.
+    /// </summary>
+    public interface IReleasesCacheFile
+    {
+        int ReleaseCount { get; }
+    }
+
+    public class OptiScalerReleasesCache : IReleasesCacheFile
     {
         public DateTime LastUpdated { get; set; } = DateTime.MinValue;
         public List<OptiScalerReleaseEntry> Releases { get; set; } = new();
+
+        [JsonIgnore]
+        public int ReleaseCount => Releases.Count;
     }
 
     /// <summary>
     /// A single OptiScaler Extras (FSR4 INT8 mod) release entry stored in the local cache.
     /// </summary>
-    public class ExtrasReleaseEntry
+    /// <summary>
+    /// One release of a component that ships a single versioned artifact (extras,
+    /// OptiPatcher, fakenvapi). OptiScaler itself is not one of these: it splits its
+    /// releases into stable and beta streams and is summarised separately.
+    /// </summary>
+    public interface IReleaseEntry
+    {
+        string Version { get; }
+        bool IsLatest { get; }
+        string? DownloadUrl { get; }
+    }
+
+    public class ExtrasReleaseEntry : IReleaseEntry
     {
         public string Version { get; set; } = string.Empty;
         public string? DownloadUrl { get; set; }
@@ -238,16 +264,19 @@ namespace OptiscalerManager.Core.Models
     /// <summary>
     /// Local cache of OptiScaler Extras release metadata.
     /// </summary>
-    public class ExtrasReleasesCache
+    public class ExtrasReleasesCache : IReleasesCacheFile
     {
         public DateTime LastUpdated { get; set; } = DateTime.MinValue;
         public List<ExtrasReleaseEntry> Releases { get; set; } = new();
+
+        [JsonIgnore]
+        public int ReleaseCount => Releases.Count;
     }
 
     /// <summary>
     /// A single OptiPatcher release entry stored in the local cache.
     /// </summary>
-    public class OptiPatcherReleaseEntry
+    public class OptiPatcherReleaseEntry : IReleaseEntry
     {
         public string Version { get; set; } = string.Empty;
         public string? DownloadUrl { get; set; }
@@ -257,16 +286,19 @@ namespace OptiscalerManager.Core.Models
     /// <summary>
     /// Local cache of OptiPatcher release metadata.
     /// </summary>
-    public class OptiPatcherReleasesCache
+    public class OptiPatcherReleasesCache : IReleasesCacheFile
     {
         public DateTime LastUpdated { get; set; } = DateTime.MinValue;
         public List<OptiPatcherReleaseEntry> Releases { get; set; } = new();
+
+        [JsonIgnore]
+        public int ReleaseCount => Releases.Count;
     }
 
     /// <summary>
     /// A single Fakenvapi release entry stored in the local cache.
     /// </summary>
-    public class FakenvapiReleaseEntry
+    public class FakenvapiReleaseEntry : IReleaseEntry
     {
         public string Version { get; set; } = string.Empty;
         public string? DownloadUrl { get; set; }
@@ -276,10 +308,13 @@ namespace OptiscalerManager.Core.Models
     /// <summary>
     /// Local cache of Fakenvapi release metadata.
     /// </summary>
-    public class FakenvapiReleasesCache
+    public class FakenvapiReleasesCache : IReleasesCacheFile
     {
         public DateTime LastUpdated { get; set; } = DateTime.MinValue;
         public List<FakenvapiReleaseEntry> Releases { get; set; } = new();
+
+        [JsonIgnore]
+        public int ReleaseCount => Releases.Count;
     }
 
     /// <summary>

@@ -18,6 +18,7 @@ using System;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
@@ -336,93 +337,99 @@ namespace OptiscalerManager.Core.Services
             catch (Exception ex) { Log.Write($"[Config] Failed to save local versions: {ex.Message}"); }
         }
 
-        private void LoadReleasesCache()
+        // ── Release-cache persistence ────────────────────────────────────────────
+
+        /// <summary>
+        /// Reads one of the release caches from disk, or null when it is missing or
+        /// unreadable. A corrupt cache is never fatal: we log it and refetch.
+        ///
+        /// The caches live in static fields, so each caller checks whether its own is
+        /// already populated first and reads the file at most once per process.
+        /// </summary>
+        private T? ReadReleasesCache<T>(string fileName, string label, JsonTypeInfo<T> typeInfo)
+            where T : class, IReleasesCacheFile
         {
-            // Only load once per process (static field)
-            if (_releasesCache.Releases.Count > 0) return;
-            if (!File.Exists(_releasesCacheFile)) return;
+            var file = Path.Combine(_baseDir, fileName);
+            if (!File.Exists(file)) return null;
             try
             {
-                var json = File.ReadAllText(_releasesCacheFile);
-                var loaded = JsonSerializer.Deserialize(json, OptimizerContext.Default.OptiScalerReleasesCache);
-                if (loaded != null)
-                {
-                    _releasesCache = loaded;
-                    RebuildInMemoryCacheFromReleases();
-                    Log.Write($"[ReleasesCache] Loaded {_releasesCache.Releases.Count} entries from local cache (last updated: {_releasesCache.LastUpdated})");
-                }
+                var loaded = JsonSerializer.Deserialize(File.ReadAllText(file), typeInfo);
+                if (loaded is not null)
+                    Log.Write($"[{label}] Loaded {loaded.ReleaseCount} entries from local cache.");
+                return loaded;
             }
             catch (Exception ex)
             {
-                Log.Write($"[ReleasesCache] Failed to load: {ex.Message}");
+                Log.Write($"[{label}] Failed to load: {ex.Message}");
+                return null;
             }
         }
 
-        private void SaveReleasesCache()
+        /// <summary>Writes a release cache back to disk. Failing to save is not fatal either.</summary>
+        private void WriteReleasesCache<T>(string fileName, string label, JsonTypeInfo<T> typeInfo, T cache)
+            where T : class, IReleasesCacheFile
         {
             try
             {
-                var json = JsonSerializer.Serialize(_releasesCache, OptimizerContext.Default.OptiScalerReleasesCache);
-                File.WriteAllText(_releasesCacheFile, json);
+                File.WriteAllText(Path.Combine(_baseDir, fileName), JsonSerializer.Serialize(cache, typeInfo));
+                Log.Write($"[{label}] Saved {cache.ReleaseCount} entries.");
             }
             catch (Exception ex)
             {
-                Log.Write($"[ReleasesCache] Failed to save: {ex.Message}");
+                Log.Write($"[{label}] Failed to save: {ex.Message}");
             }
         }
+
+        private void LoadReleasesCache()
+        {
+            if (_releasesCache.Releases.Count > 0) return;
+            if (ReadReleasesCache("optiscaler_releases_cache.json", "ReleasesCache", OptimizerContext.Default.OptiScalerReleasesCache) is not { } loaded) return;
+            _releasesCache = loaded;
+            RebuildInMemoryCacheFromReleases();
+        }
+
+        private void SaveReleasesCache()
+            => WriteReleasesCache("optiscaler_releases_cache.json", "ReleasesCache", OptimizerContext.Default.OptiScalerReleasesCache, _releasesCache);
 
         // ── Extras (FSR4 INT8) cache ──────────────────────────────────────────────
 
         private void LoadExtrasCache()
         {
             if (_extrasCache.Releases.Count > 0) return;
-            var file = Path.Combine(_baseDir, "extras_cache.json");
-            if (!File.Exists(file)) return;
-            try
-            {
-                var json = File.ReadAllText(file);
-                var loaded = JsonSerializer.Deserialize(json, OptimizerContext.Default.ExtrasReleasesCache);
-                if (loaded != null)
-                {
-                    _extrasCache = loaded;
-                    RebuildInMemoryExtrasCache();
-                    Log.Write($"[ExtrasCache] Loaded {_extrasCache.Releases.Count} entries from local cache.");
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Write($"[ExtrasCache] Failed to load: {ex.Message}");
-            }
+            if (ReadReleasesCache("extras_cache.json", "ExtrasCache", OptimizerContext.Default.ExtrasReleasesCache) is not { } loaded) return;
+            _extrasCache = loaded;
+            RebuildInMemoryExtrasCache();
         }
 
         private void SaveExtrasCache()
+            => WriteReleasesCache("extras_cache.json", "ExtrasCache", OptimizerContext.Default.ExtrasReleasesCache, _extrasCache);
+
+        /// <summary>
+        /// The two things the UI wants from a single-stream component's release list: which
+        /// version is newest, and every version it could offer, newest first.
+        ///
+        /// Returns null for an empty list so callers leave the last known "latest" alone —
+        /// a failed refresh should not erase what we already knew.
+        /// </summary>
+        private static (string? Latest, System.Collections.Generic.List<string> Versions)? SummariseReleases<T>(
+            System.Collections.Generic.List<T>? releases, string label) where T : IReleaseEntry
         {
-            try
-            {
-                var file = Path.Combine(_baseDir, "extras_cache.json");
-                var json = JsonSerializer.Serialize(_extrasCache, OptimizerContext.Default.ExtrasReleasesCache);
-                File.WriteAllText(file, json);
-                Log.Write($"[ExtrasCache] Saved {_extrasCache.Releases.Count} entries to {file}.");
-            }
-            catch (Exception ex)
-            {
-                Log.Write($"[ExtrasCache] Failed to save: {ex.Message}");
-            }
+            if (releases is null || releases.Count == 0) return null;
+
+            var latest = releases.FirstOrDefault(r => r.IsLatest)?.Version ?? releases[0].Version;
+            var versions = VersionOrder.Newest(releases.Select(r => r.Version));
+            Log.Write($"[{label}] Rebuilt in-memory: {versions.Count} version(s), latest={latest}");
+            return (latest, versions);
         }
 
         private void RebuildInMemoryExtrasCache()
         {
-            if (_extrasCache.Releases == null || _extrasCache.Releases.Count == 0)
+            if (SummariseReleases(_extrasCache.Releases, "ExtrasCache") is not { } summary)
             {
                 _cachedExtrasVersions = new System.Collections.Generic.List<string>();
                 return;
             }
-
-            _cachedLatestExtrasVersion = _extrasCache.Releases.FirstOrDefault(r => r.IsLatest)?.Version
-                ?? _extrasCache.Releases.FirstOrDefault()?.Version;
-
-            _cachedExtrasVersions = _extrasCache.Releases.Select(r => r.Version).Distinct().ToList();
-            Log.Write($"[ExtrasCache] Rebuilt in-memory: {_cachedExtrasVersions.Count} version(s), latest={_cachedLatestExtrasVersion}");
+            (_cachedLatestExtrasVersion, _cachedExtrasVersions) = summary;
         }
 
         /// <summary>
@@ -477,31 +484,12 @@ namespace OptiscalerManager.Core.Services
 
             var all = _releasesCache.Releases;
 
-            Version parse(string v)
-            {
-                if (string.IsNullOrEmpty(v)) return new Version(0, 0);
-                var clean = new string(v.TakeWhile(c => char.IsDigit(c) || c == '.').ToArray()).TrimEnd('.');
-                if (!string.IsNullOrEmpty(clean) && Version.TryParse(clean, out var parsed)) return parsed;
-                return new Version(0, 0);
-            }
-
-            int parseSuffixValue(string v)
-            {
-                var match = System.Text.RegularExpressions.Regex.Match(v, @"\d+$");
-                if (match.Success && int.TryParse(match.Value, out int val)) return val;
-                return 0;
-            }
-
             var stablesList = all.Where(r => !r.IsBeta)
-                                 .OrderByDescending(r => parse(r.Version))
-                                 .ThenByDescending(r => parseSuffixValue(r.Version))
-                                 .ThenByDescending(r => r.Version, StringComparer.OrdinalIgnoreCase)
+                                 .OrderBy(r => r.Version, VersionOrder.Descending)
                                  .ToList();
 
             var betasList = all.Where(r => r.IsBeta)
-                               .OrderByDescending(r => parse(r.Version))
-                               .ThenByDescending(r => parseSuffixValue(r.Version))
-                               .ThenByDescending(r => r.Version, StringComparer.OrdinalIgnoreCase)
+                               .OrderBy(r => r.Version, VersionOrder.Descending)
                                .ToList();
 
             _cachedBetaVersions = new System.Collections.Generic.HashSet<string>(
@@ -1117,6 +1105,71 @@ namespace OptiscalerManager.Core.Services
         /// the per-version cache folder. Returns the path to the DLL file, which keeps
         /// whichever name the release ships (see <see cref="Components.Fsr4Int8Build"/>).
         /// </summary>
+        /// <summary>
+        /// The URL we already know for a version, from the cached release list.
+        /// </summary>
+        private static string? CachedAssetUrl<T>(System.Collections.Generic.IEnumerable<T> releases, string version)
+            where T : IReleaseEntry =>
+            releases.FirstOrDefault(r => string.Equals(r.Version, version, StringComparison.OrdinalIgnoreCase))?.DownloadUrl;
+
+        /// <summary>
+        /// Asks GitHub which file to download for one release, when the cached list does
+        /// not already say. <paramref name="wantsAsset"/> picks the right file out of the
+        /// release by name — components publish different things (a .asi, a .zip, a .7z).
+        ///
+        /// Tags are written both ways across these repos ("v0.9.3" and "0.9.3"), so both
+        /// are tried before giving up. A repo that attaches no assets at all can still be
+        /// served by its source archive, which is what <paramref name="fallBackToZipball"/>
+        /// allows.
+        /// </summary>
+        private async Task<string?> ResolveReleaseAssetUrlAsync(
+            RepositoryConfig config, string version, string label,
+            Func<string, bool> wantsAsset, bool fallBackToZipball = false)
+        {
+            foreach (var prefix in new[] { "v", "" })
+            {
+                try
+                {
+                    var apiUrl = $"https://api.github.com/repos/{config.RepoOwner}/{config.RepoName}/releases/tags/{prefix}{version}";
+                    var response = await GetWithRetryAsync(() => _httpClient, apiUrl, maxRetries: 2, timeoutSeconds: 15);
+                    if (!response.IsSuccessStatusCode) continue;
+
+                    using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+                    if (doc.RootElement.TryGetProperty("assets", out var assets))
+                    {
+                        foreach (var asset in assets.EnumerateArray())
+                        {
+                            if (!asset.TryGetProperty("browser_download_url", out var urlProp)) continue;
+                            if (urlProp.GetString() is not { } url) continue;
+
+                            // Match on the asset's name, falling back to the URL, which ends
+                            // with the same file name for anything GitHub hosts.
+                            var name = asset.TryGetProperty("name", out var nameProp) ? nameProp.GetString() : null;
+                            if (wantsAsset(string.IsNullOrEmpty(name) ? url : name)) return url;
+                        }
+                    }
+
+                    if (fallBackToZipball &&
+                        doc.RootElement.TryGetProperty("zipball_url", out var zipball) &&
+                        zipball.GetString() is { Length: > 0 } zipballUrl)
+                    {
+                        return zipballUrl;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Write($"[{label}] API lookup attempt failed: {ex.Message}");
+                }
+            }
+            return null;
+        }
+
+        /// <summary>True for the archive formats these components ship in.</summary>
+        private static bool IsArchiveAsset(string name) =>
+            name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ||
+            name.EndsWith(".7z", StringComparison.OrdinalIgnoreCase);
+
         public async Task<string> DownloadExtrasDllAsync(string version, IProgress<double>? progress = null)
         {
             var extractDir = GetExtrasDllCachePath(version);
@@ -1129,46 +1182,8 @@ namespace OptiscalerManager.Core.Services
                 return dllPath;
             }
 
-            // Resolve download URL (cache first, then API)
-            string? downloadUrl = _extrasCache.Releases
-                .FirstOrDefault(r => string.Equals(r.Version, version, StringComparison.OrdinalIgnoreCase))
-                ?.DownloadUrl;
-
-            if (string.IsNullOrEmpty(downloadUrl))
-            {
-                // Try to fetch from API
-                Log.Write($"[ExtrasDownload] No cached URL for v{version}, trying API...");
-                var config = _config.OptiScalerExtras;
-                foreach (var prefix in new[] { "v", "" })
-                {
-                    try
-                    {
-                        var apiUrl = $"https://api.github.com/repos/{config.RepoOwner}/{config.RepoName}/releases/tags/{prefix}{version}";
-                        var response = await GetWithRetryAsync(() => _httpClient, apiUrl, maxRetries: 2, timeoutSeconds: 15);
-                        if (!response.IsSuccessStatusCode) continue;
-
-                        var json = await response.Content.ReadAsStringAsync();
-                        using var doc = JsonDocument.Parse(json);
-                        if (doc.RootElement.TryGetProperty("assets", out var assets))
-                        {
-                            foreach (var asset in assets.EnumerateArray())
-                            {
-                                if (asset.TryGetProperty("browser_download_url", out var urlProp))
-                                {
-                                    var u = urlProp.GetString();
-                                    if (u != null && (u.EndsWith(".zip") || u.EndsWith(".7z")))
-                                    {
-                                        downloadUrl = u;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        if (!string.IsNullOrEmpty(downloadUrl)) break;
-                    }
-                    catch (Exception ex) { Log.Write($"[ExtrasDownload] API lookup attempt failed: {ex.Message}"); }
-                }
-            }
+            var downloadUrl = CachedAssetUrl(_extrasCache.Releases, version)
+                ?? await ResolveReleaseAssetUrlAsync(_config.OptiScalerExtras, version, "ExtrasDownload", IsArchiveAsset);
 
             if (string.IsNullOrEmpty(downloadUrl))
                 throw new VersionUnavailableException(version, "No downloadable asset found for this Extras version.");
@@ -1247,51 +1262,22 @@ namespace OptiscalerManager.Core.Services
         private void LoadOptiPatcherCache()
         {
             if (_optiPatcherCache.Releases.Count > 0) return;
-            var file = Path.Combine(_baseDir, "optipatcher_cache.json");
-            if (!File.Exists(file)) return;
-            try
-            {
-                var json = File.ReadAllText(file);
-                var loaded = JsonSerializer.Deserialize(json, OptimizerContext.Default.OptiPatcherReleasesCache);
-                if (loaded != null)
-                {
-                    _optiPatcherCache = loaded;
-                    RebuildInMemoryOptiPatcherCache();
-                    Log.Write($"[OptiPatcherCache] Loaded {_optiPatcherCache.Releases.Count} entries from local cache.");
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Write($"[OptiPatcherCache] Failed to load: {ex.Message}");
-            }
+            if (ReadReleasesCache("optipatcher_cache.json", "OptiPatcherCache", OptimizerContext.Default.OptiPatcherReleasesCache) is not { } loaded) return;
+            _optiPatcherCache = loaded;
+            RebuildInMemoryOptiPatcherCache();
         }
 
         private void SaveOptiPatcherCache()
-        {
-            try
-            {
-                var file = Path.Combine(_baseDir, "optipatcher_cache.json");
-                var json = JsonSerializer.Serialize(_optiPatcherCache, OptimizerContext.Default.OptiPatcherReleasesCache);
-                File.WriteAllText(file, json);
-                Log.Write($"[OptiPatcherCache] Saved {_optiPatcherCache.Releases.Count} entries.");
-            }
-            catch (Exception ex)
-            {
-                Log.Write($"[OptiPatcherCache] Failed to save: {ex.Message}");
-            }
-        }
+            => WriteReleasesCache("optipatcher_cache.json", "OptiPatcherCache", OptimizerContext.Default.OptiPatcherReleasesCache, _optiPatcherCache);
 
         private void RebuildInMemoryOptiPatcherCache()
         {
-            if (_optiPatcherCache.Releases == null || _optiPatcherCache.Releases.Count == 0)
+            if (SummariseReleases(_optiPatcherCache.Releases, "OptiPatcherCache") is not { } summary)
             {
                 _cachedOptiPatcherVersions = new System.Collections.Generic.List<string>();
                 return;
             }
-            _cachedLatestOptiPatcherVersion = _optiPatcherCache.Releases.FirstOrDefault(r => r.IsLatest)?.Version
-                ?? _optiPatcherCache.Releases.FirstOrDefault()?.Version;
-            _cachedOptiPatcherVersions = _optiPatcherCache.Releases.Select(r => r.Version).Distinct().ToList();
-            Log.Write($"[OptiPatcherCache] Rebuilt in-memory: {_cachedOptiPatcherVersions.Count} version(s), latest={_cachedLatestOptiPatcherVersion}");
+            (_cachedLatestOptiPatcherVersion, _cachedOptiPatcherVersions) = summary;
         }
 
         // ── Fakenvapi cache ───────────────────────────────────────────────────────
@@ -1299,65 +1285,22 @@ namespace OptiscalerManager.Core.Services
         private void LoadFakenvapiCache()
         {
             if (_fakenvapiCache.Releases.Count > 0) return;
-            var file = Path.Combine(_baseDir, "fakenvapi_cache.json");
-            if (!File.Exists(file)) return;
-            try
-            {
-                var json = File.ReadAllText(file);
-                var loaded = JsonSerializer.Deserialize(json, OptimizerContext.Default.FakenvapiReleasesCache);
-                if (loaded != null)
-                {
-                    _fakenvapiCache = loaded;
-                    RebuildInMemoryFakenvapiCache();
-                    Log.Write($"[FakenvapiCache] Loaded {_fakenvapiCache.Releases.Count} entries from local cache.");
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Write($"[FakenvapiCache] Failed to load: {ex.Message}");
-            }
+            if (ReadReleasesCache("fakenvapi_cache.json", "FakenvapiCache", OptimizerContext.Default.FakenvapiReleasesCache) is not { } loaded) return;
+            _fakenvapiCache = loaded;
+            RebuildInMemoryFakenvapiCache();
         }
 
         private void SaveFakenvapiCache()
-        {
-            try
-            {
-                var file = Path.Combine(_baseDir, "fakenvapi_cache.json");
-                var json = JsonSerializer.Serialize(_fakenvapiCache, OptimizerContext.Default.FakenvapiReleasesCache);
-                File.WriteAllText(file, json);
-                Log.Write($"[FakenvapiCache] Saved {_fakenvapiCache.Releases.Count} entries.");
-            }
-            catch (Exception ex)
-            {
-                Log.Write($"[FakenvapiCache] Failed to save: {ex.Message}");
-            }
-        }
+            => WriteReleasesCache("fakenvapi_cache.json", "FakenvapiCache", OptimizerContext.Default.FakenvapiReleasesCache, _fakenvapiCache);
 
         private void RebuildInMemoryFakenvapiCache()
         {
-            if (_fakenvapiCache.Releases == null || _fakenvapiCache.Releases.Count == 0)
+            if (SummariseReleases(_fakenvapiCache.Releases, "FakenvapiCache") is not { } summary)
             {
                 _cachedFakenvapiVersions = new System.Collections.Generic.List<string>();
                 return;
             }
-            _cachedLatestFakenvapiVersion = _fakenvapiCache.Releases.FirstOrDefault(r => r.IsLatest)?.Version
-                ?? _fakenvapiCache.Releases.FirstOrDefault()?.Version;
-
-            static Version parseFakenvapiVer(string v)
-            {
-                var clean = v.TrimStart('v');
-                var dash = clean.IndexOf('-');
-                if (dash >= 0) clean = clean[..dash];
-                return Version.TryParse(clean, out var p) ? p : new Version(0, 0);
-            }
-
-            _cachedFakenvapiVersions = _fakenvapiCache.Releases
-                .Select(r => r.Version)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderByDescending(v => parseFakenvapiVer(v))
-                .ThenByDescending(v => v, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            Log.Write($"[FakenvapiCache] Rebuilt in-memory: {_cachedFakenvapiVersions.Count} version(s), latest={_cachedLatestFakenvapiVersion}");
+            (_cachedLatestFakenvapiVersion, _cachedFakenvapiVersions) = summary;
         }
 
         /// <summary>
@@ -1477,52 +1420,9 @@ namespace OptiscalerManager.Core.Services
                 return cacheDir;
             }
 
-            // Resolve download URL (cache first, then API)
-            string? downloadUrl = _fakenvapiCache.Releases
-                .FirstOrDefault(r => string.Equals(r.Version, version, StringComparison.OrdinalIgnoreCase))
-                ?.DownloadUrl;
-
-            if (string.IsNullOrEmpty(downloadUrl))
-            {
-                var config = _config.Fakenvapi;
-                foreach (var prefix in new[] { "v", "" })
-                {
-                    try
-                    {
-                        var apiUrl = $"https://api.github.com/repos/{config.RepoOwner}/{config.RepoName}/releases/tags/{prefix}{version}";
-                        var resp = await GetWithRetryAsync(() => _httpClient, apiUrl, maxRetries: 2, timeoutSeconds: 15);
-                        if (!resp.IsSuccessStatusCode) continue;
-
-                        var json = await resp.Content.ReadAsStringAsync();
-                        using var doc = JsonDocument.Parse(json);
-                        if (doc.RootElement.TryGetProperty("assets", out var assets))
-                        {
-                            foreach (var asset in assets.EnumerateArray())
-                            {
-                                if (asset.TryGetProperty("browser_download_url", out var urlProp) &&
-                                    asset.TryGetProperty("name", out var nameProp))
-                                {
-                                    var assetName = nameProp.GetString() ?? "";
-                                    var assetUrl  = urlProp.GetString();
-                                    if (assetUrl != null &&
-                                        (assetName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ||
-                                         assetName.EndsWith(".7z", StringComparison.OrdinalIgnoreCase)))
-                                    {
-                                        downloadUrl = assetUrl;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        // Fallback to zipball
-                        if (string.IsNullOrEmpty(downloadUrl) && doc.RootElement.TryGetProperty("zipball_url", out var zipball))
-                            downloadUrl = zipball.GetString();
-
-                        if (!string.IsNullOrEmpty(downloadUrl)) break;
-                    }
-                    catch (Exception ex) { Log.Write($"[FakenvapiDownload] API lookup attempt failed: {ex.Message}"); }
-                }
-            }
+            var downloadUrl = CachedAssetUrl(_fakenvapiCache.Releases, version)
+                ?? await ResolveReleaseAssetUrlAsync(_config.Fakenvapi, version, "FakenvapiDownload",
+                       IsArchiveAsset, fallBackToZipball: true);
 
             if (string.IsNullOrEmpty(downloadUrl))
                 throw new VersionUnavailableException(version, "No downloadable asset found for Fakenvapi.");
@@ -1595,7 +1495,7 @@ namespace OptiscalerManager.Core.Services
                     versions.Add(Path.GetFileName(dir));
                 }
             }
-            return versions.OrderByDescending(v => v).ToList();
+            return VersionOrder.Newest(versions);
         }
 
         public void DeleteFakenvapiCache(string version)
@@ -1719,46 +1619,9 @@ namespace OptiscalerManager.Core.Services
                 return asiPath;
             }
 
-            // Resolve download URL (cache first, then API)
-            string? downloadUrl = _optiPatcherCache.Releases
-                .FirstOrDefault(r => string.Equals(r.Version, version, StringComparison.OrdinalIgnoreCase))
-                ?.DownloadUrl;
-
-            if (string.IsNullOrEmpty(downloadUrl))
-            {
-                var config = _config.OptiPatcher;
-                foreach (var prefix in new[] { "v", "" })
-                {
-                    try
-                    {
-                        var apiUrl = $"https://api.github.com/repos/{config.RepoOwner}/{config.RepoName}/releases/tags/{prefix}{version}";
-                        var response = await GetWithRetryAsync(() => _httpClient, apiUrl, maxRetries: 2, timeoutSeconds: 15);
-                        if (!response.IsSuccessStatusCode) continue;
-
-                        var json = await response.Content.ReadAsStringAsync();
-                        using var doc = JsonDocument.Parse(json);
-                        if (doc.RootElement.TryGetProperty("assets", out var assets))
-                        {
-                            foreach (var asset in assets.EnumerateArray())
-                            {
-                                if (asset.TryGetProperty("browser_download_url", out var urlProp) &&
-                                    asset.TryGetProperty("name", out var nameProp))
-                                {
-                                    var assetName = nameProp.GetString() ?? "";
-                                    var assetUrl  = urlProp.GetString();
-                                    if (assetUrl != null && assetName.EndsWith(".asi", StringComparison.OrdinalIgnoreCase))
-                                    {
-                                        downloadUrl = assetUrl;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        if (!string.IsNullOrEmpty(downloadUrl)) break;
-                    }
-                    catch (Exception ex) { Log.Write($"[OptiPatcherDownload] API lookup attempt failed: {ex.Message}"); }
-                }
-            }
+            var downloadUrl = CachedAssetUrl(_optiPatcherCache.Releases, version)
+                ?? await ResolveReleaseAssetUrlAsync(_config.OptiPatcher, version, "OptiPatcherDownload",
+                       name => name.EndsWith(".asi", StringComparison.OrdinalIgnoreCase));
 
             if (string.IsNullOrEmpty(downloadUrl))
                 throw new VersionUnavailableException(version, "No OptiPatcher.asi asset found for this version.");
@@ -2247,14 +2110,7 @@ namespace OptiscalerManager.Core.Services
                     }
                 }
             }
-            // Better to sort by length and alpha descending:
-            versions.Sort((a, b) =>
-            {
-                var comparison = b.Length.CompareTo(a.Length);
-                if (comparison == 0) return string.Compare(b, a, StringComparison.OrdinalIgnoreCase);
-                return comparison;
-            });
-            return versions;
+            return VersionOrder.Newest(versions);
         }
 
         public void DeleteOptiScalerCache(string version)
@@ -2405,7 +2261,7 @@ namespace OptiscalerManager.Core.Services
                         versions.Add(dirName);
                 }
             }
-            return versions.OrderByDescending(v => v).ToList();
+            return VersionOrder.Newest(versions);
         }
 
         public System.Collections.Generic.List<string> GetDownloadedOptiPatcherVersions()
@@ -2421,7 +2277,7 @@ namespace OptiscalerManager.Core.Services
                         versions.Add(dirName);
                 }
             }
-            return versions.OrderByDescending(v => v).ToList();
+            return VersionOrder.Newest(versions);
         }
 
         public void DeleteOptiPatcherCache(string version)
@@ -2471,18 +2327,7 @@ namespace OptiscalerManager.Core.Services
                     versions.Add(Path.GetFileName(dir));
                 }
             }
-            static Version parseNukemVer(string v)
-            {
-                var clean = v.TrimStart('v');
-                var dash = clean.IndexOf('-');
-                if (dash >= 0) clean = clean[..dash];
-                return Version.TryParse(clean, out var p) ? p : new Version(0, 0);
-            }
-
-            return versions
-                .OrderByDescending(v => parseNukemVer(v))
-                .ThenByDescending(v => v, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            return VersionOrder.Newest(versions);
         }
 
         public void DeleteNukemFGCache(string version)
@@ -3065,16 +2910,7 @@ namespace OptiscalerManager.Core.Services
                     versions.Add(Path.GetFileName(dir));
             }
 
-            static Version parseVer(string v)
-            {
-                var clean = new string(v.TakeWhile(c => char.IsDigit(c) || c == '.').ToArray()).TrimEnd('.');
-                return Version.TryParse(clean, out var p) ? p : new Version(0, 0);
-            }
-
-            return versions
-                .OrderByDescending(v => parseVer(v))
-                .ThenByDescending(v => v, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            return VersionOrder.Newest(versions);
         }
 
         private static CustomFsr4DllInfo? ReadUserDllInfo(string versionDir, string logTag)
