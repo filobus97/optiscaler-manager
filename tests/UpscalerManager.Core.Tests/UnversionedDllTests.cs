@@ -10,8 +10,13 @@ namespace UpscalerManager.Core.Tests;
 /// A DLL that carries no version resource reads back as 0.0.0.0. The game still has the
 /// technology; it just does not say which version — and the UI must not invent one.
 /// </summary>
-public class UnversionedDllTests
+[Collection(AppDataCollection.Name)]
+public class UnversionedDllTests : IDisposable
 {
+    private readonly ScopedAppData _appData = new();
+
+    public void Dispose() => _appData.Dispose();
+
     [Fact]
     public void TechnologyIsDetectedButNoVersionIsClaimed()
     {

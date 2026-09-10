@@ -23,20 +23,21 @@ namespace UpscalerManager.Core.Tests
     public class ComponentAttributionTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "osm_attrib_" + Guid.NewGuid().ToString("N"));
-        private readonly string? _previousConfigHome = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+        private readonly string? _previousRoot = AppDataPaths.RootOverride;
         private readonly string _gameDir;
 
         public ComponentAttributionTests()
         {
             _gameDir = Path.Combine(_root, "game");
             Directory.CreateDirectory(_gameDir);
-            // Keep the backup store inside the scratch directory.
-            Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Path.Combine(_root, "config"));
+            // Keep the backup store inside the scratch directory. An explicit override,
+            // not XDG_CONFIG_HOME, which Windows ignores.
+            AppDataPaths.RootOverride = Path.Combine(_root, "config", "UpscalerManager");
         }
 
         public void Dispose()
         {
-            Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", _previousConfigHome);
+            AppDataPaths.RootOverride = _previousRoot;
             try { Directory.Delete(_root, true); } catch { }
         }
 

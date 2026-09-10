@@ -40,10 +40,23 @@ public static class AppDataPaths
     /// The app-data root, e.g. <c>~/.config/UpscalerManager</c>. Reading this performs
     /// the one-time migration if an older folder is still the one holding the data.
     /// </summary>
+    /// <summary>
+    /// Redirects the app-data root, for tests.
+    ///
+    /// Tests used to point XDG_CONFIG_HOME at a scratch directory, which works on Linux
+    /// and macOS and is silently ignored on Windows — where the suite then read and wrote
+    /// the developer's real AppData, leaving backup folders behind and failing whenever
+    /// it tripped over its own leftovers. An explicit override behaves the same
+    /// everywhere.
+    /// </summary>
+    internal static string? RootOverride { get; set; }
+
     public static string Root
     {
         get
         {
+            if (RootOverride is { Length: > 0 } overridden) return overridden;
+
             var root = Path.Combine(BaseDirectory(), FolderName);
             MigrateIfNeeded(BaseDirectory(), root, PreviousFolderNames);
             return root;

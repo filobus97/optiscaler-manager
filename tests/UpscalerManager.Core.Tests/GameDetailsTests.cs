@@ -16,12 +16,20 @@ namespace UpscalerManager.Core.Tests
     /// so these pin the two things it reads: the components on disk and what the ini
     /// actually says.
     /// </summary>
+    [Collection(AppDataCollection.Name)]
     public class GameDetailsTests : IDisposable
     {
         private readonly string _dir = Path.Combine(Path.GetTempPath(), "osm_details_" + Guid.NewGuid().ToString("N"));
 
+        private readonly ScopedAppData _appData = new();
+
         public GameDetailsTests() => Directory.CreateDirectory(_dir);
-        public void Dispose() { try { Directory.Delete(_dir, true); } catch { } }
+
+        public void Dispose()
+        {
+            _appData.Dispose();
+            try { Directory.Delete(_dir, true); } catch { }
+        }
 
         private void Place(string relative, string? fileVersion = null)
         {

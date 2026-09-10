@@ -573,15 +573,19 @@ public class GameAnalyzerService
             else
                 version = $"{info.FileMajorPart}.{info.FileMinorPart}.{info.FileBuildPart}.{info.FilePrivatePart}";
 
-            // On Linux, FileVersionInfo cannot read Windows PE version resources — fall back to manual PE parsing
-            if (version == "0.0.0.0" && !OperatingSystem.IsWindows())
+            // FileVersionInfo reads PE version resources through the OS on Windows and not
+            // at all elsewhere, so fall back to parsing the file ourselves whenever it comes
+            // back with nothing. Not gated to non-Windows: when the platform call cannot
+            // read a particular file we can still read it, and the answer should not depend
+            // on which OS the app happens to be running on.
+            if (string.IsNullOrEmpty(version) || version == "0.0.0.0")
                 version = ReadPeFileVersion(filePath);
 
             return version;
         }
         catch
         {
-            return OperatingSystem.IsWindows() ? "0.0.0.0" : ReadPeFileVersion(filePath);
+            return ReadPeFileVersion(filePath);
         }
     }
 

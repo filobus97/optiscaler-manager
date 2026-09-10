@@ -51,6 +51,41 @@ namespace UpscalerManager.Core.Tests
             Assert.False(Directory.Exists(Old("OptiscalerManager")));
         }
 
+        /// <summary>
+        /// The redirect the whole suite depends on. It used to be done with
+        /// XDG_CONFIG_HOME, which Windows ignores — so on Windows the tests silently
+        /// operated on the real user's app-data instead of a scratch directory.
+        /// </summary>
+        [Fact]
+        public void TheAppDataRootCanBeRedirectedOnAnyPlatform()
+        {
+            var previous = AppDataPaths.RootOverride;
+            try
+            {
+                var scratch = Path.Combine(_appData, "redirected");
+                AppDataPaths.RootOverride = scratch;
+
+                Assert.Equal(scratch, AppDataPaths.Root);
+                Assert.Equal(Path.Combine(scratch, "Cache"), AppDataPaths.Cache);
+                Assert.Equal(Path.Combine(scratch, "Backups"), AppDataPaths.Backups);
+                Assert.Equal(Path.Combine(scratch, "Profiles"), AppDataPaths.Profiles);
+            }
+            finally { AppDataPaths.RootOverride = previous; }
+        }
+
+        [Fact]
+        public void WithNoOverrideTheRootSitsUnderTheUsersConfigDirectory()
+        {
+            var previous = AppDataPaths.RootOverride;
+            try
+            {
+                AppDataPaths.RootOverride = null;
+                Assert.EndsWith(AppDataPaths.FolderName, AppDataPaths.Root);
+                Assert.True(Path.IsPathRooted(AppDataPaths.Root));
+            }
+            finally { AppDataPaths.RootOverride = previous; }
+        }
+
         [Fact]
         public void TheAppIsNoLongerNamedAfterOptiScaler()
             => Assert.Equal("UpscalerManager", AppDataPaths.FolderName);
@@ -119,14 +154,12 @@ namespace UpscalerManager.Core.Tests
         [Fact]
         public void AGameBackedUpBeforeTheRenameIsStillRevertibleAfterIt()
         {
-            var previousConfigHome = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+            var previousRoot = AppDataPaths.RootOverride;
             var home = Path.Combine(_appData, "home");
             var gameDir = Path.Combine(_appData, "game");
-            // The directory has to exist before XDG_CONFIG_HOME points at it, or the
-            // runtime reports no application-data folder at all.
             Directory.CreateDirectory(home);
             Directory.CreateDirectory(gameDir);
-            Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", home);
+            AppDataPaths.RootOverride = Path.Combine(home, AppDataPaths.FolderName);
 
             try
             {
@@ -166,7 +199,7 @@ namespace UpscalerManager.Core.Tests
             }
             finally
             {
-                Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", previousConfigHome);
+                AppDataPaths.RootOverride = previousRoot;
             }
         }
     }

@@ -72,6 +72,13 @@ jobs:
             echo "version=$v" >> "$GITHUB_OUTPUT"
           fi
 
+      # Tests gate the release. They used to run only in CI, on a separate workflow
+      # that could go red without stopping a publish — and did, for five releases,
+      # because the failures were Windows-only and nobody was reading that status.
+      # A release that cannot pass its own tests should not be uploaded.
+      - name: Test
+        run: dotnet test tests/UpscalerManager.Core.Tests/UpscalerManager.Core.Tests.csproj -c Release
+
       # Untrimmed self-contained single-file publish. PublishTrimmed stays off
       # (Avalonia + reflection paths are not verified trim-safe).
       - name: Publish

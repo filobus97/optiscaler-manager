@@ -162,9 +162,12 @@ public class StorageInventoryTests
     private sealed class FakeAppData : IDisposable
     {
         private readonly string _root = NewTempDir();
-        private readonly string? _previous = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+        private readonly string? _previous = AppDataPaths.RootOverride;
 
-        public FakeAppData() => Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", _root);
+        // An explicit override rather than XDG_CONFIG_HOME: that variable is a Unix
+        // convention and is ignored on Windows, where the suite would otherwise operate
+        // on the developer's real AppData.
+        public FakeAppData() => AppDataPaths.RootOverride = AppDir;
 
         public string AppDir => Path.Combine(_root, "UpscalerManager");
 
@@ -205,7 +208,7 @@ public class StorageInventoryTests
 
         public void Dispose()
         {
-            Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", _previous);
+            AppDataPaths.RootOverride = _previous;
             try { Directory.Delete(_root, true); } catch { }
         }
     }

@@ -16,9 +16,12 @@ namespace UpscalerManager.Core.Tests
     /// prefers 'signed' paths. These pin that selection logic against a synthetic
     /// SDK tree built from minimal PE files (no proprietary binaries involved).
     /// </summary>
+    [Collection(AppDataCollection.Name)]
     public class FsrSdkScanTests : IDisposable
     {
         private readonly string _root;
+
+        private readonly ScopedAppData _appData = new();
 
         public FsrSdkScanTests()
         {
@@ -28,6 +31,7 @@ namespace UpscalerManager.Core.Tests
 
         public void Dispose()
         {
+            _appData.Dispose();
             try { if (Directory.Exists(_root)) Directory.Delete(_root, true); } catch { }
         }
 
