@@ -45,7 +45,7 @@
     <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10" Margin="0,16,0,0">
       <Button Name="InstallButton" Classes="BtnPrimary" Content="Install OptiScaler"
               Click="OnInstallClick"
-              ToolTip.Tip="Choose the version, backend and add-ons, and see exactly what will change before anything is written."/>
+              ToolTip.Tip="Choose the version, which files to install and the add-ons, and see exactly what will change before anything is written."/>
       <Button Name="RevertButton" Classes="BtnDanger" Content="Remove OptiScaler"
               Click="OnRevertClick"
               ToolTip.Tip="Restore the files that were here before and remove everything the install added."/>
