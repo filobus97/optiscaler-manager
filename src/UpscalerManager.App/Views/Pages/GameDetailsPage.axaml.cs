@@ -88,11 +88,9 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         Mark("OptiScalerTab", !_swapTab);
         Mark("SwapTab", _swapTab);
 
-        // Install and Remove act on OptiScaler, so they belong to its tab. Swapping
-        // has no single action — each DLL is its own row — so the swapper tab leaves
-        // the bar with only what applies to the game as a whole.
-        Show("InstallButton", !_swapTab);
-        Show("RevertButton", !_swapTab && _row.Game.IsOptiscalerInstalled);
+        // Install and Remove sit inside the OptiScaler panel, so hiding the panel
+        // hides them. Remove still depends on there being something to remove.
+        Show("RevertButton", _row.Game.IsOptiscalerInstalled);
     }
 
     private void Show(string name, bool visible)
@@ -321,8 +319,8 @@ public partial class GameDetailsPage : UserControl, IHostedPage
 
         var installed = game.IsOptiscalerInstalled;
         if (install is not null) install.Content = installed ? "Reinstall OptiScaler" : "Install OptiScaler";
-        // Whether Remove is shown is decided by ApplyTab, which also has to hide it
-        // on the other tab — setting it here too would make the two disagree.
+        // Whether Remove is shown is ApplyTab's call; setting it here too would let
+        // the two disagree.
         _ = revert;
 
         if (summary is not null)

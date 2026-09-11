@@ -171,11 +171,12 @@ Building from source is in [Building & running](#building--running).
   not on the cards, so neither is a stray click away.
 
   Below that summary the page splits into **two tabs — OptiScaler and DLL swapper**
-  — because they are alternatives, not a list. Picking one changes both the options
-  shown and the actions pinned at the bottom, so neither route is presented as the
-  default with the other tacked on beneath it. A game that already has DLLs swapped
-  and no OptiScaler opens on the swapper, so the route it is actually using is the
-  one you land on.
+  — because they are alternatives, not a list. Each tab carries its own actions:
+  Install and Remove live in the OptiScaler tab, and a swap is done from its own
+  row, so neither route is presented as the page's real purpose with the other
+  tacked on beneath it. The bar at the bottom keeps only what applies to the game
+  either way. A game that already has DLLs swapped and no OptiScaler opens on the
+  swapper, so the route it is actually using is the one you land on.
 
   ![A game's details page](docs/screenshots/details.png)
 

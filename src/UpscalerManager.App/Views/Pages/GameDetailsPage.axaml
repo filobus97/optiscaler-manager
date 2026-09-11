@@ -40,7 +40,7 @@
               ToolTip.Tip="Replace one of the game's own upscaler libraries with a different build of the same file. No OptiScaler involved."/>
     </StackPanel>
 
-    <ScrollViewer Grid.Row="3" Margin="0,10,0,0">
+    <ScrollViewer Grid.Row="3" Name="TabScroller" Margin="0,10,0,0">
       <StackPanel Spacing="16">
 
         <!-- OptiScaler tab -->
@@ -50,6 +50,19 @@
             <StackPanel Spacing="10">
               <TextBlock Name="OptiScalerSummaryText" TextWrapping="Wrap" FontSize="12"
                          Foreground="{StaticResource BrTextSecondary}"/>
+              <!-- This tab's actions live in it, exactly as the swapper's live in
+                   its rows. A pinned bar belonging to one tab made that route look
+                   like the page's real purpose and the other like an extra.
+                   Above the config table, so picking the tab shows an action
+                   immediately rather than after a scroll. -->
+              <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,2,0,4">
+                <Button Name="InstallButton" Classes="BtnPrimary" Content="Install OptiScaler"
+                        Click="OnInstallClick"
+                        ToolTip.Tip="Choose the version, which files to install and the add-ons, and see exactly what will change before anything is written."/>
+                <Button Name="RevertButton" Classes="BtnDanger" Content="Remove OptiScaler"
+                        Click="OnRevertClick"
+                        ToolTip.Tip="Restore the files that were here before and remove everything the install added."/>
+              </StackPanel>
               <StackPanel Name="ConfigList" Spacing="8"/>
             </StackPanel>
           </Border>
@@ -73,15 +86,8 @@
       </StackPanel>
     </ScrollViewer>
 
-    <!-- Actions. The first two belong to the OptiScaler tab and are hidden on the
-         other; swapping is done per DLL, from its own row. -->
+    <!-- Only what applies to the game itself. Each tab carries its own actions. -->
     <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="10" Margin="0,16,0,0">
-      <Button Name="InstallButton" Classes="BtnPrimary" Content="Install OptiScaler"
-              Click="OnInstallClick"
-              ToolTip.Tip="Choose the version, which files to install and the add-ons, and see exactly what will change before anything is written."/>
-      <Button Name="RevertButton" Classes="BtnDanger" Content="Remove OptiScaler"
-              Click="OnRevertClick"
-              ToolTip.Tip="Restore the files that were here before and remove everything the install added."/>
       <Button Name="RescanButton" Content="Re-scan this game" Click="OnRescanClick"
               ToolTip.Tip="Read the game folder again — use this after changing files by hand."/>
       <Button Content="Back to games" Click="OnCloseClick" IsCancel="True"
