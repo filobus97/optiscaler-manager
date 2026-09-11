@@ -134,6 +134,32 @@ public class StorageInventoryTests
     }
 
     [Fact]
+    public void CoverImagesAreListedAsOneReclaimableGroup()
+    {
+        using var env = new FakeAppData();
+        env.AddCover("steam_1091500.jpg", 40000);
+        env.AddCover("steam_292030.jpg", 35000);
+
+        var item = Assert.Single(new StorageInventoryService(new AppConfiguration()).Scan(),
+            i => i.Group == "Cover images");
+
+        Assert.Equal(StorageTier.Downloaded, item.Tier);
+        Assert.Equal("2 cover(s)", item.Label);
+        Assert.Equal(75000, item.Bytes);
+        Assert.True(item.CanDelete);
+    }
+
+    [Fact]
+    public void NoCoverGroupAppearsWhenNoneHaveBeenFetched()
+    {
+        using var env = new FakeAppData();
+        env.AddCacheVersion("OptiScaler", "0.9.3", 10);
+
+        Assert.DoesNotContain(new StorageInventoryService(new AppConfiguration()).Scan(),
+            i => i.Group == "Cover images");
+    }
+
+    [Fact]
     public void ImportedDllsAreListedAndSized()
     {
         using var env = new FakeAppData();
@@ -197,6 +223,13 @@ public class StorageInventoryTests
             var dir = Path.Combine(AppDir, "Cache", component, version);
             Directory.CreateDirectory(dir);
             File.WriteAllBytes(Path.Combine(dir, "payload.bin"), new byte[bytes]);
+        }
+
+        public void AddCover(string name, int bytes)
+        {
+            var dir = Path.Combine(AppDir, "Cache", "Covers");
+            Directory.CreateDirectory(dir);
+            File.WriteAllBytes(Path.Combine(dir, name), new byte[bytes]);
         }
 
         public void AddCustomDll(string name, int bytes)

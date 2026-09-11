@@ -80,6 +80,7 @@ public sealed class StorageInventoryService
     {
         var items = new List<StorageItem>();
         items.AddRange(ScanDownloadedComponents());
+        items.AddRange(ScanCoverArt());
         items.AddRange(ScanUserImports());
         items.AddRange(ScanBackups());
         return items;
@@ -107,6 +108,25 @@ public sealed class StorageInventoryService
                     : new StorageItem(StorageTier.Downloaded, group, name, dir, DirectorySize(dir));
             }
         }
+    }
+
+    /// <summary>
+    /// Cover images. Downloaded, so re-obtainable, and the only group here that costs
+    /// nothing to lose — but it is disk the user did not ask for, so it is listed.
+    /// </summary>
+    private IEnumerable<StorageItem> ScanCoverArt()
+    {
+        var dir = Path.Combine(_cacheDir, "Covers");
+        if (!Directory.Exists(dir)) yield break;
+
+        var files = Directory.GetFiles(dir);
+        var bytes = files.Sum(FileSize);
+        if (files.Length == 0) yield break;
+
+        // One row for the lot: individual covers are meaningless to pick between.
+        yield return new StorageItem(StorageTier.Downloaded, "Cover images",
+            $"{files.Length} cover(s)", dir, bytes,
+            "Re-downloaded automatically when a game is next scanned.");
     }
 
     private IEnumerable<StorageItem> ScanUserImports()

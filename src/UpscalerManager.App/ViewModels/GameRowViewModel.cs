@@ -2,11 +2,16 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Avalonia.Media.Imaging;
+using UpscalerManager.Core.Logging;
 using UpscalerManager.Core.Models;
+using UpscalerManager.Core.Services;
 
 namespace UpscalerManager.App.ViewModels;
 
-/// <summary>One row in the game list. Wraps a scanned <see cref="Game"/> and the
+/// <summary>One card in the game list. Wraps a scanned <see cref="Game"/> and the
 /// bits of display state the single screen needs.</summary>
 public sealed class GameRowViewModel : ViewModelBase
 {
@@ -21,6 +26,49 @@ public sealed class GameRowViewModel : ViewModelBase
     public string Name => Game.Name;
 
     public string SubTitle => $"{Game.Platform}  •  {Game.InstallPath}";
+
+    /// <summary>The platform alone, for the card, where there is no room for a path.</summary>
+    public string PlatformName => Game.Platform.ToString();
+
+    private Bitmap? _coverImage;
+
+    /// <summary>
+    /// Cover art, or null when the game has none — the card shows a placeholder then,
+    /// which is most non-Steam games, since only Steam publishes art we can look up
+    /// without an API key.
+    /// </summary>
+    public Bitmap? CoverImage
+    {
+        get => _coverImage;
+        private set
+        {
+            SetField(ref _coverImage, value);
+            OnPropertyChanged(nameof(HasCoverImage));
+        }
+    }
+
+    public bool HasCoverImage => _coverImage is not null;
+
+    /// <summary>
+    /// Fetches and decodes the cover, if there is one. Never throws: a card without art
+    /// is a cosmetic loss and must not disturb the scan.
+    /// </summary>
+    public async Task LoadCoverAsync(CoverArtService covers, CancellationToken cancel = default)
+    {
+        try
+        {
+            if (await covers.GetCoverAsync(Game, cancel) is not { } path) return;
+
+            // Decoding is the expensive part, so keep it off the UI thread.
+            var bitmap = await Task.Run(() => new Bitmap(path), cancel);
+            CoverImage = bitmap;
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Log.Write($"[Covers] Could not show art for {Game.Name}: {ex.Message}");
+        }
+    }
 
     private string _statusText;
     public string StatusText

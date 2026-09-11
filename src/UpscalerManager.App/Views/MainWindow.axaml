@@ -11,19 +11,33 @@
         Title="Upscaler Manager">
 
   <Window.Styles>
-    <!-- Scoped to the game list only (a global ListBoxItem rule would leak into
-         ComboBox dropdowns, since ComboBoxItem derives from ListBoxItem). -->
-    <Style Selector="ListBox#GamesList > ListBoxItem">
-      <Setter Property="Padding" Value="0"/>
-      <Setter Property="Margin" Value="4"/>
+    <!-- A card is a Button, so its chrome has to be replaced wholesale. -->
+    <Style Selector="Button.GameCard">
+      <Setter Property="Background" Value="{StaticResource BrBgSurface}"/>
+      <Setter Property="BorderBrush" Value="{StaticResource BrBorderSubtle}"/>
+      <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="CornerRadius" Value="{StaticResource RadiusMedium}"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="VerticalContentAlignment" Value="Top"/>
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background" Duration="0:0:0.15"/>
+          <BrushTransition Property="BorderBrush" Duration="0:0:0.15"/>
+        </Transitions>
+      </Setter>
     </Style>
-    <!-- The focused/selected game row lights up its card border. -->
-    <Style Selector="ListBox#GamesList > ListBoxItem:selected Border.GameCard">
-      <Setter Property="BorderBrush" Value="{StaticResource BrAccent}"/>
+    <Style Selector="Button.GameCard:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource BrBgElevated}"/>
+      <Setter Property="BorderBrush" Value="{StaticResource BrBorderDefault}"/>
     </Style>
-    <Style Selector="ListBox#GamesList > ListBoxItem:focus-visible Border.GameCard">
+    <Style Selector="Button.GameCard:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource BrBgElevated}"/>
+    </Style>
+    <!-- The focused card is outlined in the accent, so a controller user can always
+         see where they are. -->
+    <Style Selector="Button.GameCard:focus-visible /template/ ContentPresenter">
       <Setter Property="BorderBrush" Value="{StaticResource BrAccent}"/>
+      <Setter Property="BorderThickness" Value="2"/>
     </Style>
   </Window.Styles>
 
@@ -95,64 +109,81 @@
                  FontSize="12" TextWrapping="Wrap"/>
     </Border>
 
-    <!-- Game list -->
+    <!-- Game cards -->
     <Border Grid.Row="4" Margin="0,12,0,0"
             CornerRadius="{StaticResource RadiusMedium}"
             Background="{StaticResource BrBgCard}"
             BorderThickness="1" BorderBrush="{StaticResource BrBorderSubtle}">
       <Grid>
-        <!-- ListBox (not ItemsControl) so Up/Down walks the game rows with the
-             keyboard/controller; the focused row's buttons are one Right away.
-             Left/Right across the row's three cells is wired up in the code-behind. -->
-        <ListBox Name="GamesList" ItemsSource="{Binding Games}" Margin="8"
-                 Background="Transparent" SelectionMode="Single">
-          <ListBox.ItemTemplate>
-            <DataTemplate x:DataType="vm:GameRowViewModel">
-              <Border Classes="GameCard" Padding="14,12"
-                      CornerRadius="{StaticResource RadiusMedium}"
-                      Background="{StaticResource BrBgSurface}"
-                      BorderThickness="1" BorderBrush="{StaticResource BrBorderSubtle}">
-                <Grid ColumnDefinitions="*,Auto,Auto">
-                  <StackPanel Grid.Column="0" Orientation="Vertical" Spacing="3" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="15"
-                               Foreground="{StaticResource BrTextPrimary}" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock Text="{Binding SubTitle}" FontSize="11"
-                               Foreground="{StaticResource BrTextSecondary}" TextTrimming="CharacterEllipsis"/>
-                    <!-- Status plus what the game already has, with versions: "FSR" alone
-                         says nothing, "FSR 4.1.1" answers the question. -->
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                      <TextBlock Text="{Binding StatusText}" FontSize="12" VerticalAlignment="Center"
-                                 Foreground="{StaticResource BrAccent}"/>
-                      <ItemsControl ItemsSource="{Binding TechBadges}">
-                        <ItemsControl.ItemsPanel>
-                          <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="4"/></ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                          <DataTemplate x:DataType="x:String">
-                            <Border Background="{StaticResource BrBgElevated}"
-                                    BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1"
-                                    CornerRadius="{StaticResource RadiusSmall}" Padding="6,1">
-                              <TextBlock Text="{Binding}" FontSize="10.5"
-                                         Foreground="{StaticResource BrTextSecondary}"/>
-                            </Border>
-                          </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                      </ItemsControl>
-                    </StackPanel>
-                  </StackPanel>
+        <!-- Each card is a single Button rather than a row of controls, which is what
+             makes controller navigation free: XYFocus moves between cards spatially and
+             Enter/A activates one. Everything you can do to a game lives on its details
+             page, so a card needs exactly one action. -->
+        <ScrollViewer Name="GamesScroller" Padding="8">
+          <ItemsControl Name="GamesList" ItemsSource="{Binding Games}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel Orientation="Horizontal"/>
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:GameRowViewModel">
+                <Button Classes="GameCard" Width="162" Margin="0,0,10,10" Padding="7"
+                        Click="OnDetailsClick"
+                        ToolTip.Tip="{Binding SubTitle}">
+                  <StackPanel Spacing="7">
+                    <!-- Cover art, with the placeholder behind it so a game without
+                         art still has a card of the same shape. -->
+                    <!-- 2:3, the shape Steam publishes library art in. -->
+                    <Border Height="218" ClipToBounds="True"
+                            CornerRadius="{StaticResource RadiusMedium}"
+                            Background="{StaticResource BrBgElevated}"
+                            BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+                      <Grid>
+                        <TextBlock Text="&#x1F3AE;" FontSize="38" Opacity="0.45"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Foreground="{StaticResource BrTextSecondary}"/>
+                        <Image Source="{Binding CoverImage}" Stretch="UniformToFill"
+                               IsVisible="{Binding HasCoverImage}"/>
+                      </Grid>
+                    </Border>
 
-                  <Button Grid.Column="1" Classes="BtnPrimary" Content="Install OptiScaler"
-                          Margin="0,0,8,0" Click="OnInstallClick"
-                          IsEnabled="{Binding IsIdle}"
-                          ToolTip.Tip="Download and install OptiScaler for this game. The next screen lets you choose the version, backend, add-ons and OptiScaler.ini — and shows exactly what will change before anything is written."/>
-                  <Button Grid.Column="2" Content="Details  &#x203A;"
-                          Click="OnDetailsClick"
-                          ToolTip.Tip="What upscaling technology this game has and at which version, what OptiScaler is set to do, and the option to remove it."/>
-                </Grid>
-              </Border>
-            </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
+                    <StackPanel Spacing="1">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12.5"
+                                 MaxLines="2" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                 Foreground="{StaticResource BrTextPrimary}"/>
+                      <TextBlock Text="{Binding PlatformName}" FontSize="10.5"
+                                 TextTrimming="CharacterEllipsis"
+                                 Foreground="{StaticResource BrTextSecondary}"/>
+                      <TextBlock Text="{Binding StatusText}" FontSize="11"
+                                 TextTrimming="CharacterEllipsis"
+                                 Foreground="{StaticResource BrAccent}"/>
+                    </StackPanel>
+
+                    <!-- What the game already has, with versions: "FSR" alone says
+                         nothing, "FSR 4.1.1" answers the question. -->
+                    <ItemsControl ItemsSource="{Binding TechBadges}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                          <Border Background="{StaticResource BrBgElevated}"
+                                  BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1"
+                                  CornerRadius="{StaticResource RadiusSmall}"
+                                  Padding="5,1" Margin="0,0,4,4">
+                            <TextBlock Text="{Binding}" FontSize="10"
+                                       Foreground="{StaticResource BrTextSecondary}"/>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
 
         <TextBlock IsVisible="{Binding HasNoGames}" HorizontalAlignment="Center" VerticalAlignment="Center"
                    Foreground="{StaticResource BrTextSecondary}" TextAlignment="Center"

@@ -7,53 +7,22 @@
 
     <StackPanel Grid.Row="0" Spacing="4">
       <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                 Text="Set the overlay key, import your own DLLs and .ini profiles, and manage add-ons. Anything you bring your own — the proprietary AMD runtime is never downloaded, only supplied by you and kept in a private cache."/>
+                 Text="Grouped by what each setting affects: the app, and what it installs into your games. Anything you bring your own is supplied by you and kept in a private cache — never downloaded for you."/>
     </StackPanel>
 
     <ScrollViewer Grid.Row="1" Margin="0,14,0,0">
       <StackPanel Spacing="16">
-
-        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
-          <StackPanel Spacing="8">
-            <TextBlock Text="OptiScaler overlay / menu key" FontWeight="SemiBold"
-                       Foreground="{StaticResource BrTextPrimary}"/>
-            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                       Text="Key that opens OptiScaler's in-game overlay. Default is Insert, but not all keyboards have it. Once set, this is forced on every OptiScaler.ini the Manager writes (including the default one)."/>
-            <StackPanel Orientation="Horizontal" Spacing="10">
-              <TextBlock Text="Menu key:" VerticalAlignment="Center" Foreground="{StaticResource BrTextSecondary}"/>
-              <ComboBox Name="MenuKeyCombo" MinWidth="220"
-                        ToolTip.Tip="Applied as [Menu] ShortcutKey on install. 'OptiScaler default' leaves the key untouched (Insert)."/>
-            </StackPanel>
-          </StackPanel>
-        </Border>
-
-        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
-          <StackPanel Spacing="8">
-            <TextBlock Text="Custom DLLs (bring your own)" FontWeight="SemiBold"
-                       Foreground="{StaticResource BrTextPrimary}"/>
-            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                       Text="Import one or more DLLs you already possess (e.g. amdxcffx64.dll, a custom amd_fidelityfx_upscaler_dx12.dll build). At install time they are overlaid on the OptiScaler install: names OptiScaler ships are swapped in place, new names are added alongside. Only 64-bit DLLs are accepted; nothing is ever downloaded for you."/>
-            <StackPanel Orientation="Horizontal" Spacing="10">
-              <Button Content="Import DLL(s)…" Click="OnImportDlls"
-                      ToolTip.Tip="Pick one or more local .dll files (multi-select). Each is validated as a 64-bit PE."/>
-              <Button Content="Import folder…" Click="OnImportDllFolder"
-                      ToolTip.Tip="Pick a folder — every 64-bit DLL inside (recursively) is imported; the largest copy of duplicated names wins."/>
-              <Button Content="Import archive…" Click="OnImportDllArchive"
-                      ToolTip.Tip="Pick a .zip/.7z/.rar — every 64-bit DLL inside is imported."/>
-            </StackPanel>
-            <StackPanel Name="CustomDllsList" Spacing="4"/>
-          </StackPanel>
-        </Border>
-
+        <TextBlock Text="The app itself" FontSize="15" FontWeight="Bold"
+                   Foreground="{StaticResource BrTextPrimary}"/>
+        <TextBlock Text="Settings for Upscaler Manager, not for anything it installs." FontSize="11.5" TextWrapping="Wrap" Margin="0,-10,0,0"
+                   Foreground="{StaticResource BrTextSecondary}"/>
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
                 BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="8">
             <TextBlock Text="Controller" FontWeight="SemiBold"
                        Foreground="{StaticResource BrTextPrimary}"/>
             <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                       Text="Navigate the whole app with a game controller: D-pad or left stick to move, right stick to scroll, A to confirm, B to go back, shoulders to jump between controls. In the game list, up/down picks the game and left/right reaches its Install and Details buttons. Works on the desktop and in Steam Gaming Mode."/>
+                       Text="Navigate the whole app with a game controller: D-pad or left stick to move between cards and controls, right stick to scroll, A to open or confirm, B to go back, shoulders to jump between controls. Works on the desktop and in Steam Gaming Mode."/>
             <CheckBox Name="GamepadCheck" Content="Enable controller navigation"
                       Foreground="{StaticResource BrTextPrimary}" FontSize="12"
                       ToolTip.Tip="Reads the controller directly. If something else (Steam Input) is already mapping it to the keyboard, that is detected and navigation is left to it automatically — turn this off only if you want the controller ignored entirely. Takes effect on the next start."/>
@@ -61,48 +30,6 @@
                        Foreground="{StaticResource BrTextSecondary}"/>
           </StackPanel>
         </Border>
-
-        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
-          <StackPanel Spacing="8">
-            <TextBlock Text="Add-ons" FontWeight="SemiBold"
-                       Foreground="{StaticResource BrTextPrimary}"/>
-            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                       Text="fakenvapi (Reflex → Anti-Lag 2 / LatencyFlex) is downloaded automatically when you select it at install time. Nukem's DLSSG-to-FSR3 frame-gen mod cannot be auto-downloaded — import its dlssg_to_fsr3_amd_is_better.dll (or the mod archive) here once, then select it per install."/>
-            <StackPanel Orientation="Horizontal" Spacing="10">
-              <Button Content="Import Nukem FG DLL…" Click="OnImportNukemFg"
-                      ToolTip.Tip="Pick dlssg_to_fsr3_amd_is_better.dll or the downloaded mod archive (.zip/.7z). Stored in the cache for future installs."/>
-              <TextBlock Name="NukemStatusText" VerticalAlignment="Center" FontSize="12"
-                         Foreground="{StaticResource BrTextSecondary}"/>
-            </StackPanel>
-          </StackPanel>
-        </Border>
-
-        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
-          <StackPanel Spacing="8">
-            <TextBlock Text="OptiScaler.ini profiles" FontWeight="SemiBold"
-                       Foreground="{StaticResource BrTextPrimary}"/>
-            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                       Text="Collect OptiScaler.ini files and tag each with a name, then pick one when installing OptiScaler. Leave the name blank to use the file name."/>
-            <StackPanel Orientation="Horizontal" Spacing="10">
-              <TextBox Name="ProfileNameBox" Width="240" PlaceholderText="Profile name (optional)"/>
-              <Button Content="Import .ini…" Click="OnImportIni"
-                      ToolTip.Tip="Pick an OptiScaler.ini file. Its settings are saved under the given name and can be selected at install time."/>
-            </StackPanel>
-            <StackPanel Name="IniProfilesList" Spacing="4"/>
-          </StackPanel>
-        </Border>
-
-        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgSurface}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
-          <StackPanel Spacing="6">
-            <TextBlock Text="Imported so far" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
-            <TextBlock Name="InventoryText" TextWrapping="Wrap" FontSize="12"
-                       Foreground="{StaticResource BrTextSecondary}"/>
-          </StackPanel>
-        </Border>
-
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
                 BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="8">
@@ -114,7 +41,6 @@
                     ToolTip.Tip="Shows everything the app has written to disk, with sizes, grouped by how safe each thing is to remove."/>
           </StackPanel>
         </Border>
-
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgSurface}"
                 BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="8">
@@ -133,8 +59,81 @@
           </StackPanel>
         </Border>
 
-        <TextBlock Name="ResultText" TextWrapping="Wrap" FontSize="12"
-                   Foreground="{StaticResource BrAccent}"/>
+        <TextBlock Text="OptiScaler" FontSize="15" FontWeight="Bold"
+                   Foreground="{StaticResource BrTextPrimary}"/>
+        <TextBlock Text="Only used when installing OptiScaler into a game. Ignored otherwise." FontSize="11.5" TextWrapping="Wrap" Margin="0,-10,0,0"
+                   Foreground="{StaticResource BrTextSecondary}"/>
+        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="8">
+            <TextBlock Text="OptiScaler overlay / menu key" FontWeight="SemiBold"
+                       Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
+                       Text="Key that opens OptiScaler's in-game overlay. Default is Insert, but not all keyboards have it. Once set, this is forced on every OptiScaler.ini the Manager writes (including the default one)."/>
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Text="Menu key:" VerticalAlignment="Center" Foreground="{StaticResource BrTextSecondary}"/>
+              <ComboBox Name="MenuKeyCombo" MinWidth="220"
+                        ToolTip.Tip="Applied as [Menu] ShortcutKey on install. 'OptiScaler default' leaves the key untouched (Insert)."/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Add-ons" FontWeight="SemiBold"
+                       Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
+                       Text="fakenvapi (Reflex → Anti-Lag 2 / LatencyFlex) is downloaded automatically when you select it at install time. Nukem's DLSSG-to-FSR3 frame-gen mod cannot be auto-downloaded — import its dlssg_to_fsr3_amd_is_better.dll (or the mod archive) here once, then select it per install."/>
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <Button Content="Import Nukem FG DLL…" Click="OnImportNukemFg"
+                      ToolTip.Tip="Pick dlssg_to_fsr3_amd_is_better.dll or the downloaded mod archive (.zip/.7z). Stored in the cache for future installs."/>
+              <TextBlock Name="NukemStatusText" VerticalAlignment="Center" FontSize="12"
+                         Foreground="{StaticResource BrTextSecondary}"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="8">
+            <TextBlock Text="OptiScaler.ini profiles" FontWeight="SemiBold"
+                       Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
+                       Text="Collect OptiScaler.ini files and tag each with a name, then pick one when installing OptiScaler. Leave the name blank to use the file name."/>
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBox Name="ProfileNameBox" Width="240" PlaceholderText="Profile name (optional)"/>
+              <Button Content="Import .ini…" Click="OnImportIni"
+                      ToolTip.Tip="Pick an OptiScaler.ini file. Its settings are saved under the given name and can be selected at install time."/>
+            </StackPanel>
+            <StackPanel Name="IniProfilesList" Spacing="4"/>
+          </StackPanel>
+        </Border>
+        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Custom DLLs (bring your own)" FontWeight="SemiBold"
+                       Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
+                       Text="Import one or more DLLs you already possess (e.g. amdxcffx64.dll, a custom amd_fidelityfx_upscaler_dx12.dll build). At install time they are overlaid on the OptiScaler install: names OptiScaler ships are swapped in place, new names are added alongside. Only 64-bit DLLs are accepted; nothing is ever downloaded for you."/>
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <Button Content="Import DLL(s)…" Click="OnImportDlls"
+                      ToolTip.Tip="Pick one or more local .dll files (multi-select). Each is validated as a 64-bit PE."/>
+              <Button Content="Import folder…" Click="OnImportDllFolder"
+                      ToolTip.Tip="Pick a folder — every 64-bit DLL inside (recursively) is imported; the largest copy of duplicated names wins."/>
+              <Button Content="Import archive…" Click="OnImportDllArchive"
+                      ToolTip.Tip="Pick a .zip/.7z/.rar — every 64-bit DLL inside is imported."/>
+            </StackPanel>
+            <StackPanel Name="CustomDllsList" Spacing="4"/>
+          </StackPanel>
+        </Border>
+        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgSurface}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="6">
+            <TextBlock Text="Imported so far" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock Name="InventoryText" TextWrapping="Wrap" FontSize="12"
+                       Foreground="{StaticResource BrTextSecondary}"/>
+          </StackPanel>
+        </Border>
+
       </StackPanel>
     </ScrollViewer>
 

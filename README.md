@@ -55,8 +55,13 @@ Building from source is in [Building & running](#building--running).
 
 ## What it is (and what it deliberately isn't)
 
-- **One primary screen.** A detected-GPU banner and your game list. Per game, a
-  single **Install OptiScaler** button downloads and installs the *real OptiScaler
+- **One primary screen.** A detected-GPU banner and your games as cover-art cards.
+  Steam supplies the artwork; other launchers get a placeholder. A card shows what
+  upscaling the game already has, at which versions, and whether OptiScaler is
+  installed — and opens the game. Everything you can *do* to a game lives on its
+  page, so a card has exactly one action and nothing to mis-click.
+
+- **Installing OptiScaler** downloads and installs the *real OptiScaler
   release from source* (`optiscaler/OptiScaler` on GitHub) — **latest by default,
   or any older release from the version selector** at the top of the screen. The
   install screen then decouples the independent choices:
@@ -115,8 +120,8 @@ Building from source is in [Building & running](#building--running).
   what each one does in a sentence, and whether it shipped with the game or this app
   added it. When OptiScaler is installed it also says, in plain language, what it is
   set to do (which upscaler will really run, whether FSR 4 is on, frame generation,
-  the Nvidia override, the overlay key). **Removing OptiScaler lives here**, not in
-  the game list, so it is harder to hit by accident with a controller.
+  the Nvidia override, the overlay key). **Installing and removing both live here**,
+  not on the cards, so neither is a stray click away.
 
   ![A game's details page](docs/screenshots/details.png)
 
@@ -383,11 +388,14 @@ care you would any mod tool, and read the release notes before updating.
 | **B** | Back out / close the dialog |
 | **LB / RB** | Jump to the previous / next control |
 
-The game list behaves like a grid: **up/down changes the highlighted game** (the list
-scrolls once you reach the last visible one), and **left/right moves across that game's
-row** — game, *Install OptiScaler*, *Details*. Press **A** on the game itself to start
-the install without stepping over to the button first, and keep going up to leave the
-list for *Rescan* and *Settings*. A bright focus ring always shows where you are.
+The cards are a grid, and the D-pad moves through them the way the layout looks:
+**left/right along a row, up/down between rows**, wrapping as the window resizes.
+Press **A** to open a game, **B** to come back, and keep going up to leave the grid
+for *Rescan* and *Settings*. A bright focus ring always shows where you are.
+
+That navigation is not special-cased anywhere in the app — a card is a single
+focusable control, so the toolkit's own directional focus handles it. The version
+of this that needed hand-written code was the old three-column list.
 
 The right stick scrolls whatever the focused control sits in — the game list on the
 main screen, the page in Settings — without changing what is selected.
