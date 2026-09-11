@@ -576,7 +576,7 @@ Optional, and nothing in the app is gated behind it. Channels are listed in
 *Settings → Support the project* links to that page rather than to a platform
 directly, so a channel can change without a new release.
 
-Bug reports are worth more. The app writes a log; attaching it helps most.
+Bug reports are worth more. Settings has an "Open the log folder" button; attaching that file helps most.
 
 ---
 

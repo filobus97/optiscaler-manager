@@ -57,6 +57,11 @@
             <TextBlock Text="About &amp; updates" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
             <TextBlock Name="AppVersionText" TextWrapping="Wrap" FontSize="12"
                        Foreground="{StaticResource BrTextSecondary}"/>
+            <TextBlock Name="LogPathText" TextWrapping="Wrap" FontSize="11.5"
+                       Foreground="{StaticResource BrTextSecondary}"/>
+            <Button Name="OpenLogButton" Content="Open the log folder" HorizontalAlignment="Left"
+                    Click="OnOpenLogFolder"
+                    ToolTip.Tip="Everything the app did this session and last, written as it happens. Attach it to a bug report — it is what makes an install or swap that went wrong diagnosable."/>
             <StackPanel Orientation="Horizontal" Spacing="10">
               <Button Content="Check for updates" Click="OnCheckAppUpdate"
                       ToolTip.Tip="Asks GitHub whether a newer release of this app exists."/>

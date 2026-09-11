@@ -13,7 +13,7 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <RootNamespace>UpscalerManager.App</RootNamespace>
     <AssemblyName>UpscalerManager</AssemblyName>
-    <Version>0.24.0</Version>
+    <Version>0.24.1</Version>
     <Product>Upscaler Manager</Product>
     <!-- Windows executable icon (Explorer / taskbar before the window exists). -->
     <ApplicationIcon>..\..\assets\icons\icon.ico</ApplicationIcon>

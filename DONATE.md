@@ -6,4 +6,4 @@ Optional. Nothing in the app is gated behind it.
 
 **[ko-fi.com/B2W426SLFP](https://ko-fi.com/B2W426SLFP)**
 
-Bug reports are worth more. The app writes a log — attaching it helps most.
+Bug reports are worth more. Settings has an "Open the log folder" button — attaching that file helps most.

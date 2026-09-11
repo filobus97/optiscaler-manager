@@ -58,6 +58,26 @@ public partial class SettingsPage : UserControl, IHostedPage
         }
     }
 
+    /// <summary>
+    /// Opens the folder holding the log. A button rather than only a path, because the
+    /// path is inside the config directory and nobody should have to type it out to file
+    /// a bug report.
+    /// </summary>
+    private void OnOpenLogFolder(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            UpscalerManager.Core.Services.PlatformServiceFactory.CreateShellService()
+                .OpenFolder(UpscalerManager.App.Infrastructure.UiLog.LogDirectory);
+        }
+        catch (Exception ex)
+        {
+            if (this.FindControl<TextBlock>("LogPathText") is { } text)
+                text.Text = $"Could not open a file manager ({ex.Message}). "
+                          + $"The log is at {UpscalerManager.App.Infrastructure.UiLog.LogFile}";
+        }
+    }
+
     /// <summary>Raised when a setting changes that the game grid has to react to.</summary>
     public Action? GameListSettingChanged { get; set; }
 
@@ -168,6 +188,9 @@ public partial class SettingsPage : UserControl, IHostedPage
         var text = this.FindControl<TextBlock>("AppVersionText");
         if (text is not null)
             text.Text = $"Upscaler Manager v{_manager.AppVersion}";
+
+        if (this.FindControl<TextBlock>("LogPathText") is { } logPath)
+            logPath.Text = $"Log: {UpscalerManager.App.Infrastructure.UiLog.LogFile}";
     }
 
     private void RefreshNukemStatus()
