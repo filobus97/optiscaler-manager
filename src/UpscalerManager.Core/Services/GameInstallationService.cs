@@ -1016,20 +1016,7 @@ namespace UpscalerManager.Core.Services
             }
         }
 
-        private static string? ComputeSha256(string filePath)
-        {
-            try
-            {
-                using var sha = SHA256.Create();
-                using var stream = File.OpenRead(filePath);
-                var hash = sha.ComputeHash(stream);
-                return Convert.ToHexString(hash);
-            }
-            catch
-            {
-                return null;
-            }
-        }
+        private static string? ComputeSha256(string filePath) => FileHash.Sha256(filePath);
 
         private static void SaveManifest(string manifestPath, InstallationManifest manifest)
         {

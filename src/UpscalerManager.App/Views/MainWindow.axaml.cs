@@ -214,8 +214,17 @@ public partial class MainWindow : Window
     /// </summary>
     private async Task ShowGameDetailsAsync(GameRowViewModel row)
     {
-        var page = new GameDetailsPage(_manager, row);
+        var page = new GameDetailsPage(_manager, row)
+        {
+            // The swap picker opens over the game's page, so Back from it returns to
+            // the game rather than all the way out to the list.
+            ShowPage = ShowPageAsync,
+        };
         await ShowPageAsync(page);
+
+        // A swap changes what the card says, and the details page cannot update the
+        // grid behind it.
+        _vm.RefreshVisibleGames();
 
         switch (page.Outcome)
         {

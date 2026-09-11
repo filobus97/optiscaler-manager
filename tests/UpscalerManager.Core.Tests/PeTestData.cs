@@ -12,8 +12,12 @@ namespace UpscalerManager.Core.Tests
     /// the MZ/PE signatures, the COFF machine type, the optional-header magic and
     /// security data directory, and (optionally) a VS_FIXEDFILEINFO block that the
     /// version scanner locates by signature.
+    ///
+    /// Public rather than internal so the UI harness can build the same fixtures: the
+    /// swap flow needs real 64-bit PEs carrying version resources, and a second
+    /// implementation of that would be free to disagree with this one.
     /// </summary>
-    internal static class PeTestData
+    public static class PeTestData
     {
         public const ushort MachineAmd64 = 0x8664;
         public const ushort MachineI386 = 0x014c;

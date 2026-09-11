@@ -1,0 +1,67 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="UpscalerManager.App.Views.Pages.DllSwapPage"
+        XYFocus.NavigationModes="Keyboard,Gamepad">
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <StackPanel Grid.Row="0" Spacing="4">
+      <TextBlock Name="HeadingText" FontWeight="SemiBold" FontSize="14"
+                 Foreground="{StaticResource BrTextPrimary}"/>
+      <TextBlock Name="ExplanationText" TextWrapping="Wrap" FontSize="12"
+                 Foreground="{StaticResource BrTextSecondary}"/>
+      <Border Name="WarningBox" IsVisible="False" Margin="0,6,0,0" Padding="10" CornerRadius="6"
+              Background="#3D1F1F" BorderBrush="{StaticResource BrError}" BorderThickness="1">
+        <TextBlock Name="WarningText" TextWrapping="Wrap" FontSize="12"
+                   Foreground="{StaticResource BrTextPrimary}"/>
+      </Border>
+    </StackPanel>
+
+    <ScrollViewer Grid.Row="1" Name="Scroller" VerticalScrollBarVisibility="Auto" Margin="0,14,0,0">
+      <StackPanel Spacing="14" Margin="0,0,10,4">
+
+        <!-- What is in the game right now, and how to undo it -->
+        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Name="CurrentPanel" Spacing="8"/>
+        </Border>
+
+        <!-- Builds already held -->
+        <StackPanel Spacing="6">
+          <TextBlock Text="In your library" FontWeight="SemiBold"
+                     Foreground="{StaticResource BrTextPrimary}"/>
+          <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                  BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+            <StackPanel Name="LibraryPanel" Spacing="6"/>
+          </Border>
+        </StackPanel>
+
+        <!-- Builds sitting in the user's other games -->
+        <StackPanel Spacing="6">
+          <TextBlock Text="Found in your other games" FontWeight="SemiBold"
+                     Foreground="{StaticResource BrTextPrimary}"/>
+          <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                  BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+            <StackPanel Spacing="8">
+              <TextBlock TextWrapping="Wrap" FontSize="11.5"
+                         Foreground="{StaticResource BrTextSecondary}"
+                         Text="Nothing is downloaded. These are builds already on your disk, in games you own — so they work offline and cannot be withdrawn by anyone. Adding one copies it into the library first, leaving the game it came from untouched."/>
+              <StackPanel Name="HarvestPanel" Spacing="6"/>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+      </StackPanel>
+    </ScrollViewer>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10" Margin="0,16,0,0">
+      <Button Name="ImportButton" Content="Import a DLL…" Click="OnImport"
+              ToolTip.Tip="Pick a DLL you already have. It has to be a 64-bit build of one of the swappable files, and carry a version — otherwise there is no way to tell it apart from what is already in the game."/>
+      <TextBlock Name="StatusText" VerticalAlignment="Center" FontSize="12" TextWrapping="Wrap"
+                 Foreground="{StaticResource BrTextSecondary}"/>
+      <Button Name="CloseButton" Content="Done" Click="OnClose" IsCancel="True"
+              HorizontalAlignment="Right"
+              ToolTip.Tip="Back to the game (Esc, or B on a controller)."/>
+    </StackPanel>
+  </Grid>
+</UserControl>

@@ -203,9 +203,12 @@ public partial class StoragePage : UserControl, IHostedPage
         Grid.SetColumn(size, 1);
         grid.Children.Add(size);
 
-        var action = tier == StorageTier.LiveBackup
-            ? BuildRevertButton(item)
-            : BuildDeleteButton(item, tier);
+        // A backup kept alive only by swapped DLLs has no OptiScaler to remove, so the
+        // Revert button here would do nothing. Reverting a swap is per-file and lives on
+        // the game's own page, which is where this points.
+        Control action = tier != StorageTier.LiveBackup ? BuildDeleteButton(item, tier)
+            : item.SwapsOnly ? BuildSwapRevertHint()
+            : BuildRevertButton(item);
         Grid.SetColumn(action, 2);
         grid.Children.Add(action);
 
@@ -266,6 +269,25 @@ public partial class StoragePage : UserControl, IHostedPage
             Refresh();
         };
         return button;
+    }
+
+    /// <summary>
+    /// Stands in for the Revert button on a swap-only backup: there is no single action
+    /// here, because a game can have several DLLs swapped and each is reverted on its own.
+    /// </summary>
+    private static TextBlock BuildSwapRevertHint()
+    {
+        var hint = new TextBlock
+        {
+            Text = "Revert on the game's page",
+            FontSize = 11,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            Foreground = Brush("BrTextSecondary"),
+        };
+        ToolTip.SetTip(hint,
+            "Each swapped DLL is reverted separately, from the game's own page. " +
+            "Once none is swapped, this backup moves to the section above and can be removed.");
+        return hint;
     }
 
     private bool RevertGameAvailable(StorageItem item) =>

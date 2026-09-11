@@ -6,12 +6,8 @@ A deliberately **simple** desktop frontend for managing the upscalers in your ga
 
 Sometimes a game just needs [**OptiScaler**](https://github.com/optiscaler/OptiScaler),
 which lets its existing DLSS option drive FSR or XeSS instead. Sometimes all it needs
-is a **newer DLL** — a later DLSS, FSR or XeSS build dropped in place. The app installs
-OptiScaler today, and always tells you exactly what it is about to change.
-
-> **Swapping DLLs directly is not built yet.** It is the next thing being added, and
-> the reason the app is no longer called OptiScaler Manager. Until then this manages
-> OptiScaler installs, and reports the upscaler DLLs it finds in each game.
+is a **newer DLL** — a later DLSS, FSR or XeSS build dropped in place. The app does
+both, and always tells you exactly what it is about to change.
 
 It **reuses the proven service layer** of
 [**OptiScaler Client**](https://github.com/Optiscaler-Client/Optiscaler-Client) —
@@ -84,6 +80,28 @@ Building from source is in [Building & running](#building--running).
   with no upscaler** takes them out of the grid; the status bar then says how many
   are hidden. They stay scanned either way, so turning the filter off brings them
   straight back and a mis-detected game is never permanently invisible.
+
+- **Swapping a DLL** replaces one of the game's own upscaler libraries with a
+  different build of the same library. A game loads whichever
+  `nvngx_dlss.dll` is sitting next to it, so a newer one upgrades the game with
+  nothing hooked, nothing injected and nothing to configure. Nine files are
+  swappable — DLSS, DLSS FG, DLSS RR, the FidelityFX DX12/Vulkan runtimes, XeSS,
+  XeSS DX11, XeSS FG and XeLL — and only ones **already present** are offered,
+  because this upgrades a library a game ships rather than adding one.
+
+  **Where the builds come from: your own games, and nothing else.** The app scans
+  what you already have installed and offers those versions; you can also import a
+  file yourself. It **never downloads a DLL**
+  ([why](#which-binaries-this-app-will-fetch-and-which-it-will-not)). That means the
+  library works offline, costs no bandwidth, and cannot be emptied by somebody else
+  taking a file down.
+
+  Swaps go through the same backup-and-manifest layer as everything else: the
+  original is copied out before anything is written, and the game's page can put it
+  back. A revert is **refused if the DLL changed since** — a game patch is the usual
+  reason — because restoring the older original over it would undo that.
+
+  ![Swapping a DLL](docs/screenshots/swap.png)
 
 - **Installing OptiScaler** downloads and installs the *real OptiScaler
   release from source* (`optiscaler/OptiScaler` on GitHub) — **latest by default,
@@ -524,21 +542,12 @@ What that means in practice, stated plainly so you can judge for yourself:
 
 ## Supporting the project
 
-Entirely optional, and nothing in the app is gated behind it. The channels live
-in **[DONATE.md](DONATE.md)**, and *Settings → Support the project* links there
-rather than to a platform directly — so a channel can be added or corrected with
-a commit instead of a release, and every installed copy follows immediately.
+Optional, and nothing in the app is gated behind it. Channels are listed in
+**[DONATE.md](DONATE.md)** — currently [Ko-fi](https://ko-fi.com/B2W426SLFP).
+*Settings → Support the project* links to that page rather than to a platform
+directly, so a channel can change without a new release.
 
-[![Buy Me a Coffee at ko-fi.com](https://storage.ko-fi.com/cdn/kofi6.png?v=6)](https://ko-fi.com/B2W426SLFP)
-
-Currently **[Ko-fi](https://ko-fi.com/B2W426SLFP)**, which takes **no platform fee
-on tips** — apart from the payment processor's own cut it arrives intact. One-off
-payments, by card or PayPal. There is deliberately **no direct PayPal link**:
-donations sent that way carry commercial fees, stay reversible for months, and
-expose the recipient's legal name and address to the payer.
-
-Bug reports with a log, and reports of what the app did on hardware nobody here
-owns, are worth more than money.
+Bug reports are worth more. The app writes a log; attaching it helps most.
 
 ---
 

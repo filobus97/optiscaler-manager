@@ -121,13 +121,21 @@ namespace UpscalerManager.Core.Services
         /// gameDir is the actual directory where the file lives on disk.
         /// Returns true if the file was backed up, false if it didn't exist.
         /// </summary>
-        public bool BackupFile(string storeKey, string gameDir, string relativePath)
+        /// <param name="backupRelativePath">
+        /// Where to put it inside the store, when that differs from where it came from.
+        /// The swap route uses this to keep its originals under a <c>swaps/</c> prefix,
+        /// so an OptiScaler backup and a swap backup of the same filename cannot
+        /// overwrite one another — the collision check forbids that pairing, but a
+        /// shared namespace would make a bug there silently destructive.
+        /// </param>
+        public bool BackupFile(string storeKey, string gameDir, string relativePath, string? backupRelativePath = null)
         {
             var src = Path.Combine(gameDir, relativePath);
             if (!File.Exists(src))
                 return false;
 
-            var dst = Path.Combine(GetFilesDir(storeKey), relativePath);
+            var effectiveRelative = string.IsNullOrWhiteSpace(backupRelativePath) ? relativePath : backupRelativePath;
+            var dst = Path.Combine(GetFilesDir(storeKey), effectiveRelative);
             var dstDir = Path.GetDirectoryName(dst);
             if (!string.IsNullOrEmpty(dstDir))
                 Directory.CreateDirectory(dstDir);

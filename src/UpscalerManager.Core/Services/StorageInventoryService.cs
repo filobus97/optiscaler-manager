@@ -36,7 +36,8 @@ public sealed record StorageItem(
     string Path,
     long Bytes,
     string? Note = null,
-    string? GameDirectory = null)
+    string? GameDirectory = null,
+    bool SwapsOnly = false)
 {
     /// <summary>Everything except a live backup, which has to be reverted first.</summary>
     public bool CanDelete => Tier != StorageTier.LiveBackup;
@@ -81,6 +82,7 @@ public sealed class StorageInventoryService
         var items = new List<StorageItem>();
         items.AddRange(ScanDownloadedComponents());
         items.AddRange(ScanCoverArt());
+        items.AddRange(ScanSwapLibrary());
         items.AddRange(ScanUserImports());
         items.AddRange(ScanBackups());
         return items;
@@ -127,6 +129,31 @@ public sealed class StorageInventoryService
         yield return new StorageItem(StorageTier.Downloaded, "Cover images",
             $"{files.Length} cover(s)", dir, bytes,
             "Re-downloaded automatically when a game is next scanned.");
+    }
+
+    /// <summary>
+    /// The swap library: builds harvested out of the user's games, or imported by hand.
+    ///
+    /// Grouped with their imports rather than the downloads because nothing can fetch
+    /// these back — a harvested build's only other copy is in the game it came from,
+    /// and if that game has since been patched or uninstalled, deleting the library
+    /// copy loses that version for good.
+    /// </summary>
+    private IEnumerable<StorageItem> ScanSwapLibrary()
+    {
+        var root = Path.Combine(_cacheDir, "SwapLibrary");
+        if (!Directory.Exists(root)) yield break;
+
+        foreach (var dllDir in Directory.GetDirectories(root).OrderBy(d => d, StringComparer.OrdinalIgnoreCase))
+        {
+            var dllName = Path.GetFileName(dllDir);
+            foreach (var versionDir in Directory.GetDirectories(dllDir))
+            {
+                yield return new StorageItem(StorageTier.UserImport, "Swappable DLL builds",
+                    $"{dllName}  {Path.GetFileName(versionDir)}", versionDir, DirectorySize(versionDir),
+                    "Harvested from one of your games, or imported. Nothing can download it back.");
+            }
+        }
     }
 
     private IEnumerable<StorageItem> ScanUserImports()
@@ -181,10 +208,25 @@ public sealed class StorageInventoryService
             // just read is the authority — re-deriving the backup's location from the
             // game path would only risk disagreeing with the folder we are looking at.
             var committed = string.Equals(manifest?.OperationStatus, "committed", StringComparison.OrdinalIgnoreCase);
+            var hasSwaps = _swaps.HasSwapsForDirectory(gameDir);
+
             if (committed && GameStillHasOptiScaler(gameDir))
             {
                 yield return new StorageItem(StorageTier.LiveBackup, "Backups", label, dir, size,
-                    "This game still has OptiScaler installed.", gameDir);
+                    hasSwaps
+                        ? "This game still has OptiScaler installed, and swapped DLLs."
+                        : "This game still has OptiScaler installed.",
+                    gameDir);
+            }
+            else if (hasSwaps)
+            {
+                // Swapping needs no OptiScaler, so this backup can be live without a
+                // trace of OptiScaler in the folder. Before this case existed the row
+                // read "already reverted" and offered a Remove button, which would have
+                // deleted the only copy of the game's own DLL.
+                yield return new StorageItem(StorageTier.LiveBackup, "Backups", label, dir, size,
+                    "This game has DLLs swapped by this app. These are its original files.",
+                    gameDir, SwapsOnly: true);
             }
             else
             {
@@ -199,6 +241,8 @@ public sealed class StorageInventoryService
     /// rather than trusting the manifest matters: a player can remove a mod by hand, and
     /// then the backup really is spent.
     /// </summary>
+    private readonly DllSwapService _swaps = new();
+
     private static bool GameStillHasOptiScaler(string gameDir)
     {
         try

@@ -35,6 +35,8 @@ public static class UpscalerCatalog
             "Nvidia's ray-tracing denoiser, used in place of the game's own."),
         new TechDefinition("libxess.dll", "XeSS", TechRole.Upscaler, "Intel",
             "Intel's upscaler. Runs on any modern GPU, and best on Intel Arc."),
+        new TechDefinition("libxess_dx11.dll", "XeSS (DX11)", TechRole.Upscaler, "Intel",
+            "The DX11 build of Intel's upscaler, shipped alongside libxess.dll by games that need it."),
         new TechDefinition("amd_fidelityfx_upscaler_dx12.dll", "FSR (FidelityFX upscaler)", TechRole.Upscaler, "AMD",
             "AMD's upscaler. This is the file FSR 4 lives in, so its version is the FSR version you can actually get."),
         new TechDefinition("ffx_fsr2_api_x64.dll", "FSR 2 (older API)", TechRole.Upscaler, "AMD",

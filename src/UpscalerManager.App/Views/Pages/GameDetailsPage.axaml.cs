@@ -30,6 +30,9 @@ public partial class GameDetailsPage : UserControl, IHostedPage
     private readonly ManagerService _manager = null!;
     private readonly GameRowViewModel _row = null!;
 
+    /// <summary>Filled by <see cref="RenderComponents"/>, read by the rows it builds.</summary>
+    private System.Collections.Generic.HashSet<string> _swappedFiles = new(StringComparer.OrdinalIgnoreCase);
+
     public DetailsOutcome Outcome { get; private set; } = DetailsOutcome.None;
 
     public string Title { get; private set; } = "Game details";
@@ -58,7 +61,98 @@ public partial class GameDetailsPage : UserControl, IHostedPage
             subtitle.Text = $"{game.Platform}  •  {game.InstallPath}";
 
         RenderComponents();
+        RenderSwaps();
         RenderOptiScaler();
+    }
+
+    /// <summary>
+    /// Opens a page from inside this one. Supplied by the main window, which owns the
+    /// page stack, so Back from the picker returns here rather than to the game list.
+    /// </summary>
+    public Func<IHostedPage, Task<bool>>? ShowPage { get; set; }
+
+    // ── Swapping ────────────────────────────────────────────────────────────────
+
+    private void RenderSwaps()
+    {
+        var list = this.FindControl<StackPanel>("SwapList");
+        var empty = this.FindControl<TextBlock>("NoSwapsText");
+        if (list is null) return;
+
+        list.Children.Clear();
+
+        var slots = _manager.SwapSlots(_row.Game);
+        if (empty is not null) empty.IsVisible = slots.Count == 0;
+
+        foreach (var slot in slots)
+            list.Children.Add(SwapRow(slot));
+    }
+
+    private Control SwapRow(SwapSlot slot)
+    {
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+
+        var heading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        heading.Children.Add(new TextBlock
+        {
+            Text = slot.Version is { Length: > 0 } v
+                ? $"{slot.Definition.Label}  {v}"
+                : slot.Definition.Label,
+            FontSize = 13,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = Brush("BrTextPrimary"),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        if (slot.IsOurs) heading.Children.Add(SourceTag("swapped by this app"));
+
+        var text = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+        text.Children.Add(heading);
+        text.Children.Add(new TextBlock
+        {
+            // What stands in the way, when something does — otherwise what the file is.
+            Text = slot.Verdict.Allowed ? slot.Definition.Note : slot.Verdict.Reason,
+            FontSize = 11.5,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = Brush(slot.Verdict.Allowed ? "BrTextSecondary" : "BrWarning"),
+        });
+        grid.Children.Add(text);
+
+        // Always enabled, even when a swap is refused: the page behind it explains why,
+        // and a dead button with no explanation is worse than one that tells you.
+        var button = new Button
+        {
+            Content = slot.IsOurs ? "Change or revert" : "Choose a build",
+            FontSize = 11.5,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        ToolTip.SetTip(button, slot.Verdict.Allowed
+            ? $"Pick which build of {slot.FileName} this game should use, from your library or from your other games."
+            : slot.Verdict.Reason);
+        button.Click += async (_, _) => await OpenSwapPage(slot);
+
+        Grid.SetColumn(button, 1);
+        grid.Children.Add(button);
+
+        return new Border
+        {
+            Padding = new Avalonia.Thickness(10, 8),
+            CornerRadius = new Avalonia.CornerRadius(6),
+            Background = Brush("BrBgSurface"),
+            Child = grid,
+        };
+    }
+
+    private async Task OpenSwapPage(SwapSlot slot)
+    {
+        if (ShowPage is null) return;
+
+        var changed = await ShowPage(new DllSwapPage(_manager, _row.Game, slot));
+        if (!changed) return;
+
+        // A swap rewrites a file in place, which the analyzer's folder-timestamp cache
+        // cannot see, so the whole page is re-read rather than just the swap rows.
+        _row.RefreshFromGame();
+        Render();
     }
 
     // ── What the game has ───────────────────────────────────────────────────────
@@ -70,6 +164,7 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         if (list is null) return;
 
         list.Children.Clear();
+        _swappedFiles = SwappedFileNames();
         var components = _row.Game.DetectedComponents;
         if (empty is not null) empty.IsVisible = components.Count == 0;
         if (components.Count == 0) return;
@@ -93,6 +188,26 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         }
     }
 
+    /// <summary>
+    /// Files this app swapped, so the list above can say so too. Attribution otherwise
+    /// comes from the install manifest, which knows nothing about swaps — leaving the
+    /// same file tagged in one section of this page and untagged in the other.
+    /// </summary>
+    private System.Collections.Generic.HashSet<string> SwappedFileNames()
+    {
+        try
+        {
+            return _manager.SwapSlots(_row.Game)
+                .Where(s => s.IsOurs)
+                .Select(s => s.FileName)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
     private Control ComponentRow(DetectedComponent c)
     {
         var heading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
@@ -109,6 +224,8 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         // player dropped in, and "came with the game" was asserting exactly that.
         if (c.Source == ComponentSource.Manager)
             heading.Children.Add(SourceTag("added by this app"));
+        else if (_swappedFiles.Contains(c.FileName))
+            heading.Children.Add(SourceTag("swapped by this app"));
 
         var panel = new StackPanel { Spacing = 2 };
         panel.Children.Add(heading);

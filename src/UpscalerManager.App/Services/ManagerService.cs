@@ -40,7 +40,71 @@ public sealed class ManagerService
     }
 
     // ── Game scan ───────────────────────────────────────────────────────────
-    public Task<List<Game>> ScanGamesAsync() => _scanner.ScanAllGamesAsync();
+    public async Task<List<Game>> ScanGamesAsync()
+    {
+        var games = await _scanner.ScanAllGamesAsync();
+        // Kept because the swap library harvests from the user's whole collection, not
+        // just the game being looked at: the point of that route is that the versions on
+        // offer are ones they already own.
+        _scanned = games;
+        return games;
+    }
+
+    private List<Game> _scanned = new();
+
+    /// <summary>The games from the last scan.</summary>
+    public IReadOnlyList<Game> ScannedGames => _scanned;
+
+    // ── DLL swapping ────────────────────────────────────────────────────────
+    private readonly DllSwapService _swaps = new();
+    private readonly DllLibraryService _library = new();
+
+    /// <summary>
+    /// One row per swappable DLL present in this game. Stale records are dropped first,
+    /// so a game that was verified or reinstalled since the last swap does not claim one
+    /// that is no longer there.
+    /// </summary>
+    public IReadOnlyList<SwapSlot> SwapSlots(Game game)
+    {
+        _swaps.ForgetStaleSwaps(game);
+        return _swaps.Slots(game);
+    }
+
+    /// <summary>Builds of one DLL the library already holds, newest first.</summary>
+    public IReadOnlyList<LibraryDll> LibraryBuilds(string fileName) => _library.For(fileName);
+
+    /// <summary>
+    /// Builds of one DLL sitting in the user's other games, not yet held. Excludes the
+    /// game being looked at: swapping a game's own file for itself achieves nothing.
+    /// </summary>
+    public IReadOnlyList<HarvestableDll> HarvestableBuilds(string fileName, Game exclude) =>
+        _library.Harvestable(
+            _scanned.Where(g => !string.Equals(g.InstallPath, exclude.InstallPath, StringComparison.OrdinalIgnoreCase)),
+            fileName);
+
+    /// <summary>Copies a build out of one of the user's games into the library.</summary>
+    public LibraryDll HarvestBuild(HarvestableDll source) => _library.Harvest(source);
+
+    /// <summary>Takes a file the user chose into the library.</summary>
+    public LibraryDll ImportSwappableDll(string path) => _library.Import(path);
+
+    /// <summary>Replaces the game's DLL with a held build, backing the original up.</summary>
+    public void SwapDll(Game game, SwapSlot slot, LibraryDll build)
+    {
+        _swaps.Swap(game, slot, build);
+        RefreshGameAnalysis(game);
+    }
+
+    /// <summary>Puts the game's own DLL back.</summary>
+    public void RevertSwap(Game game, SwappedFile swapped, bool force = false)
+    {
+        _swaps.Revert(game, swapped, force);
+        RefreshGameAnalysis(game);
+    }
+
+    /// <summary>Swapped files an OptiScaler install would overwrite, for the warning.</summary>
+    public IReadOnlyList<string> SwapsOptiScalerWouldOverwrite(Game game) =>
+        _swaps.SwapsOptiScalerWouldOverwrite(game);
 
     // ── Bring-your-own inventory ────────────────────────────────────────────
     /// <summary>The user's custom-DLL library (migrated from any legacy imports on first use).</summary>

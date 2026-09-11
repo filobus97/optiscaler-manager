@@ -26,6 +26,21 @@
           </StackPanel>
         </Border>
 
+        <!-- Swap DLLs: the simpler route, so it comes first -->
+        <Border Name="SwapCard" Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="10">
+            <TextBlock Text="Swap a DLL" FontWeight="SemiBold"
+                       Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
+                       Text="This game loads whichever build of these files is sitting next to it, so replacing one with a newer build upgrades the game — nothing hooked, nothing injected, nothing to configure. The original is kept and can be put back at any time."/>
+            <StackPanel Name="SwapList" Spacing="8"/>
+            <TextBlock Name="NoSwapsText" IsVisible="False" TextWrapping="Wrap" FontSize="12"
+                       Foreground="{StaticResource BrTextSecondary}"
+                       Text="None of the swappable libraries is present in this game, so there is nothing to replace. Swapping upgrades a library a game already ships; it cannot add one."/>
+          </StackPanel>
+        </Border>
+
         <!-- OptiScaler -->
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
                 BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
