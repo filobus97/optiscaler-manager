@@ -91,6 +91,7 @@ internal static class DesktopEntryService
 
     private static void InstallIcons(string dataHome)
     {
+        var changed = false;
         foreach (var size in IconSizes)
         {
             var uri = new Uri($"avares://UpscalerManager/Assets/icon-{size}.png");
@@ -108,7 +109,57 @@ internal static class DesktopEntryService
             // Rewrite only on change, so we are not touching the icon cache every launch.
             if (File.Exists(dest) && File.ReadAllBytes(dest).SequenceEqual(bytes)) continue;
             File.WriteAllBytes(dest, bytes);
+            changed = true;
         }
+
+        if (changed) RefreshIconCache(dataHome);
+    }
+
+    /// <summary>
+    /// Tells the desktop that the icons on disk have changed.
+    ///
+    /// Writing the PNGs is not enough: GNOME and KDE both read the icon theme through a
+    /// cache, so a changed icon keeps showing the old image in the taskbar and the
+    /// window bar — sometimes until the next login. That is exactly what happened when
+    /// this app's mark changed: the in-app header updated with the binary while the
+    /// launcher kept the previous one.
+    ///
+    /// Every step is best-effort. None of these tools is guaranteed to exist, and a
+    /// missing taskbar icon must never stop the app from starting, so nothing here is
+    /// waited on or allowed to throw.
+    /// </summary>
+    private static void RefreshIconCache(string dataHome)
+    {
+        var hicolor = Path.Combine(dataHome, "icons", "hicolor");
+
+        // Some desktops only re-read when the theme directory's own timestamp moves.
+        try { Directory.SetLastWriteTimeUtc(hicolor, DateTime.UtcNow); } catch { }
+
+        // -t skips the index.theme check: a per-user hicolor directory rarely has one,
+        // and without the flag the cache update simply refuses.
+        foreach (var (exe, args) in new[]
+                 {
+                     ("gtk-update-icon-cache", $"-t -f -q \"{hicolor}\""),
+                     ("xdg-desktop-menu", "forceupdate"),
+                 })
+        {
+            try
+            {
+                using var process = System.Diagnostics.Process.Start(
+                    new System.Diagnostics.ProcessStartInfo(exe, args)
+                    {
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                    });
+            }
+            catch
+            {
+                // Not installed on this system; the next login picks the icons up anyway.
+            }
+        }
+
+        Log.Write("[Desktop] Icons changed; asked the desktop to refresh its icon cache.");
     }
 
     private static void InstallEntry(string dataHome, string exe)
