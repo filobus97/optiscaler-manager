@@ -4,12 +4,8 @@
 No image libraries are assumed to be available, so this rasterises and encodes
 PNG/ICO directly. Run it to regenerate assets/icons/ after changing the design.
 
-The mark: a rounded square in the app's accent purple with a cartoon cat's head.
-
-Detail is chosen per size. Eyes, nose and inner ears are drawn from 48px up; at
-32px and below they collapse into a smudge and read worse than nothing, so those
-sizes get the plain silhouette instead. Shapes are painted in order, later ones
-over earlier ones.
+The mark: a rounded square in the app's accent purple with a white diagonal
+double-headed arrow — "scaling" — kept geometric so it still reads at 16px.
 """
 import struct, zlib, os
 
@@ -17,15 +13,9 @@ OUT = os.path.join(os.path.dirname(__file__), "..", "assets", "icons")
 SIZES = [16, 24, 32, 48, 64, 128, 256]
 SS = 4  # supersampling factor, for antialiasing
 
-# Below this the face turns to mush; those sizes get the plain silhouette.
-DETAIL_FROM = 48
-
 TOP = (0x9D, 0x88, 0xFF)   # AccentPrimaryHover
 BOT = (0x75, 0x60, 0xE0)   # AccentPrimaryPressed
-FUR = (0xFF, 0xFF, 0xFF)
-EYE = (0x2A, 0x24, 0x40)   # BgBase — reads as near-black on the white face
-NOSE = (0xF2, 0x8F, 0xA8)
-INNER_EAR = (0xF2, 0x8F, 0xA8)
+GLYPH = (0xFF, 0xFF, 0xFF)
 
 
 def rounded_rect(x, y, w, h, r):
@@ -49,85 +39,29 @@ def in_poly(x, y, pts):
     return inside
 
 
-def in_ellipse(x, y, cx, cy, rx, ry):
-    dx, dy = (x - cx) / rx, (y - cy) / ry
-    return dx * dx + dy * dy <= 1.0
-
-
-def poly_ellipse(cx, cy, rx, ry, n=48, squash_top=None):
-    """An ellipse as a polygon, so it can be composed like any other shape."""
-    import math
-    pts = []
-    for i in range(n):
-        a = 2.0 * math.pi * i / n
-        pts.append((cx + rx * math.cos(a), cy + ry * math.sin(a)))
-    return pts
-
-
-def cat_shapes(w, detailed):
-    """
-    The cat's head as (colour, shape) pairs, painted in order.
-
-    `detailed` adds the face; without it the silhouette is left plain, which is
-    what small sizes need.
-    """
+def arrow_polys(w):
+    """Diagonal double-headed arrow across the square, as polygons in [0,w] space."""
     u = w / 100.0
-    shapes = []
+    # Shaft: a thick bar from lower-left to upper-right.
+    t = 8.0 * u                      # half-thickness
+    ax, ay = 30.0 * u, 70.0 * u      # lower-left
+    bx, by = 70.0 * u, 30.0 * u      # upper-right
+    # Perpendicular offset for the shaft rectangle (direction is 45 degrees).
+    px, py = t * 0.7071, t * 0.7071
+    shaft = [(ax - px, ay - py), (bx - px, by - py), (bx + px, by + py), (ax + px, ay + py)]
 
-    # Ears. The notch between them must sit above the top of the face, or the
-    # face fills the V and the whole mark reads as a featureless blob.
-    left_ear = [(21.0 * u, 58.0 * u), (23.0 * u, 6.0 * u), (52.0 * u, 36.0 * u)]
-    right_ear = [(79.0 * u, 58.0 * u), (77.0 * u, 6.0 * u), (48.0 * u, 36.0 * u)]
-    shapes.append((FUR, ("poly", left_ear)))
-    shapes.append((FUR, ("poly", right_ear)))
-
-    # Face: wider than tall, which is what makes it read as a cat and not a bear.
-    shapes.append((FUR, ("ellipse", 50.0 * u, 64.0 * u, 33.0 * u, 27.0 * u)))
-
-    if not detailed:
-        return shapes
-
-    # Inner ears, well inset so a clear rim of fur stays around them — otherwise the
-    # ear reads as a pink triangle with a white outline rather than as an ear.
-    shapes.append((INNER_EAR, ("poly",
-        [(30.0 * u, 48.0 * u), (31.0 * u, 22.0 * u), (45.0 * u, 39.0 * u)])))
-    shapes.append((INNER_EAR, ("poly",
-        [(70.0 * u, 48.0 * u), (69.0 * u, 22.0 * u), (55.0 * u, 39.0 * u)])))
-
-    # Eyes: big and round, set wide. Cartoon proportions, not anatomical ones.
-    shapes.append((EYE, ("ellipse", 38.0 * u, 60.0 * u, 6.5 * u, 8.0 * u)))
-    shapes.append((EYE, ("ellipse", 62.0 * u, 60.0 * u, 6.5 * u, 8.0 * u)))
-    # A catchlight in each turns two dots into eyes.
-    shapes.append((FUR, ("ellipse", 40.3 * u, 57.0 * u, 2.2 * u, 2.6 * u)))
-    shapes.append((FUR, ("ellipse", 64.3 * u, 57.0 * u, 2.2 * u, 2.6 * u)))
-
-    # Nose: a small rounded triangle.
-    shapes.append((NOSE, ("poly",
-        [(44.5 * u, 73.0 * u), (55.5 * u, 73.0 * u), (50.0 * u, 79.5 * u)])))
-
-    return shapes
-
-
-def colour_at(shapes, x, y):
-    """Topmost shape covering this point, or None for background."""
-    found = None
-    for colour, shape in shapes:
-        if shape[0] == "poly":
-            if in_poly(x, y, shape[1]):
-                found = colour
-        else:
-            _, cx, cy, rx, ry = shape
-            if in_ellipse(x, y, cx, cy, rx, ry):
-                found = colour
-    return found
-
-
+    head = 20.0 * u
+    # Upper-right head
+    h1 = [(78.0 * u, 22.0 * u), (78.0 * u, 22.0 * u + head), (78.0 * u - head, 22.0 * u)]
+    # Lower-left head
+    h2 = [(22.0 * u, 78.0 * u), (22.0 * u, 78.0 * u - head), (22.0 * u + head, 78.0 * u)]
+    return [shaft, h1, h2]
 
 
 def render(size):
     w = size * SS
     radius = w * 0.22
-    shapes = cat_shapes(w, detailed=size >= DETAIL_FROM)
+    polys = arrow_polys(w)
     px = bytearray()
     for py_ in range(size):
         row = bytearray()
@@ -139,9 +73,8 @@ def render(size):
                     y = py_ * SS + sy + 0.5
                     if not rounded_rect(x, y, w, w, radius):
                         continue
-                    hit = colour_at(shapes, x, y)
-                    if hit is not None:
-                        cr, cg, cb = hit
+                    if any(in_poly(x, y, p) for p in polys):
+                        cr, cg, cb = GLYPH
                     else:
                         t = y / w
                         cr = int(TOP[0] + (BOT[0] - TOP[0]) * t)
