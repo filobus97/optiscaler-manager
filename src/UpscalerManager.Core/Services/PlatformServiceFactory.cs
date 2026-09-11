@@ -38,6 +38,13 @@ public static class PlatformServiceFactory
         return null;
     }
 
+    /// <summary>
+    /// Returns the <see cref="IShellService"/> for the current OS. Everything except
+    /// Windows goes through the xdg/open probe, which covers Linux and macOS.
+    /// </summary>
+    public static IShellService CreateShellService() =>
+        OperatingSystem.IsWindows() ? new WindowsShellService() : new XdgShellService();
+
     // ── Private implementations ────────────────────────────────────────────
 
     [SupportedOSPlatform("windows")]

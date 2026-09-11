@@ -44,9 +44,9 @@ public sealed class GameRowViewModel : ViewModelBase
     /// The card's tooltip. A card fits two rows of chips and clips the rest, so the
     /// full list goes here — nothing detected is only visible on the details page.
     /// </summary>
-    public string CardTip => TechBadges.Count == 0
+    public string CardTip => _allBadges.Count == 0
         ? SubTitle
-        : $"{SubTitle}\n\n{string.Join("  •  ", TechBadges.Select(b => b.Label))}";
+        : $"{SubTitle}\n\n{string.Join("  •  ", _allBadges.Select(b => b.Label))}";
 
     /// <summary>The platform alone, for the card, where there is no room for a path.</summary>
     public string PlatformName => Game.Platform.ToString();
@@ -132,11 +132,21 @@ public sealed class GameRowViewModel : ViewModelBase
         set => SetField(ref _isInstalled, value);
     }
 
+    /// <summary>
+    /// How many chips a card's reserved three rows hold. A game can carry eight
+    /// distinct technologies, which needs four rows — reserving that on every card to
+    /// suit a case that essentially never occurs would cost 18px of art on all of
+    /// them, so past this the rest collapse into a "+N" chip.
+    /// </summary>
+    private const int MaxCardChips = 6;
+
+    /// <summary>Every chip, for the tooltip, even when the card only shows some.</summary>
+    private IReadOnlyList<TechBadge> _allBadges = Array.Empty<TechBadge>();
+
     private IReadOnlyList<TechBadge> _techBadges = Array.Empty<TechBadge>();
     /// <summary>
-    /// Short "what this game has" labels with versions, e.g. "FSR 4.1.1". The point of
-    /// showing the version here is that presence alone answers nothing — FSR 3.1 and
-    /// FSR 4.1 are the same badge but a completely different result.
+    /// What this game has, as presence-only tags: "DLSS", "FSR", "XeSS". Capped at what
+    /// the card's chip rows hold; <see cref="CardTip"/> always carries the full list.
     /// </summary>
     public IReadOnlyList<TechBadge> TechBadges
     {
@@ -157,7 +167,12 @@ public sealed class GameRowViewModel : ViewModelBase
 
         StatusText = DescribeStatus(Game);
 
-        TechBadges = TechBadge.For(Game);
+        _allBadges = TechBadge.For(Game);
+        TechBadges = _allBadges.Count <= MaxCardChips
+            ? _allBadges
+            : _allBadges.Take(MaxCardChips - 1)
+                        .Append(new TechBadge($"+{_allBadges.Count - (MaxCardChips - 1)}", TechVendor.Other))
+                        .ToList();
         OnPropertyChanged(nameof(HasNoUpscaler));
         OnPropertyChanged(nameof(CardTip));
     }

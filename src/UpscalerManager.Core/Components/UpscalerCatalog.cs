@@ -65,8 +65,8 @@ public static class UpscalerCatalog
             "Intel's latency reduction."),
 
         // ── Runtimes / support ───────────────────────────────────────────────────
-        new TechDefinition("amdxcffx64.dll", "AMD FSR 4 runtime", TechRole.Runtime, "AMD",
-            "The AMD library FSR 4 needs. Proprietary, so it is never downloaded for you — you supply it yourself."),
+        new TechDefinition("amdxcffx64.dll", "AMD FSR 4 runtime (or a community INT8 build)", TechRole.Runtime, "AMD",
+            "The slot AMD's FSR 4 library occupies. AMD's own binary is proprietary and never downloaded for you — you supply it. Newer community INT8 builds also ship under this exact name, so this file may be either; the two cannot be told apart by name alone. When it sits next to an OptiScaler upscaler library, which of the two actually runs is OptiScaler's choice, not something that can be read off the files."),
         new TechDefinition("amd_fidelityfx_dx12.dll", "FidelityFX runtime (DX12)", TechRole.Runtime, "AMD",
             "The library that loads AMD's upscaler and frame generation."),
         new TechDefinition("amd_fidelityfx_loader_dx12.dll", "FidelityFX loader (DX12)", TechRole.Runtime, "AMD",

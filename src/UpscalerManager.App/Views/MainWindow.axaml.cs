@@ -82,11 +82,10 @@ public partial class MainWindow : Window
     {
         try
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = _manager.ReleasesPageUrl,
-                UseShellExecute = true,
-            });
+            // Through the shell service rather than Process.Start: on Linux it probes
+            // for xdg-open/open and says which it tried when none is there.
+            UpscalerManager.Core.Services.PlatformServiceFactory
+                .CreateShellService().OpenUrl(_manager.ReleasesPageUrl);
         }
         catch (Exception ex)
         {

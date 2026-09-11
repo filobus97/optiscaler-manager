@@ -41,12 +41,12 @@ namespace UpscalerManager.Core.Tests
             game.DetectedComponents[0].Source = ComponentSource.Manager;
 
             var chip = Assert.Single(TechChip.For(game));
-            Assert.Equal("FSR 4.0.2", chip.Label);
+            Assert.Equal("FSR", chip.Label);
             Assert.Equal(TechVendor.Amd, chip.Vendor);
         }
 
         [Fact]
-        public void OneChipPerTechnologyShowingTheNewest()
+        public void OneChipPerTechnologyHoweverManyFilesCarryIt()
         {
             var game = GameWith(
                 ("FSR (FidelityFX upscaler)", "AMD", TechRole.Upscaler, "3.1.0"),
@@ -55,18 +55,25 @@ namespace UpscalerManager.Core.Tests
 
             var chips = TechChip.For(game);
             Assert.Equal(2, chips.Count);
-            Assert.Equal("DLSS 310.2", chips[0].Label);
-            Assert.Equal("FSR 4.1.1", chips[1].Label);
+            Assert.Equal("DLSS", chips[0].Label);
+            Assert.Equal("FSR", chips[1].Label);
         }
 
         [Fact]
-        public void VersionsAreTrimmedToThreeParts()
+        public void NoVersionIsEverPutOnAChip()
         {
-            // "4.1.1.2740" is a build number; three parts is what people recognise.
-            Assert.Equal("4.1.1", TechChip.Trim("4.1.1.2740"));
-            Assert.Equal("310.2", TechChip.Trim("310.2.0.0"));
-            Assert.Equal("2.0.2", TechChip.Trim("2.0.2.68"));
-            Assert.Equal("3.7", TechChip.Trim("3.7.0.0"));
+            // Two FSR files at different versions is the normal case once OptiScaler is
+            // installed, and a card cannot know which one will load. Naming either is a
+            // claim the app cannot support — it read "FSR 4.1.1" on a game that had just
+            // had the 4.0.2 community build installed. Versions live on the game's page,
+            // per file, where they are attributable.
+            var game = GameWith(
+                ("FSR (FidelityFX upscaler)", "AMD", TechRole.Upscaler, "4.0.2.1"),
+                ("FSR 3 (older API)", "AMD", TechRole.Upscaler, "4.1.1.2740"));
+
+            var chip = Assert.Single(TechChip.For(game));
+            Assert.Equal("FSR", chip.Label);
+            Assert.DoesNotContain("4.", chip.Label);
         }
 
         [Fact]
@@ -88,7 +95,7 @@ namespace UpscalerManager.Core.Tests
                 ("DLSS", "Nvidia", TechRole.Upscaler, "310.2"));
 
             var chip = Assert.Single(TechChip.For(game));
-            Assert.Equal("DLSS 310.2", chip.Label);
+            Assert.Equal("DLSS", chip.Label);
         }
 
         [Fact]
@@ -100,7 +107,7 @@ namespace UpscalerManager.Core.Tests
                 ("XeSS", "Intel", TechRole.Upscaler, "2.0.2"),
                 ("DLSS", "Nvidia", TechRole.Upscaler, "310.2"));
 
-            Assert.Equal(new[] { "DLSS 310.2", "XeSS 2.0.2", "DLSS FG 310.1", "Nukem FG" },
+            Assert.Equal(new[] { "DLSS", "XeSS", "DLSS FG", "Nukem FG" },
                 TechChip.For(game).Select(c => c.Label));
         }
 

@@ -1,8 +1,0 @@
-# Shows the "Sponsor" button on the repository page.
-#
-# Both channels take no platform cut. GitHub Sponsors is the easiest route for
-# anyone who already has a GitHub account; Liberapay covers everyone else and is
-# itself a non-profit. Ko-fi is left out rather than guessed at — a wrong handle
-# would send people to a stranger's donation page.
-github: filobus97
-liberapay: Pippo

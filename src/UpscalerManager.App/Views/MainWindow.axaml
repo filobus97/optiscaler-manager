@@ -128,7 +128,7 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:GameRowViewModel">
-                <Button Classes="GameCard" Width="176" Height="348" Margin="0,0,10,10" Padding="7"
+                <Button Classes="GameCard" Width="176" Height="366" Margin="0,0,10,10" Padding="7"
                         Click="OnDetailsClick"
                         ToolTip.Tip="{Binding CardTip}">
                   <StackPanel Spacing="7" ClipToBounds="True">
@@ -164,7 +164,8 @@
                          nothing, "FSR 4.1.1" answers the question. -->
                     <!-- Chips wrap, so two or three sit on a line when they fit. Each
                          is tinted by vendor: Nvidia green, AMD red, Intel blue. -->
-                    <ItemsControl ItemsSource="{Binding TechBadges}" Height="36" ClipToBounds="True"
+                    <ItemsControl Name="TechChipArea" ItemsSource="{Binding TechBadges}"
+                                  Height="54" ClipToBounds="True"
                                   IsVisible="{Binding HasTechBadges}">
                       <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>

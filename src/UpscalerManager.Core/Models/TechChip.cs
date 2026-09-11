@@ -15,12 +15,21 @@ public enum TechVendor
 }
 
 /// <summary>
-/// A short "DLSS 3.7.20" summary of one technology found in a game, for the game card.
+/// A "DLSS" / "FSR" / "XeSS" tag naming one technology found in a game, for the game
+/// card.
+///
+/// Presence only, deliberately no version. A card cannot say which version is the one
+/// that will actually load: a game can carry several files under the same technology —
+/// its own shipped FSR next to the one an OptiScaler install brought — and picking the
+/// newest to display named a version the game does not necessarily use. That was
+/// reported as a card claiming FSR 4.1.1 on a game where the 4.0.2 community build had
+/// just been installed. The game's own page lists every file with its own version, which
+/// is the honest place for that detail.
 /// </summary>
 public sealed record TechChip(string Label, TechVendor Vendor)
 {
     /// <summary>
-    /// One chip per technology, showing the newest version of each.
+    /// One chip per technology present in the game.
     ///
     /// Built from the per-file detection, deliberately: the game's summary
     /// <c>FsrVersion</c>/<c>DlssVersion</c> fields skip files this app installed, so a
@@ -35,12 +44,7 @@ public sealed record TechChip(string Label, TechVendor Vendor)
             .Where(c => c.Role is TechRole.Upscaler or TechRole.FrameGeneration)
             .GroupBy(c => ShortName(c.Technology))
             .OrderBy(g => Order(g.Key))
-            .Select(g =>
-            {
-                var newest = g.OrderBy(c => c.Version ?? string.Empty, VersionOrder.Descending).First();
-                var label = newest.Version is null ? g.Key : $"{g.Key} {Trim(newest.Version)}";
-                return new TechChip(label, VendorOf(g.First().Vendor));
-            })
+            .Select(g => new TechChip(g.Key, VendorOf(g.First().Vendor)))
             .ToList();
     }
 
@@ -76,13 +80,6 @@ public sealed record TechChip(string Label, TechVendor Vendor)
         "Nukem FG" => 7,
         _ => 8,
     };
-
-    /// <summary>
-    /// Three components is enough to recognise a release — "4.1.1", not "4.1.1.2740".
-    /// The details page carries the full version for anyone who needs the build.
-    /// </summary>
-    internal static string Trim(string version) =>
-        string.Join('.', VersionLabel.Short(version).Split('.').Take(3));
 
     internal static TechVendor VendorOf(string vendor)
     {

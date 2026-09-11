@@ -64,11 +64,18 @@ Building from source is in [Building & running](#building--running).
   The status line on a card reports **only OptiScaler**: its version if installed,
   or that it is not. Nothing more is claimed there, because whether FSR 4 actually
   *runs* depends on the `.ini`, the OptiScaler release and the GPU — the app cannot
-  know it from the files alone. What *is* on disk is in the chips below the line,
-  **colour-coded by vendor** (DLSS green, FSR red, XeSS blue) and carrying versions,
-  because "FSR" alone says nothing while "FSR 4.0.2" answers the question. Two rows
-  of chips fit on a card; the card's tooltip lists every one, and the game's page
-  lists them in full with file paths.
+  know it from the files alone. Below it, a chip per technology present — `DLSS`,
+  `FSR`, `XeSS` — **colour-coded by vendor** (Nvidia green, AMD red, Intel blue).
+
+  **Presence only, deliberately no version on a chip.** A game routinely carries
+  more than one file for the same technology once OptiScaler is installed, at
+  different versions, and nothing in the files says which one will load. Showing
+  the newest read "FSR 4.1.1" on a game where the 4.0.2 community build had just
+  been installed — both were there, and the choice between them is OptiScaler's.
+  Versions belong per-file on the game's page, where each one is attributable.
+
+  Three rows of chips fit on a card; beyond that the rest collapse into a `+N`
+  chip, and the card's tooltip always lists every one.
 
 - **Games with nothing to work with are labelled, and can be hidden.** A game with
   no DLSS, FSR or XeSS library gets a plain **"No upscaler found"** tag, because
@@ -514,24 +521,6 @@ What that means in practice, stated plainly so you can judge for yourself:
   reading them; the commit history records those rather than hiding them.
 - None of that makes it infallible. Bugs are the maintainer's responsibility, not
   the tool's — report them and they get fixed.
-
-## Supporting the project
-
-Entirely optional, and nothing in the app is gated behind it.
-
-- **[GitHub Sponsors](https://github.com/sponsors/filobus97)** — takes **no
-  platform fee** on sponsorships from personal accounts, so effectively all of it
-  arrives. Needs a GitHub account, which not everyone has.
-- **[Liberapay](https://liberapay.com/Pippo/donate)** — a non-profit platform that
-  takes **no cut at all**; only the payment processor's own fee applies, and it is
-  charged once per top-up rather than per donation. Donations are recurring and
-  paid in advance, so a Liberapay account is needed, but not a GitHub one. Card
-  and PayPal top-ups are both accepted.
-
-There is deliberately **no direct PayPal link**: donations sent that way carry
-commercial fees, stay reversible for months, and expose the recipient's legal name
-and address to the payer. Routing the same payment through one of the platforms
-above avoids all three.
 
 ---
 
