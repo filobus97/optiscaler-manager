@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using UpscalerManager.Core.Components;
 using UpscalerManager.Core.Logging;
@@ -30,6 +31,7 @@ public sealed class ManagerService
     public ManagerService(IManualComponentProvider manualProvider)
     {
         _components = new ComponentManagementService(manualProvider);
+        _vendor = new VendorDllService(_library);
     }
 
     // ── GPU banner ──────────────────────────────────────────────────────────
@@ -58,6 +60,7 @@ public sealed class ManagerService
     // ── DLL swapping ────────────────────────────────────────────────────────
     private readonly DllSwapService _swaps = new();
     private readonly DllLibraryService _library = new();
+    private readonly VendorDllService _vendor;
 
     /// <summary>
     /// One row per swappable DLL present in this game. Stale records are dropped first,
@@ -82,8 +85,24 @@ public sealed class ManagerService
             _scanned.Where(g => !string.Equals(g.InstallPath, exclude.InstallPath, StringComparison.OrdinalIgnoreCase)),
             fileName);
 
-    /// <summary>Copies a build out of one of the user's games into the library.</summary>
+    /// <summary>
+    /// Builds of one DLL inside the OptiScaler releases already downloaded. No network,
+    /// and the only source for AMD's FidelityFX runtimes.
+    /// </summary>
+    public IReadOnlyList<HarvestableDll> OptiScalerBuilds(string fileName) =>
+        _library.FromOptiScalerReleases(fileName);
+
+    /// <summary>Copies a build out of a game, or out of an OptiScaler release, into the library.</summary>
     public LibraryDll HarvestBuild(HarvestableDll source) => _library.Harvest(source);
+
+    /// <summary>What the vendor publishes for this DLL, newest first. Never automatic.</summary>
+    public Task<IReadOnlyList<VendorBuild>> VendorBuildsAsync(string fileName, CancellationToken cancel = default) =>
+        _vendor.AvailableAsync(fileName, cancel);
+
+    /// <summary>Downloads one vendor build into the library.</summary>
+    public Task<LibraryDll> DownloadVendorBuildAsync(
+        VendorBuild build, IProgress<double>? progress = null, CancellationToken cancel = default) =>
+        _vendor.DownloadAsync(build, progress, cancel);
 
     /// <summary>Takes a file the user chose into the library.</summary>
     public LibraryDll ImportSwappableDll(string path) => _library.Import(path);

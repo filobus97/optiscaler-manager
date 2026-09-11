@@ -241,6 +241,146 @@ namespace UpscalerManager.Core.Tests
             Assert.False(safe.StartsWith('.'), $"'{safe}' would be a hidden or relative path");
         }
 
+        // ── Other sources for a build ────────────────────────────────────────
+
+        [Fact]
+        public void OptiScalerReleasesAlreadyDownloadedAreASource()
+        {
+            // An OptiScaler release bundles the libraries it hooks, so anyone who has
+            // installed it once already has those builds — no network, and the only
+            // source for AMD's runtimes.
+            var release = Path.Combine(AppDataPaths.Cache, "OptiScaler", "v0.9.4");
+            Directory.CreateDirectory(release);
+            File.WriteAllBytes(Path.Combine(release, "libxess.dll"),
+                PeTestData.BuildPe(PeTestData.MachineAmd64, "2.1.0.0"));
+
+            var found = Assert.Single(new DllLibraryService().FromOptiScalerReleases("libxess.dll"));
+            Assert.Equal("2.1.0.0", found.Version);
+            Assert.Equal("OptiScaler v0.9.4", found.GameName);
+            Assert.False(found.InLibrary);
+        }
+
+        [Fact]
+        public void ReleaseLayoutsAreScannedRecursively()
+        {
+            // Upstream has moved these between subdirectories across versions; pinning
+            // the scan to one path would quietly stop finding anything.
+            var nested = Path.Combine(AppDataPaths.Cache, "OptiScaler", "v0.9.4", "D3D12_Optiscaler");
+            Directory.CreateDirectory(nested);
+            File.WriteAllBytes(Path.Combine(nested, "amd_fidelityfx_dx12.dll"),
+                PeTestData.BuildPe(PeTestData.MachineAmd64, "1.1.2.0"));
+
+            var found = Assert.Single(new DllLibraryService().FromOptiScalerReleases());
+            Assert.Equal("amd_fidelityfx_dx12.dll", found.FileName);
+            Assert.Equal("1.1.2.0", found.Version);
+        }
+
+        [Fact]
+        public void ThingsInAReleaseThatAreNotSwappableAreIgnored()
+        {
+            var release = Path.Combine(AppDataPaths.Cache, "OptiScaler", "v0.9.4");
+            Directory.CreateDirectory(release);
+            foreach (var name in new[] { "OptiScaler.dll", "amd_fidelityfx_upscaler_dx12.dll", "nvapi64.dll" })
+                File.WriteAllBytes(Path.Combine(release, name),
+                    PeTestData.BuildPe(PeTestData.MachineAmd64, "1.0.0.0"));
+
+            Assert.Empty(new DllLibraryService().FromOptiScalerReleases());
+        }
+
+        [Fact]
+        public void ABuildAlreadyHeldIsMarkedRatherThanOfferedTwice()
+        {
+            AddToLibrary("libxess.dll", "2.1.0.0");
+            var release = Path.Combine(AppDataPaths.Cache, "OptiScaler", "v0.9.4");
+            Directory.CreateDirectory(release);
+            File.WriteAllBytes(Path.Combine(release, "libxess.dll"),
+                PeTestData.BuildPe(PeTestData.MachineAmd64, "2.1.0.0"));
+
+            Assert.True(Assert.Single(new DllLibraryService().FromOptiScalerReleases()).InLibrary);
+        }
+
+        [Fact]
+        public void EveryVendorSourceNamesADllWeActuallySwap()
+        {
+            // A download that installed a file the swapper does not recognise would be
+            // fetched, imported, and then never offered anywhere.
+            foreach (var source in VendorDllSource.All)
+                Assert.True(SwappableDlls.IsSwappable(source.FileName),
+                    $"{source.FileName} is offered for download but is not swappable.");
+        }
+
+        [Fact]
+        public void VendorUrlsPointAtTheVendorsOwnRepository()
+        {
+            // The point of this route: the file comes from Nvidia or Intel, not from a
+            // mirror this project runs. If that ever changes, the licence position
+            // changes with it.
+            foreach (var source in VendorDllSource.All)
+            {
+                var url = VendorDllSource.UrlFor(source, "v1.2.3");
+                Assert.StartsWith("https://raw.githubusercontent.com/", url);
+                Assert.Contains($"/{source.Owner}/{source.Repo}/v1.2.3/", url);
+                Assert.EndsWith(source.PathInRepo, url);
+            }
+        }
+
+        [Fact]
+        public void OnlyReleaseBuildsForTheArchitectureGamesShipAreOffered()
+        {
+            // The repositories also carry aarch64, arm64ec and development builds.
+            // Installing a development build into a game would be a debugging-only
+            // surprise, and the wrong architecture simply would not load.
+            foreach (var source in VendorDllSource.All.Where(s => s.Owner == "NVIDIA"))
+            {
+                Assert.Contains("Windows_x86_64", source.PathInRepo);
+                Assert.Contains("/rel/", source.PathInRepo);
+            }
+        }
+
+        [Fact]
+        public void AmdRuntimesAreNotOfferedForDownload()
+        {
+            // AMD does not publish them as loose binaries; OptiScaler's releases carry
+            // them, which is why that local source exists.
+            Assert.False(VendorDllSource.CanDownload("amd_fidelityfx_dx12.dll"));
+            Assert.False(VendorDllSource.CanDownload("amd_fidelityfx_vk.dll"));
+            Assert.True(VendorDllSource.CanDownload("nvngx_dlss.dll"));
+            Assert.True(VendorDllSource.CanDownload("libxess.dll"));
+        }
+
+        [Fact]
+        public void TagsAreReadOutOfGitHubsResponse()
+        {
+            // The request cannot be exercised offline, so the parsing is. Shape taken
+            // from the real /tags response.
+            const string json = """
+                [
+                  {"name":"v310.9.1","commit":{"sha":"abc","url":"https://api.github.com/x"}},
+                  {"name":"v310.7.0","commit":{"sha":"def","url":"https://api.github.com/y"}}
+                ]
+                """;
+            Assert.Equal(new[] { "v310.9.1", "v310.7.0" }, VendorDllService.ParseTags(json));
+        }
+
+        [Theory]
+        [InlineData("not json at all")]
+        [InlineData("{\"message\":\"Not Found\"}")]
+        [InlineData("[]")]
+        [InlineData("[{\"commit\":{}}]")]
+        public void AResponseThatIsNotAListOfTagsYieldsNothing(string json)
+        {
+            // An error page or a rate-limit body must read as "no downloads offered",
+            // not as an exception on a page that is only showing an extra route.
+            Assert.Empty(VendorDllService.ParseTags(json));
+        }
+
+        [Theory]
+        [InlineData("v310.9.1", "310.9.1")]
+        [InlineData("v3.0.2", "3.0.2")]
+        [InlineData("3.0.2", "3.0.2")]
+        public void ATagNamesAVersion(string tag, string expected)
+            => Assert.Equal(expected, VendorDllSource.VersionFromTag(tag));
+
         // ── Swapping ─────────────────────────────────────────────────────────
 
         [Fact]

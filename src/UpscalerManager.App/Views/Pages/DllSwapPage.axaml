@@ -38,15 +38,29 @@
 
         <!-- Builds sitting in the user's other games -->
         <StackPanel Spacing="6">
-          <TextBlock Text="Found in your other games" FontWeight="SemiBold"
+          <TextBlock Text="Already on your disk" FontWeight="SemiBold"
                      Foreground="{StaticResource BrTextPrimary}"/>
           <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
                   BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
             <StackPanel Spacing="8">
               <TextBlock TextWrapping="Wrap" FontSize="11.5"
                          Foreground="{StaticResource BrTextSecondary}"
-                         Text="Nothing is downloaded. These are builds already on your disk, in games you own — so they work offline and cannot be withdrawn by anyone. Adding one copies it into the library first, leaving the game it came from untouched."/>
+                         Text="Builds in your other games, and in the OptiScaler releases this app has already downloaded. Nothing is fetched for these — they work offline, and adding one copies it into the library, leaving the source untouched."/>
               <StackPanel Name="HarvestPanel" Spacing="6"/>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- Straight from the vendor -->
+        <StackPanel Spacing="6">
+          <TextBlock Text="Download from the vendor" FontWeight="SemiBold"
+                     Foreground="{StaticResource BrTextPrimary}"/>
+          <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                  BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+            <StackPanel Spacing="8">
+              <TextBlock Name="VendorNoteText" TextWrapping="Wrap" FontSize="11.5"
+                         Foreground="{StaticResource BrTextSecondary}"/>
+              <StackPanel Name="VendorPanel" Spacing="6"/>
             </StackPanel>
           </Border>
         </StackPanel>

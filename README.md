@@ -89,12 +89,32 @@ Building from source is in [Building & running](#building--running).
   XeSS DX11, XeSS FG and XeLL — and only ones **already present** are offered,
   because this upgrades a library a game ships rather than adding one.
 
-  **Where the builds come from: your own games, and nothing else.** The app scans
-  what you already have installed and offers those versions; you can also import a
-  file yourself. It **never downloads a DLL**
-  ([why](#which-binaries-this-app-will-fetch-and-which-it-will-not)). That means the
-  library works offline, costs no bandwidth, and cannot be emptied by somebody else
-  taking a file down.
+  **Four places a build can come from**, in the order the picker lists them:
+
+  | Source | Network | Notes |
+  | --- | --- | --- |
+  | Your library | none | Builds you have already added. |
+  | Your other games | none | Whatever versions your installed games ship. |
+  | OptiScaler releases you have downloaded | none | A release bundles the libraries it hooks — and is the only source for AMD's FidelityFX runtimes, which AMD does not publish loose. |
+  | The vendor | download | Straight from Nvidia's and Intel's own repositories. |
+
+  Plus importing a file by hand, at any time.
+
+  **Downloads come from the vendor, never from a mirror this project runs.** Nvidia
+  publishes `nvngx_dlss`, `nvngx_dlssd` and `nvngx_dlssg` at
+  [`NVIDIA/DLSS`](https://github.com/NVIDIA/DLSS), and Intel publishes `libxess`,
+  `libxess_dx11`, `libxess_fg` and `libxell` at
+  [`intel/xess`](https://github.com/intel/xess) — so the app fetches the file the
+  user asked for from the company that made it, exactly as it already fetches
+  OptiScaler from the OptiScaler project.
+
+  That is a deliberate distinction. Nvidia's SDK licence says plainly that you *"may
+  not distribute or sublicense the SDK as a stand-alone product"* — so this project
+  hosts nothing, and never will. Intel's licence is more permissive (it allows
+  redistribution of the unmodified binary) but takes the same route, because it is
+  also the more reliable one: no volunteer's hosting bill stands between you and the
+  file. Nothing downloads automatically — these are 60–80 MB each, and only an
+  explicit press fetches one.
 
   Swaps go through the same backup-and-manifest layer as everything else: the
   original is copied out before anything is written, and the game's page can put it

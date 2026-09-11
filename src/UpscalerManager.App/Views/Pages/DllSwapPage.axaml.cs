@@ -77,6 +77,7 @@ public partial class DllSwapPage : UserControl, IHostedPage
         RenderCurrent();
         RenderLibrary();
         RenderHarvestable();
+        RenderVendor();
     }
 
     /// <summary>What is in the game now, and the way back if this app put it there.</summary>
@@ -154,14 +155,21 @@ public partial class DllSwapPage : UserControl, IHostedPage
         if (panel is null) return;
         panel.Children.Clear();
 
+        // The games and the downloaded OptiScaler releases are one list: from here they
+        // are the same thing — a build already on the disk that costs nothing to copy.
         var found = _manager.HarvestableBuilds(_slot.FileName, _game)
+            .Concat(_manager.OptiScalerBuilds(_slot.FileName))
             .Where(h => !h.InLibrary)
+            .GroupBy(h => h.Version, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .OrderBy(h => h.Version, UpscalerManager.Core.Models.VersionOrder.Descending)
             .ToList();
 
         if (found.Count == 0)
         {
             panel.Children.Add(Label(
-                "No other build of this DLL was found in your other games. Importing a file is the other way in.",
+                "No other build of this DLL was found in your games or in the OptiScaler "
+                + "releases you have downloaded.",
                 11.5, FontWeight.Normal, "BrTextSecondary"));
             return;
         }
@@ -173,6 +181,68 @@ public partial class DllSwapPage : UserControl, IHostedPage
                 isCurrent: false,
                 action: "Add and use",
                 onAction: () => HarvestAndSwap(candidate)));
+    }
+
+    /// <summary>
+    /// What the vendor publishes. Listed on open, because knowing whether a newer build
+    /// exists is the reason to be on this page — but nothing is fetched until a row is
+    /// pressed, and these files run to tens of megabytes.
+    /// </summary>
+    private async void RenderVendor()
+    {
+        var panel = this.FindControl<StackPanel>("VendorPanel");
+        if (panel is null) return;
+        panel.Children.Clear();
+
+        if (UpscalerManager.Core.Components.VendorDllSource.For(_slot.FileName) is not { } source)
+        {
+            Text("VendorNoteText",
+                $"{_slot.FileName} is not published on its own by its vendor, so it cannot be "
+                + "downloaded. OptiScaler's releases carry it, and those are listed above.");
+            return;
+        }
+
+        Text("VendorNoteText",
+            $"Downloaded straight from {source.Vendor}, never from a mirror this project runs. "
+            + source.Licence);
+        panel.Children.Add(Label($"Asking {source.Vendor} what is available…",
+            11.5, FontWeight.Normal, "BrTextSecondary"));
+
+        IReadOnlyList<VendorBuild> builds;
+        try
+        {
+            builds = await _manager.VendorBuildsAsync(_slot.FileName);
+        }
+        catch (Exception ex)
+        {
+            panel.Children.Clear();
+            panel.Children.Add(Label($"Could not reach {source.Vendor}: {ex.Message}",
+                11.5, FontWeight.Normal, "BrTextSecondary"));
+            return;
+        }
+
+        // The page can be re-rendered while this is in flight; bail if it has been.
+        if (!ReferenceEquals(panel, this.FindControl<StackPanel>("VendorPanel"))) return;
+
+        panel.Children.Clear();
+        var offered = builds.Where(b => !b.InLibrary).Take(8).ToList();
+        if (offered.Count == 0)
+        {
+            panel.Children.Add(Label(
+                builds.Count == 0
+                    ? $"{source.Vendor} published nothing that could be read, or the network is unavailable."
+                    : "You already hold every build the vendor publishes.",
+                11.5, FontWeight.Normal, "BrTextSecondary"));
+            return;
+        }
+
+        foreach (var build in offered)
+            panel.Children.Add(BuildRow(
+                build.Version,
+                $"from {build.Vendor}",
+                isCurrent: IsInstalled(build.Version),
+                action: "Download and use",
+                onAction: () => DownloadAndSwap(build)));
     }
 
     /// <summary>One version, its provenance, and the button that installs it.</summary>
@@ -239,6 +309,29 @@ public partial class DllSwapPage : UserControl, IHostedPage
             _manager.SwapDll(_game, _slot, build);
             return $"{_slot.Definition.Label} is now {build.Version}, kept in your library.";
         });
+    }
+
+    private async void DownloadAndSwap(VendorBuild build)
+    {
+        SetStatus($"Downloading {build.FileName} {build.Version} from {build.Vendor}… " +
+                  "these are large files, so this can take a minute.");
+        try
+        {
+            var progress = new Progress<double>(fraction =>
+                SetStatus($"Downloading {build.FileName} {build.Version} from {build.Vendor}… " +
+                          $"{fraction:P0}"));
+
+            var entry = await _manager.DownloadVendorBuildAsync(build, progress);
+            _manager.SwapDll(_game, _slot, entry);
+            Changed = true;
+            Reload();
+            SetStatus($"{_slot.Definition.Label} is now {entry.Version}, kept in your library.");
+        }
+        catch (Exception ex)
+        {
+            Reload();
+            SetStatus(ex.Message);
+        }
     }
 
     private void Revert(SwappedFile swapped, bool force)

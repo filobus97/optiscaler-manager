@@ -177,15 +177,65 @@ public sealed class DllLibraryService
             }
         }
 
-        // One row per build: the same DLSS version shipping in six games is one choice,
-        // not six. Keep whichever game is named first alphabetically so the list is
-        // stable between scans.
-        return found
+        return DeduplicateByBuild(found);
+    }
+
+    /// <summary>
+    /// One row per build: the same DLSS version shipping in six games is one choice, not
+    /// six. Keeps whichever source is named first alphabetically, so the list is stable
+    /// between scans rather than reordering with directory enumeration.
+    /// </summary>
+    private static IReadOnlyList<HarvestableDll> DeduplicateByBuild(List<HarvestableDll> found) =>
+        found
             .GroupBy(e => (e.FileName.ToLowerInvariant(), e.Version), StringTupleComparer.Instance)
             .Select(g => g.OrderBy(e => e.GameName, StringComparer.OrdinalIgnoreCase).First())
             .OrderBy(e => SwappableDlls.DisplayOrder(e.FileName))
             .ThenBy(e => e.Version, VersionOrder.Descending)
             .ToList();
+
+    /// <summary>
+    /// Swappable DLLs inside the OptiScaler releases this app has already downloaded.
+    ///
+    /// An OptiScaler release bundles the XeSS and FidelityFX libraries it hooks, so a
+    /// user who has installed OptiScaler once already has those builds on disk. Reading
+    /// them costs nothing, works offline, and is the only source for AMD's FidelityFX
+    /// runtimes, which AMD does not publish as loose binaries.
+    ///
+    /// Scanned recursively: release layouts have changed between versions, and pinning
+    /// this to a fixed subdirectory would quietly stop finding anything the next time
+    /// upstream moves a file.
+    /// </summary>
+    public IReadOnlyList<HarvestableDll> FromOptiScalerReleases(string? onlyFileName = null)
+    {
+        var root = Path.Combine(AppDataPaths.Cache, "OptiScaler");
+        if (!Directory.Exists(root)) return Array.Empty<HarvestableDll>();
+
+        var found = new List<HarvestableDll>();
+        foreach (var releaseDir in SafeDirectories(root))
+        {
+            var release = Path.GetFileName(releaseDir);
+            IEnumerable<string> files;
+            try { files = Directory.EnumerateFiles(releaseDir, "*.dll", SearchOption.AllDirectories); }
+            catch { continue; }
+
+            foreach (var path in files)
+            {
+                var name = Path.GetFileName(path);
+                if (SwappableDlls.For(name) is not { } definition) continue;
+                if (onlyFileName is not null &&
+                    !definition.FileName.Equals(onlyFileName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var version = VersionOf(PeFileInspector.Inspect(path));
+                if (version is null) continue;
+
+                found.Add(new HarvestableDll(
+                    definition.FileName, version, path,
+                    $"OptiScaler {release}", Has(definition.FileName, version)));
+            }
+        }
+
+        return DeduplicateByBuild(found);
     }
 
     /// <summary>
