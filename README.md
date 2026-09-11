@@ -20,6 +20,10 @@ one screen, one primary action per game, advanced options tucked away.
 
 > **Primary platform: Linux.** Windows is fully supported as the secondary
 > target; macOS at least runs the UI. Windows-only install paths are guarded.
+>
+> **This project is heavily AI-assisted** — most of the code was written by Claude,
+> with human direction, review and testing on real hardware. See
+> [How this project is built](#how-this-project-is-built).
 
 ![The game list](docs/screenshots/games.png)
 
@@ -464,6 +468,44 @@ A release can be cut three ways:
    tag is created for you. (Useful when the environment blocks direct tag pushes.)
 3. **Run the *Release* workflow manually** (`workflow_dispatch`) and pass the
    version.
+
+---
+
+## How this project is built
+
+This project is **heavily AI-assisted**. Most of the code was written by
+[Claude](https://www.anthropic.com/claude) (Anthropic) working from direction,
+review and hardware testing by the maintainer. That includes the service layer
+ported from OptiScaler Client, the UI, the tests, and these docs.
+
+What that means in practice, stated plainly so you can judge for yourself:
+
+- Changes are covered by an automated test suite that must pass on Linux and
+  Windows before a release can be published, and the UI is driven end-to-end by a
+  harness that renders the real window rather than mocking it.
+- Anything that touches your game files goes through a backup-and-manifest layer,
+  and the app shows the exact file and `.ini` changes before writing them.
+- Several bugs in this README's own claims were found by rendering screenshots and
+  reading them; the commit history records those rather than hiding them.
+- None of that makes it infallible. Bugs are the maintainer's responsibility, not
+  the tool's — report them and they get fixed.
+
+## Supporting the project
+
+Entirely optional, and nothing in the app is gated behind it.
+
+- **[GitHub Sponsors](https://github.com/sponsors/filobus97)** — takes **no
+  platform fee** on sponsorships from personal accounts, so effectively all of it
+  arrives. Needs a GitHub account, which not everyone has.
+
+A second, account-free channel (Ko-fi) may be added later; it charges no platform
+fee either and accepts both cards and PayPal, which covers people who cannot or
+would rather not use GitHub.
+
+There is deliberately **no direct PayPal link**: donations sent that way carry
+commercial fees, stay reversible for months, and expose the recipient's legal name
+and address to the payer. Routing the same payment through a tip platform avoids
+all three.
 
 ---
 

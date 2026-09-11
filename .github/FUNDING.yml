@@ -1,0 +1,9 @@
+# Shows the "Sponsor" button on the repository page.
+#
+# Only GitHub Sponsors is enabled, because it is the only one that certainly
+# exists for this account. Ko-fi and Liberapay are commented out rather than
+# guessed at: a wrong handle here would send people to a stranger's donation
+# page. Uncomment a line once the account exists and the name is confirmed.
+github: filobus97
+# ko_fi: <your-ko-fi-name>
+# liberapay: <your-liberapay-name>
