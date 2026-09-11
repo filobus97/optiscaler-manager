@@ -2,62 +2,80 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="UpscalerManager.App.Views.Pages.GameDetailsPage">
 
-  <Grid RowDefinitions="Auto,*,Auto">
+  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
 
     <!-- Where the game lives -->
     <TextBlock Grid.Row="0" Name="SubtitleText" TextWrapping="Wrap" FontSize="12"
                Foreground="{StaticResource BrTextSecondary}"/>
 
-    <ScrollViewer Grid.Row="1" Margin="0,14,0,0">
+    <!-- What the game has. Above the tabs, because it describes the game itself
+         rather than either of the two things you can do to it. -->
+    <Border Grid.Row="1" Margin="0,14,0,0"
+            Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+            BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+      <StackPanel Spacing="10">
+        <TextBlock Text="Upscaling technology in this game" FontWeight="SemiBold"
+                   Foreground="{StaticResource BrTextPrimary}"/>
+        <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
+                   Text="Everything found next to the game, with the version actually on disk. A game can carry several at once."/>
+        <!-- Capped, with its own scroll. A game can carry eight of these, and an
+             uncapped list pushed the tabs below the fold entirely — the one thing
+             that must stay on screen is the choice between the two routes. -->
+        <ScrollViewer MaxHeight="230" VerticalScrollBarVisibility="Auto">
+          <StackPanel Name="ComponentsList" Spacing="12" Margin="0,0,6,0"/>
+        </ScrollViewer>
+        <TextBlock Name="NoComponentsText" IsVisible="False" TextWrapping="Wrap" FontSize="12"
+                   Foreground="{StaticResource BrTextSecondary}"
+                   Text="No upscaling technology found. Installing OptiScaler adds it."/>
+      </StackPanel>
+    </Border>
+
+    <!-- The two routes. They are alternatives, not a list: picking one here swaps
+         both the options below and the actions pinned at the bottom, so neither
+         route is presented as the default with the other tacked on. -->
+    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="6" Margin="0,16,0,0">
+      <Button Name="OptiScalerTab" Classes="Tab" Content="OptiScaler" Click="OnSelectOptiScalerTab"
+              ToolTip.Tip="Install OptiScaler into this game, so its existing DLSS or FSR option can drive a different upscaler."/>
+      <Button Name="SwapTab" Classes="Tab" Content="DLL swapper" Click="OnSelectSwapTab"
+              ToolTip.Tip="Replace one of the game's own upscaler libraries with a different build of the same file. No OptiScaler involved."/>
+    </StackPanel>
+
+    <ScrollViewer Grid.Row="3" Margin="0,10,0,0">
       <StackPanel Spacing="16">
 
-        <!-- What the game has -->
-        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
-          <StackPanel Spacing="10">
-            <TextBlock Text="Upscaling technology in this game" FontWeight="SemiBold"
-                       Foreground="{StaticResource BrTextPrimary}"/>
-            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                       Text="Everything found next to the game, with the version actually on disk. A game can carry several at once."/>
-            <StackPanel Name="ComponentsList" Spacing="12"/>
-            <TextBlock Name="NoComponentsText" IsVisible="False" TextWrapping="Wrap" FontSize="12"
-                       Foreground="{StaticResource BrTextSecondary}"
-                       Text="No upscaling technology found. Installing OptiScaler adds it."/>
-          </StackPanel>
-        </Border>
+        <!-- OptiScaler tab -->
+        <StackPanel Name="OptiScalerPanel" Spacing="16">
+          <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                  BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+            <StackPanel Spacing="10">
+              <TextBlock Name="OptiScalerSummaryText" TextWrapping="Wrap" FontSize="12"
+                         Foreground="{StaticResource BrTextSecondary}"/>
+              <StackPanel Name="ConfigList" Spacing="8"/>
+            </StackPanel>
+          </Border>
+        </StackPanel>
 
-        <!-- Swap DLLs: the simpler route, so it comes first -->
-        <Border Name="SwapCard" Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
-          <StackPanel Spacing="10">
-            <TextBlock Text="Swap a DLL" FontWeight="SemiBold"
-                       Foreground="{StaticResource BrTextPrimary}"/>
-            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                       Text="This game loads whichever build of these files is sitting next to it, so replacing one with a newer build upgrades the game — nothing hooked, nothing injected, nothing to configure. The original is kept and can be put back at any time."/>
-            <StackPanel Name="SwapList" Spacing="8"/>
-            <TextBlock Name="NoSwapsText" IsVisible="False" TextWrapping="Wrap" FontSize="12"
-                       Foreground="{StaticResource BrTextSecondary}"
-                       Text="None of the swappable libraries is present in this game, so there is nothing to replace. Swapping upgrades a library a game already ships; it cannot add one."/>
-          </StackPanel>
-        </Border>
-
-        <!-- OptiScaler -->
-        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
-          <StackPanel Spacing="10">
-            <TextBlock Text="OptiScaler" FontWeight="SemiBold"
-                       Foreground="{StaticResource BrTextPrimary}"/>
-            <TextBlock Name="OptiScalerSummaryText" TextWrapping="Wrap" FontSize="12"
-                       Foreground="{StaticResource BrTextSecondary}"/>
-            <StackPanel Name="ConfigList" Spacing="8"/>
-          </StackPanel>
-        </Border>
+        <!-- DLL swapper tab -->
+        <StackPanel Name="SwapPanel" Spacing="16" IsVisible="False">
+          <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                  BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+            <StackPanel Spacing="10">
+              <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
+                         Text="This game loads whichever build of these files is sitting next to it, so replacing one with a newer build upgrades the game — nothing hooked, nothing injected, nothing to configure. The original is kept and can be put back at any time."/>
+              <StackPanel Name="SwapList" Spacing="8"/>
+              <TextBlock Name="NoSwapsText" IsVisible="False" TextWrapping="Wrap" FontSize="12"
+                         Foreground="{StaticResource BrTextSecondary}"
+                         Text="None of the swappable libraries is present in this game, so there is nothing to replace. Swapping upgrades a library a game already ships; it cannot add one."/>
+            </StackPanel>
+          </Border>
+        </StackPanel>
 
       </StackPanel>
     </ScrollViewer>
 
-    <!-- Actions -->
-    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10" Margin="0,16,0,0">
+    <!-- Actions. The first two belong to the OptiScaler tab and are hidden on the
+         other; swapping is done per DLL, from its own row. -->
+    <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="10" Margin="0,16,0,0">
       <Button Name="InstallButton" Classes="BtnPrimary" Content="Install OptiScaler"
               Click="OnInstallClick"
               ToolTip.Tip="Choose the version, which files to install and the add-ons, and see exactly what will change before anything is written."/>

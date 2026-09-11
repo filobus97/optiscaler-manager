@@ -131,6 +131,59 @@
             <Setter Property="BorderBrush" Value="{StaticResource BrAccent}"/>
             <Setter Property="BorderThickness" Value="2"/>
         </Style>
+        <!-- Tabs. Two buttons rather than a TabControl: a TabItem takes arrow keys
+             for its own selection, which fights the window's XYFocus navigation and
+             makes a controller behave differently here than on every other screen.
+             Order matters — later rules win, so selected-and-focused comes last. -->
+        <Style Selector="Button.Tab">
+            <!-- The default focus adorner is a white rectangle drawn outside the
+                 control, which is why restyling BorderBrush did nothing to it. On a
+                 bordered button it reads as a ring; on a tab it reads as a stray box.
+                 This one follows the tab's own shape instead. -->
+            <Setter Property="FocusAdorner">
+                <FocusAdornerTemplate>
+                    <Border BorderBrush="{StaticResource BrAccentHover}"
+                            BorderThickness="1" CornerRadius="6" Margin="-2"/>
+                </FocusAdornerTemplate>
+            </Setter>
+            <Setter Property="Background"     Value="Transparent"/>
+            <Setter Property="BorderBrush"    Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0,0,0,2"/>
+            <Setter Property="CornerRadius"   Value="0"/>
+            <Setter Property="Foreground"     Value="{StaticResource BrTextSecondary}"/>
+            <Setter Property="Padding"        Value="14,7"/>
+            <Setter Property="FontSize"       Value="13.5"/>
+        </Style>
+        <Style Selector="Button.Tab:pointerover /template/ ContentPresenter">
+            <Setter Property="Background"  Value="{StaticResource BrBgSurface}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrBorderDefault}"/>
+        </Style>
+        <!-- The global focus ring boxes a button on all four sides, which on a tab
+             reads as a stray outlined rectangle. Keep the underline shape and show
+             focus with a tint and a brighter label instead. -->
+        <Style Selector="Button.Tab:focus-visible">
+            <Setter Property="BorderThickness" Value="0,0,0,2"/>
+            <Setter Property="BorderBrush"     Value="{StaticResource BrBorderDefault}"/>
+            <Setter Property="Foreground"      Value="{StaticResource BrTextPrimary}"/>
+        </Style>
+        <Style Selector="Button.Tab:focus-visible /template/ ContentPresenter">
+            <Setter Property="Background"  Value="#2E2A4A"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrBorderDefault}"/>
+        </Style>
+        <Style Selector="Button.Tab.selected">
+            <Setter Property="Foreground"  Value="{StaticResource BrTextPrimary}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrAccent}"/>
+        </Style>
+        <Style Selector="Button.Tab.selected /template/ ContentPresenter">
+            <Setter Property="BorderBrush" Value="{StaticResource BrAccent}"/>
+        </Style>
+        <Style Selector="Button.Tab.selected:focus-visible">
+            <Setter Property="BorderBrush" Value="{StaticResource BrAccent}"/>
+        </Style>
+        <Style Selector="Button.Tab.selected:focus-visible /template/ ContentPresenter">
+            <Setter Property="BorderBrush" Value="{StaticResource BrAccent}"/>
+        </Style>
+
         <!-- ListBoxItem styling is intentionally NOT global: ComboBoxItem derives
              from ListBoxItem, so a global rule would corrupt every ComboBox dropdown.
              The game list styles its own items in MainWindow.axaml. -->

@@ -46,11 +46,66 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         _manager = manager;
         _row = row;
         Title = row.Game.Name;
+
+        // Open on the route this game is already using. A game with swapped DLLs and
+        // no OptiScaler would otherwise land on an empty OptiScaler tab and look as
+        // though nothing had been done to it.
+        _swapTab = !row.Game.IsOptiscalerInstalled && HasSwaps();
+
         Render();
     }
 
     public void FocusFirst() =>
-        this.FindControl<Button>("InstallButton")?.Focus(NavigationMethod.Directional);
+        this.FindControl<Button>("OptiScalerTab")?.Focus(NavigationMethod.Directional);
+
+    // ── Tabs ────────────────────────────────────────────────────────────────────
+
+    private bool HasSwaps()
+    {
+        try { return _manager.SwapSlots(_row.Game).Any(s => s.IsOurs); }
+        catch { return false; }
+    }
+
+
+    /// <summary>Which route the page is showing. Not persisted: it follows the game.</summary>
+    private bool _swapTab;
+
+    private void OnSelectOptiScalerTab(object? sender, RoutedEventArgs e) => SelectTab(swap: false);
+
+    private void OnSelectSwapTab(object? sender, RoutedEventArgs e) => SelectTab(swap: true);
+
+    private void SelectTab(bool swap)
+    {
+        _swapTab = swap;
+        ApplyTab();
+    }
+
+    private void ApplyTab()
+    {
+        Show("OptiScalerPanel", !_swapTab);
+        Show("SwapPanel", _swapTab);
+
+        Mark("OptiScalerTab", !_swapTab);
+        Mark("SwapTab", _swapTab);
+
+        // Install and Remove act on OptiScaler, so they belong to its tab. Swapping
+        // has no single action — each DLL is its own row — so the swapper tab leaves
+        // the bar with only what applies to the game as a whole.
+        Show("InstallButton", !_swapTab);
+        Show("RevertButton", !_swapTab && _row.Game.IsOptiscalerInstalled);
+    }
+
+    private void Show(string name, bool visible)
+    {
+        if (this.FindControl<Control>(name) is { } control) control.IsVisible = visible;
+    }
+
+    private void Mark(string name, bool selected)
+    {
+        if (this.FindControl<Button>(name) is not { } tab) return;
+        if (selected) tab.Classes.Add("selected");
+        else tab.Classes.Remove("selected");
+    }
 
     private void Render()
     {
@@ -63,6 +118,7 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         RenderComponents();
         RenderSwaps();
         RenderOptiScaler();
+        ApplyTab();
     }
 
     /// <summary>
@@ -264,14 +320,16 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         var install = this.FindControl<Button>("InstallButton");
 
         var installed = game.IsOptiscalerInstalled;
-        if (revert is not null) revert.IsVisible = installed;
         if (install is not null) install.Content = installed ? "Reinstall OptiScaler" : "Install OptiScaler";
+        // Whether Remove is shown is decided by ApplyTab, which also has to hide it
+        // on the other tab — setting it here too would make the two disagree.
+        _ = revert;
 
         if (summary is not null)
         {
             summary.Text = installed
                 ? $"Installed — version {game.OptiscalerVersion ?? "unknown"}."
-                : "Not installed. Installing it lets this game's DLSS or FSR option drive FSR 4 instead.";
+                : "Not installed. Installing it lets this game's existing DLSS or FSR option drive a different upscaler — the route for games a straight DLL swap cannot help.";
         }
 
         if (config is null) return;

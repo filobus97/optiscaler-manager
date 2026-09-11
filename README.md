@@ -101,6 +101,11 @@ Building from source is in [Building & running](#building--running).
   back. A revert is **refused if the DLL changed since** — a game patch is the usual
   reason — because restoring the older original over it would undo that.
 
+  ![The DLL swapper tab](docs/screenshots/swap-tab.png)
+
+  Picking a build for one of them opens its own page — your library, and the builds
+  found in your other games:
+
   ![Swapping a DLL](docs/screenshots/swap.png)
 
 - **Installing OptiScaler** downloads and installs the *real OptiScaler
@@ -165,11 +170,14 @@ Building from source is in [Building & running](#building--running).
   the Nvidia override, the overlay key). **Installing and removing both live here**,
   not on the cards, so neither is a stray click away.
 
+  Below that summary the page splits into **two tabs — OptiScaler and DLL swapper**
+  — because they are alternatives, not a list. Picking one changes both the options
+  shown and the actions pinned at the bottom, so neither route is presented as the
+  default with the other tacked on beneath it. A game that already has DLLs swapped
+  and no OptiScaler opens on the swapper, so the route it is actually using is the
+  one you land on.
+
   ![A game's details page](docs/screenshots/details.png)
-
-  ...and, further down the same page, what OptiScaler is actually set to do:
-
-  ![What OptiScaler is set to do](docs/screenshots/details-optiscaler.png)
 
 - **One window, always.** Settings, the install screen and the details page replace
   the game list in place rather than opening windows of their own — gamescope (Steam's
