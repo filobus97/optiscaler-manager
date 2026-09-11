@@ -35,6 +35,21 @@ public partial class SettingsPage : UserControl, IHostedPage
         await ShowPage(new StoragePage(_manager, RevertGame));
     }
 
+    /// <summary>Raised when a setting changes that the game grid has to react to.</summary>
+    public Action? GameListSettingChanged { get; set; }
+
+    private void WireGameListSettings()
+    {
+        if (this.FindControl<CheckBox>("ChkHideNoUpscaler") is not { } hide) return;
+
+        hide.IsChecked = _manager.HideGamesWithoutUpscaler;
+        hide.IsCheckedChanged += (_, _) =>
+        {
+            _manager.HideGamesWithoutUpscaler = hide.IsChecked == true;
+            GameListSettingChanged?.Invoke();
+        };
+    }
+
     /// <summary>Starts on the first control so a controller has somewhere to move from.</summary>
     public void FocusFirst() => this.FindControl<ComboBox>("MenuKeyCombo")?.Focus(NavigationMethod.Directional);
 
@@ -64,6 +79,7 @@ public partial class SettingsPage : UserControl, IHostedPage
         _manager = manager;
         SetupMenuKey();
         SetupGamepadCard();
+        WireGameListSettings();
         SetupAboutCard();
         RefreshNukemStatus();
         if (_manager.IsNukemFgCached) RefreshNukemUpdateStatusAsync(); // async: flag a newer Nukem release

@@ -73,7 +73,8 @@ public partial class InstallPage : UserControl, IHostedPage
         _ready = true;
         UpdatePreview();
 
-        // INT8 is the default backend — reveal and load its version list on open.
+        // The default option is pre-selected, so the INT8 version list stays hidden
+        // until it is picked. Kept as a guard in case that default ever changes.
         if (this.FindControl<RadioButton>("RbInt8")!.IsChecked == true)
             OnInt8CheckedChanged(this, new RoutedEventArgs());
     }

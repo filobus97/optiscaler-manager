@@ -4,6 +4,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using UpscalerManager.Core.Logging;
 using UpscalerManager.Core.Models;
@@ -20,12 +23,30 @@ public sealed class GameRowViewModel : ViewModelBase
     public GameRowViewModel(Game game)
     {
         Game = game;
-        _statusText = game.IsOptiscalerInstalled ? "OptiScaler installed" : "Not installed";
+        _statusText = DescribeStatus(game);
     }
+
+    /// <summary>
+    /// Only what can be stated about OptiScaler itself. The old line claimed
+    /// "FSR 4 enabled", which the app cannot know — whether FSR 4 actually runs depends
+    /// on the ini, the release and the GPU, and the chips below already report what is
+    /// installed.
+    /// </summary>
+    private static string DescribeStatus(Game game) => game.IsOptiscalerInstalled
+        ? $"OptiScaler {VersionLabel.Short(game.OptiscalerVersion ?? "installed")}"
+        : "OptiScaler not installed";
 
     public string Name => Game.Name;
 
     public string SubTitle => $"{Game.Platform}  •  {Game.InstallPath}";
+
+    /// <summary>
+    /// The card's tooltip. A card fits two rows of chips and clips the rest, so the
+    /// full list goes here — nothing detected is only visible on the details page.
+    /// </summary>
+    public string CardTip => TechBadges.Count == 0
+        ? SubTitle
+        : $"{SubTitle}\n\n{string.Join("  •  ", TechBadges.Select(b => b.Label))}";
 
     /// <summary>The platform alone, for the card, where there is no room for a path.</summary>
     public string PlatformName => Game.Platform.ToString();
@@ -74,8 +95,15 @@ public sealed class GameRowViewModel : ViewModelBase
     public string StatusText
     {
         get => _statusText;
-        set => SetField(ref _statusText, value);
+        set { if (SetField(ref _statusText, value)) OnPropertyChanged(nameof(StatusBrush)); }
     }
+
+    /// <summary>
+    /// Green when OptiScaler is installed, plain grey when it is not. The line used to
+    /// be accent-coloured either way, so "not installed" looked like an achievement.
+    /// </summary>
+    public IBrush? StatusBrush =>
+        Application.Current?.FindResource(Game.IsOptiscalerInstalled ? "BrSuccess" : "BrTextSecondary") as IBrush;
 
     private bool _isBusy;
     public bool IsBusy
@@ -104,43 +132,43 @@ public sealed class GameRowViewModel : ViewModelBase
         set => SetField(ref _isInstalled, value);
     }
 
-    private IReadOnlyList<string> _techBadges = Array.Empty<string>();
+    private IReadOnlyList<TechBadge> _techBadges = Array.Empty<TechBadge>();
     /// <summary>
     /// Short "what this game has" labels with versions, e.g. "FSR 4.1.1". The point of
     /// showing the version here is that presence alone answers nothing — FSR 3.1 and
     /// FSR 4.1 are the same badge but a completely different result.
     /// </summary>
-    public IReadOnlyList<string> TechBadges
+    public IReadOnlyList<TechBadge> TechBadges
     {
         get => _techBadges;
-        private set => SetField(ref _techBadges, value);
+        private set { if (SetField(ref _techBadges, value)) OnPropertyChanged(nameof(HasTechBadges)); }
     }
+
+    /// <summary>
+    /// The chip row keeps a fixed two-row height so a card cannot be pushed out of its
+    /// own bounds — which means it has to disappear entirely when there are no chips,
+    /// or it reserves that space from the "no upscaler found" tag instead.
+    /// </summary>
+    public bool HasTechBadges => _techBadges.Count > 0;
 
     public void RefreshFromGame()
     {
         IsInstalled = Game.IsOptiscalerInstalled;
-        StatusText = Game.IsOptiscalerInstalled
-            ? $"FSR 4 enabled (OptiScaler {Game.OptiscalerVersion})"
-            : "Not installed";
-        TechBadges = BuildBadges();
+
+        StatusText = DescribeStatus(Game);
+
+        TechBadges = TechBadge.For(Game);
+        OnPropertyChanged(nameof(HasNoUpscaler));
+        OnPropertyChanged(nameof(CardTip));
     }
 
-    private IReadOnlyList<string> BuildBadges()
-    {
-        var badges = new List<string>();
+    /// <summary>
+    /// True when nothing upscaling-related was found next to the game.
+    ///
+    /// Such a game cannot be helped by either route: OptiScaler hooks an upscaler the
+    /// game already has rather than adding one, and there is nothing to swap. Worth
+    /// saying on the card so the absence does not read as a bug.
+    /// </summary>
+    public bool HasNoUpscaler => TechBadges.Count == 0 && !Game.IsOptiscalerInstalled;
 
-        // Presence comes from having found the file; the version is extra. Some DLLs
-        // carry no version resource, and "DLSS" alone beats claiming "DLSS 0.0".
-        void Add(string label, string? path, string? version)
-        {
-            if (path is null) return;
-            badges.Add(version is null ? label : $"{label} {VersionLabel.Short(version)}");
-        }
-
-        Add("DLSS", Game.DlssPath, Game.DlssVersion);
-        Add("DLSS FG", Game.DlssFrameGenPath, Game.DlssFrameGenVersion);
-        Add("FSR", Game.FsrPath, Game.FsrVersion);
-        Add("XeSS", Game.XessPath, Game.XessVersion);
-        return badges;
-    }
 }

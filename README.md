@@ -61,26 +61,43 @@ Building from source is in [Building & running](#building--running).
   installed — and opens the game. Everything you can *do* to a game lives on its
   page, so a card has exactly one action and nothing to mis-click.
 
+  The status line on a card reports **only OptiScaler**: its version if installed,
+  or that it is not. Nothing more is claimed there, because whether FSR 4 actually
+  *runs* depends on the `.ini`, the OptiScaler release and the GPU — the app cannot
+  know it from the files alone. What *is* on disk is in the chips below the line,
+  **colour-coded by vendor** (DLSS green, FSR red, XeSS blue) and carrying versions,
+  because "FSR" alone says nothing while "FSR 4.0.2" answers the question. Two rows
+  of chips fit on a card; the card's tooltip lists every one, and the game's page
+  lists them in full with file paths.
+
+- **Games with nothing to work with are labelled, and can be hidden.** A game with
+  no DLSS, FSR or XeSS library gets a plain **"No upscaler found"** tag, because
+  neither route helps it: OptiScaler *hooks* an upscaler a game already has rather
+  than adding one, and there is nothing to swap. **Settings → Game list → Hide games
+  with no upscaler** takes them out of the grid; the status bar then says how many
+  are hidden. They stay scanned either way, so turning the filter off brings them
+  straight back and a mis-detected game is never permanently invisible.
+
 - **Installing OptiScaler** downloads and installs the *real OptiScaler
   release from source* (`optiscaler/OptiScaler` on GitHub) — **latest by default,
   or any older release from the version selector** at the top of the screen. The
   install screen then decouples the independent choices:
 
-  **Step 1 — Backend (which files to install):**
+  **Step 1 — Which files to install:**
     - *OptiScaler default* (**recommended**): OptiScaler's release already bundles the
       newest FSR upscaler that release can hook (**FSR 4.1.1** since OptiScaler 0.9.4),
       so this alone enables FSR 4. There is deliberately **no "download newer FSR from
       AMD" option**: OptiScaler hooks AMD's model-selection code by byte pattern, so
       the only compatible AMD binaries are exactly the ones each release bundles —
       e.g. giving 0.9.3 a 4.1.1 upscaler silently disables FSR 4 (menu caps at 3.1.5);
-    - *FSR 4 INT8 community build* — from
-      [`Agustinm28/OptiScaler-Extras`](https://github.com/Agustinm28/OptiScaler-Extras)
-      (third-party, **not** the official OptiScaler project), at a **version you pick**
-      (upstream still recommends **4.0.2c** for RDNA2 on Windows);
     - *Custom DLLs* — **your imported DLLs overlaid on the OptiScaler install**: names
       OptiScaler ships (e.g. the upscaler) are swapped in place, unknown names (e.g.
       `amdxcffx64.dll`) are **added alongside**. Fully offline. Everything is
-      manifest-tracked, so *Remove OptiScaler* takes it all back out.
+      manifest-tracked, so *Remove OptiScaler* takes it all back out;
+    - *FSR 4 INT8 community build* — from
+      [`Agustinm28/OptiScaler-Extras`](https://github.com/Agustinm28/OptiScaler-Extras)
+      (third-party, **not** the official OptiScaler project), at a **version you pick**
+      (upstream still recommends **4.0.2c** for RDNA2 on Windows).
 
   **Step 2 — FSR 4 selection:** the Manager **always forces the flag that makes FSR 4
   *available*** (`[FSR] Fsr4Update=true`); you then choose whether it also **selects**
@@ -293,9 +310,9 @@ backup moves into the first group and can be removed normally.
 
 ![Managing storage](docs/screenshots/storage.png)
 
-When you click **Install OptiScaler**, the screen lets you pick the backend
-(OptiScaler default / INT8 community build / custom DLLs) and which `.ini`
-profile to write. The Manager always sets `[FSR] Fsr4Update = true` and the
+When you click **Install OptiScaler**, the screen lets you pick which files to
+install (OptiScaler default — first and pre-selected — then your custom DLLs, then
+the INT8 community build) and which `.ini` profile to write. The Manager always sets `[FSR] Fsr4Update = true` and the
 `[Upscalers]` selection per your Step-2 choice (these win over the chosen profile,
 matching what is written to disk). You always see the exact file and ini changes
 in the live preview first.
@@ -505,15 +522,16 @@ Entirely optional, and nothing in the app is gated behind it.
 - **[GitHub Sponsors](https://github.com/sponsors/filobus97)** — takes **no
   platform fee** on sponsorships from personal accounts, so effectively all of it
   arrives. Needs a GitHub account, which not everyone has.
-
-A second, account-free channel (Ko-fi) may be added later; it charges no platform
-fee either and accepts both cards and PayPal, which covers people who cannot or
-would rather not use GitHub.
+- **[Liberapay](https://liberapay.com/Pippo/donate)** — a non-profit platform that
+  takes **no cut at all**; only the payment processor's own fee applies, and it is
+  charged once per top-up rather than per donation. Donations are recurring and
+  paid in advance, so a Liberapay account is needed, but not a GitHub one. Card
+  and PayPal top-ups are both accepted.
 
 There is deliberately **no direct PayPal link**: donations sent that way carry
 commercial fees, stay reversible for months, and expose the recipient's legal name
-and address to the payer. Routing the same payment through a tip platform avoids
-all three.
+and address to the payer. Routing the same payment through one of the platforms
+above avoids all three.
 
 ---
 

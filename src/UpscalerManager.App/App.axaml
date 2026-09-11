@@ -24,6 +24,14 @@
             <Color x:Key="StatusErrorColor">#E06060</Color>
             <Color x:Key="StatusWarningColor">#D4A04A</Color>
 
+            <!-- One colour per vendor, used wherever a technology is named: Nvidia
+                 green, AMD red, Intel blue. Muted rather than brand-saturated, so a
+                 row of badges does not fight the rest of the UI, and the text on top
+                 stays readable. -->
+            <Color x:Key="TechNvidiaColor">#76B900</Color>
+            <Color x:Key="TechAmdColor">#E8544A</Color>
+            <Color x:Key="TechIntelColor">#4A9BE8</Color>
+
             <SolidColorBrush x:Key="BrBgDeep"     Color="{StaticResource BgDeepColor}"/>
             <SolidColorBrush x:Key="BrBgBase"     Color="{StaticResource BgBaseColor}"/>
             <SolidColorBrush x:Key="BrBgSurface"  Color="{StaticResource BgSurfaceColor}"/>
@@ -37,6 +45,9 @@
             <SolidColorBrush x:Key="BrTextPrimary"   Color="{StaticResource TextPrimaryColor}"/>
             <SolidColorBrush x:Key="BrTextSecondary" Color="{StaticResource TextSecondaryColor}"/>
             <SolidColorBrush x:Key="BrTextDisabled"  Color="{StaticResource TextDisabledColor}"/>
+            <SolidColorBrush x:Key="BrTechNvidia" Color="{StaticResource TechNvidiaColor}"/>
+            <SolidColorBrush x:Key="BrTechAmd"    Color="{StaticResource TechAmdColor}"/>
+            <SolidColorBrush x:Key="BrTechIntel"  Color="{StaticResource TechIntelColor}"/>
             <SolidColorBrush x:Key="BrSuccess" Color="{StaticResource StatusSuccessColor}"/>
             <SolidColorBrush x:Key="BrError"   Color="{StaticResource StatusErrorColor}"/>
             <SolidColorBrush x:Key="BrWarning" Color="{StaticResource StatusWarningColor}"/>

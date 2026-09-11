@@ -19,6 +19,16 @@
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
                 BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="8">
+            <TextBlock Text="Game list" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
+                       Text="Some games have no upscaling library at all. Neither route can help those: OptiScaler hooks an upscaler a game already has rather than adding one, and there is nothing to swap."/>
+            <CheckBox Name="ChkHideNoUpscaler" Content="Hide games with no upscaler"
+                      ToolTip.Tip="Hides them from the grid — they are still scanned, so turning this off shows them again immediately, and a game whose libraries sit somewhere the scan does not reach is never lost for good. The status bar says how many are hidden."/>
+          </StackPanel>
+        </Border>
+        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="8">
             <TextBlock Text="Controller" FontWeight="SemiBold"
                        Foreground="{StaticResource BrTextPrimary}"/>
             <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"

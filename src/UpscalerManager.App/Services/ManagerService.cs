@@ -121,6 +121,26 @@ public sealed class ManagerService
         set { _components.Config.GamepadNavigation = value; _components.SaveConfiguration(); }
     }
 
+    /// <summary>
+    /// Whether to hide games with no upscaler at all. Those cannot be helped by either
+    /// route — OptiScaler hooks an upscaler a game already has, and there is nothing to
+    /// swap — so some libraries are mostly noise without this.
+    ///
+    /// Hides rather than skips: the games are still scanned, so turning this off shows
+    /// them again without another scan, and a mis-detected game is never invisible for
+    /// good.
+    /// </summary>
+    public bool HideGamesWithoutUpscaler
+    {
+        get => _components.Config.ScanSources.UpscalerFilter == UpscalerFilterMode.HideWithoutUpscaler;
+        set
+        {
+            _components.Config.ScanSources.UpscalerFilter =
+                value ? UpscalerFilterMode.HideWithoutUpscaler : UpscalerFilterMode.ShowAll;
+            _components.SaveConfiguration();
+        }
+    }
+
     // ── Add-ons: fakenvapi + Nukem DLSSG-to-FSR3 ────────────────────────────
     /// <summary>True when Nukem's DLL has been imported into the cache (it cannot be auto-downloaded).</summary>
     public bool IsNukemFgCached => _components.IsNukemFGInstalled;

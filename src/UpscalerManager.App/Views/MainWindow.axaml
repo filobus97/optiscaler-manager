@@ -120,7 +120,7 @@
              Enter/A activates one. Everything you can do to a game lives on its details
              page, so a card needs exactly one action. -->
         <ScrollViewer Name="GamesScroller" Padding="8">
-          <ItemsControl Name="GamesList" ItemsSource="{Binding Games}">
+          <ItemsControl Name="GamesList" ItemsSource="{Binding VisibleGames}">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
                 <WrapPanel Orientation="Horizontal"/>
@@ -128,14 +128,14 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:GameRowViewModel">
-                <Button Classes="GameCard" Width="162" Margin="0,0,10,10" Padding="7"
+                <Button Classes="GameCard" Width="176" Height="348" Margin="0,0,10,10" Padding="7"
                         Click="OnDetailsClick"
-                        ToolTip.Tip="{Binding SubTitle}">
-                  <StackPanel Spacing="7">
+                        ToolTip.Tip="{Binding CardTip}">
+                  <StackPanel Spacing="7" ClipToBounds="True">
                     <!-- Cover art, with the placeholder behind it so a game without
                          art still has a card of the same shape. -->
                     <!-- 2:3, the shape Steam publishes library art in. -->
-                    <Border Height="218" ClipToBounds="True"
+                    <Border Height="228" ClipToBounds="True"
                             CornerRadius="{StaticResource RadiusMedium}"
                             Background="{StaticResource BrBgElevated}"
                             BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
@@ -157,27 +157,43 @@
                                  Foreground="{StaticResource BrTextSecondary}"/>
                       <TextBlock Text="{Binding StatusText}" FontSize="11"
                                  TextTrimming="CharacterEllipsis"
-                                 Foreground="{StaticResource BrAccent}"/>
+                                 Foreground="{Binding StatusBrush}"/>
                     </StackPanel>
 
                     <!-- What the game already has, with versions: "FSR" alone says
                          nothing, "FSR 4.1.1" answers the question. -->
-                    <ItemsControl ItemsSource="{Binding TechBadges}">
+                    <!-- Chips wrap, so two or three sit on a line when they fit. Each
+                         is tinted by vendor: Nvidia green, AMD red, Intel blue. -->
+                    <ItemsControl ItemsSource="{Binding TechBadges}" Height="36" ClipToBounds="True"
+                                  IsVisible="{Binding HasTechBadges}">
                       <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
                       </ItemsControl.ItemsPanel>
                       <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="x:String">
+                        <DataTemplate x:DataType="vm:TechBadge">
                           <Border Background="{StaticResource BrBgElevated}"
-                                  BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1"
+                                  BorderBrush="{Binding Accent}"
+                                  BorderThickness="1"
                                   CornerRadius="{StaticResource RadiusSmall}"
-                                  Padding="5,1" Margin="0,0,4,4">
-                            <TextBlock Text="{Binding}" FontSize="10"
-                                       Foreground="{StaticResource BrTextSecondary}"/>
+                                  Padding="4,1" Margin="0,0,3,3">
+                            <TextBlock Text="{Binding Label}" FontSize="9.5"
+                                       Foreground="{Binding Accent}"/>
                           </Border>
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
+
+                    <!-- Neither route can help a game with nothing to hook, so say so
+                         rather than leaving the card looking half-scanned. -->
+                    <Border IsVisible="{Binding HasNoUpscaler}"
+                            Background="{StaticResource BrBgElevated}"
+                            BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusSmall}"
+                            Padding="4,1" HorizontalAlignment="Left"
+                            ToolTip.Tip="No DLSS, FSR or XeSS library was found next to this game. OptiScaler hooks an upscaler a game already has rather than adding one, and there is nothing to swap — so neither route applies. If you believe this is wrong, the game may keep its libraries somewhere the scan does not reach.">
+                      <TextBlock Text="No upscaler found" FontSize="9.5"
+                                 Foreground="{StaticResource BrTextSecondary}"/>
+                    </Border>
                   </StackPanel>
                 </Button>
               </DataTemplate>
@@ -198,6 +214,10 @@
       <StackPanel Orientation="Horizontal" Spacing="10">
         <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
                    Foreground="{StaticResource BrTextSecondary}" FontSize="12"/>
+        <TextBlock Name="HiddenNoticeText" Text="{Binding HiddenNotice}" IsVisible="{Binding HasHiddenGames}"
+                   VerticalAlignment="Center" FontSize="12"
+                   Foreground="{StaticResource BrTextSecondary}"
+                   ToolTip.Tip="Turn off &quot;Hide games with no upscaler&quot; in Settings to show them."/>
       </StackPanel>
     </Border>
   </Grid>

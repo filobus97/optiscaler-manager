@@ -153,6 +153,31 @@ namespace UpscalerManager.Core.Tests
             Assert.Equal(ComponentSource.Manager, SourceOf(Analyze(), "amdxcffx64.dll"));
         }
 
+        /// <summary>
+        /// The reported symptom: after reinstalling OptiScaler, a game that plainly has
+        /// FSR in it showed only DLSS. The FSR library was now correctly attributed to
+        /// this app, and the card was reading a field that skips app-installed files.
+        /// </summary>
+        [Fact]
+        public void AGameShowsItsFsrChipEvenWhenTheAppInstalledTheFsrLibrary()
+        {
+            Place("nvngx_dlss.dll");
+            Place("amd_fidelityfx_upscaler_dx12.dll");
+            WriteManifest(_gameDir, "amd_fidelityfx_upscaler_dx12.dll");
+
+            var game = Analyze();
+
+            // Attribution is right: the FSR library is ours.
+            Assert.Equal(ComponentSource.Manager, SourceOf(game, "amd_fidelityfx_upscaler_dx12.dll"));
+            // And the summary field still skips it, which is what that field is for.
+            Assert.Null(game.FsrPath);
+
+            // But the card must show both technologies.
+            var labels = TechChip.For(game).Select(c => c.Label.Split(' ')[0]).ToList();
+            Assert.Contains("DLSS", labels);
+            Assert.Contains("FSR", labels);
+        }
+
         [Fact]
         public void WithNoInstallNothingIsCreditedToTheApp()
         {

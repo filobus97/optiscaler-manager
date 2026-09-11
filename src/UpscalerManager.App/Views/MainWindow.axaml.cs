@@ -148,7 +148,8 @@ public partial class MainWindow : Window
                 row.RefreshFromGame();
                 _vm.Games.Add(row);
             }
-            _vm.HasNoGames = _vm.Games.Count == 0;
+            _vm.HideGamesWithoutUpscaler = _manager.HideGamesWithoutUpscaler;
+            _vm.RefreshVisibleGames();
             _vm.StatusText = $"Found {_vm.Games.Count} game(s).";
 
             // Cover art loads after the list is on screen, not as part of the scan:
@@ -189,6 +190,13 @@ public partial class MainWindow : Window
         {
             ShowPage = ShowPageAsync,
             RevertGame = RevertGameAtAsync,
+            // Applied while Settings is still open, so the grid is already right when
+            // the user comes back rather than needing another scan.
+            GameListSettingChanged = () =>
+            {
+                _vm.HideGamesWithoutUpscaler = _manager.HideGamesWithoutUpscaler;
+                _vm.RefreshVisibleGames();
+            },
         });
         RefreshImportSummary();
     }

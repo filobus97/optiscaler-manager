@@ -7,7 +7,7 @@
 
     <StackPanel Grid.Row="0" Spacing="4">
       <!-- The game name is in the page header bar; no need to repeat it here. -->
-      <TextBlock Text="Choose the OptiScaler version, backend, add-ons and OptiScaler.ini. Nothing is written until you confirm — the preview below is exactly what will happen."
+      <TextBlock Text="Choose the OptiScaler version, which files to install, add-ons and OptiScaler.ini. Nothing is written until you confirm — the preview below is exactly what will happen."
                  FontSize="12" Foreground="{StaticResource BrTextSecondary}" TextWrapping="Wrap"/>
     </StackPanel>
 
@@ -24,10 +24,16 @@
       </StackPanel>
 
       <StackPanel Spacing="6">
-        <TextBlock Text="1. Backend — which files to install" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
+        <TextBlock Text="1. Which files to install" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
         <Border Padding="12" CornerRadius="8" Background="{StaticResource BrBgCard}"
                 BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="6">
+            <RadioButton Name="RbDefault" GroupName="Fsr4" Content="OptiScaler default (recommended)"
+                         Foreground="{StaticResource BrTextPrimary}"
+                         ToolTip.Tip="Install OptiScaler exactly as its release ships it — nothing is swapped or downloaded on top. The release bundles the newest FSR upscaler it can hook (4.1.1 since 0.9.4), and hooks the game's own DLSS and XeSS where present, so this is the right choice on any GPU unless you have a specific reason to replace a file."/>
+            <RadioButton Name="RbCustomMerged" GroupName="Fsr4" Content="Custom DLLs"
+                         Foreground="{StaticResource BrTextPrimary}"
+                         ToolTip.Tip="Your imported custom DLLs overlaid on the OptiScaler install: names OptiScaler ships (e.g. the upscaler) are swapped in place, unknown names (e.g. amdxcffx64.dll) are added alongside. Import your DLLs in Settings; Remove OptiScaler (on the game's details page) removes everything. Note: OptiScaler can only hook FSR binaries it has patterns for — a mismatched upscaler build silently disables FSR 4."/>
             <RadioButton Name="RbInt8" GroupName="Fsr4" Content="FSR 4 INT8 community build"
                          Foreground="{StaticResource BrTextPrimary}"
                          ToolTip.Tip="Install a community FSR 4 INT8 build (amd_fidelityfx_upscaler_dx12.dll) from github.com/Agustinm28/OptiScaler-Extras — a third-party repo, not part of the official OptiScaler project. Pick the version below. This is the option that provides FSR 4 without a driver."/>
@@ -36,23 +42,16 @@
               <ComboBox Name="Int8VersionCombo" MinWidth="180"
                         ToolTip.Tip="Which INT8 community build to install (newest first). This is every release published by github.com/Agustinm28/OptiScaler-Extras, so entries marked pre-release are builds its author has not declared stable."/>
             </StackPanel>
-
-            <RadioButton Name="RbCustomMerged" GroupName="Fsr4" Content="Custom DLLs"
-                         Foreground="{StaticResource BrTextPrimary}"
-                         ToolTip.Tip="Your imported custom DLLs overlaid on the OptiScaler install: names OptiScaler ships (e.g. the upscaler) are swapped in place, unknown names (e.g. amdxcffx64.dll) are added alongside. Import your DLLs in Settings; Remove OptiScaler (on the game's details page) removes everything. Note: OptiScaler can only hook FSR binaries it has patterns for — a mismatched upscaler build silently disables FSR 4."/>
-            <RadioButton Name="RbDefault" GroupName="Fsr4" Content="OptiScaler default (recommended)"
-                         Foreground="{StaticResource BrTextPrimary}"
-                         ToolTip.Tip="Install OptiScaler exactly as its release ships it — it already bundles the newest FSR upscaler that release can hook (4.1.1 since 0.9.4), so this alone enables FSR 4. No extra downloads or swaps."/>
           </StackPanel>
         </Border>
       </StackPanel>
 
       <StackPanel Spacing="6">
-        <TextBlock Text="2. FSR 4 selection" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
+        <TextBlock Text="2. FSR 4 — whether to pre-select it" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
         <Border Padding="12" CornerRadius="8" Background="{StaticResource BrBgCard}"
                 BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="6">
-            <TextBlock Text="FSR 4 is always made available (Fsr4Update=true). This only decides whether it is pre-selected."
+            <TextBlock Text="FSR 4 is always made available (Fsr4Update=true); this only decides whether it is pre-selected. This section concerns FSR alone — to use XeSS or DLSS instead, pick &quot;I'll select it in-game&quot; and choose from OptiScaler's overlay."
                        FontSize="11" Foreground="{StaticResource BrTextSecondary}" TextWrapping="Wrap"/>
             <RadioButton Name="RbSelectNow" GroupName="Fsr4Select" Content="Select FSR 4 for me now"
                          Foreground="{StaticResource BrTextPrimary}" IsChecked="True"
