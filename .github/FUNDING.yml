@@ -1,0 +1,10 @@
+# Shows the "Sponsor" button on the repository page.
+#
+# Ko-fi only. It takes no platform fee on tips, and accepts one-off payments by
+# card or PayPal. GitHub Sponsors is deliberately absent — it is not set up for
+# this account, and listing it would point the Sponsor button at a page that does
+# not exist.
+#
+# The app itself does not link to any platform directly. It links to DONATE.md, so
+# adding or changing a channel needs a commit here, not a new release.
+ko_fi: B2W426SLFP

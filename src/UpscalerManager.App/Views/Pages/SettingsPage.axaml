@@ -69,6 +69,20 @@
           </StackPanel>
         </Border>
 
+        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Support the project" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
+                       Text="Entirely optional, and nothing in the app is gated behind it. This is the only place it is mentioned. The button opens a page in the project's repository listing where donations can go — a page rather than a link built into the app, so it stays current without you having to update."/>
+            <Button Name="SupportButton" Content="Ways to support  &#x2197;" HorizontalAlignment="Left"
+                    Click="OnOpenSupportPage"
+                    ToolTip.Tip="Opens the project's donation page in your browser. Bug reports and reports of what the app did on your hardware are worth more than money — the page says so too."/>
+            <TextBlock Name="SupportResultText" FontSize="11.5" TextWrapping="Wrap" IsVisible="False"
+                       Foreground="{StaticResource BrTextSecondary}"/>
+          </StackPanel>
+        </Border>
+
         <TextBlock Text="OptiScaler" FontSize="15" FontWeight="Bold"
                    Foreground="{StaticResource BrTextPrimary}"/>
         <TextBlock Text="Only used when installing OptiScaler into a game. Ignored otherwise." FontSize="11.5" TextWrapping="Wrap" Margin="0,-10,0,0"

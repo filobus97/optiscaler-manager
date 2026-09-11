@@ -35,6 +35,29 @@ public partial class SettingsPage : UserControl, IHostedPage
         await ShowPage(new StoragePage(_manager, RevertGame));
     }
 
+    /// <summary>
+    /// Opens the project's support page in a browser. The URL is the repository's own,
+    /// not a donation platform's, so the links behind it can change without a release.
+    /// </summary>
+    private void OnOpenSupportPage(object? sender, RoutedEventArgs e)
+    {
+        var url = UpscalerManager.Core.Services.AppRepository.SupportPageUrl;
+        var result = this.FindControl<TextBlock>("SupportResultText");
+        try
+        {
+            UpscalerManager.Core.Services.PlatformServiceFactory.CreateShellService().OpenUrl(url);
+            if (result is not null) result.IsVisible = false;
+        }
+        catch (Exception ex)
+        {
+            // No browser at all is a real possibility in Gaming Mode, so show the
+            // address rather than failing silently.
+            if (result is null) return;
+            result.Text = $"Could not open a browser ({ex.Message}). The page is at {url}";
+            result.IsVisible = true;
+        }
+    }
+
     /// <summary>Raised when a setting changes that the game grid has to react to.</summary>
     public Action? GameListSettingChanged { get; set; }
 

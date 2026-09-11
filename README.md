@@ -522,6 +522,24 @@ What that means in practice, stated plainly so you can judge for yourself:
 - None of that makes it infallible. Bugs are the maintainer's responsibility, not
   the tool's — report them and they get fixed.
 
+## Supporting the project
+
+Entirely optional, and nothing in the app is gated behind it. The channels live
+in **[DONATE.md](DONATE.md)**, and *Settings → Support the project* links there
+rather than to a platform directly — so a channel can be added or corrected with
+a commit instead of a release, and every installed copy follows immediately.
+
+[![Buy Me a Coffee at ko-fi.com](https://storage.ko-fi.com/cdn/kofi6.png?v=6)](https://ko-fi.com/B2W426SLFP)
+
+Currently **[Ko-fi](https://ko-fi.com/B2W426SLFP)**, which takes **no platform fee
+on tips** — apart from the payment processor's own cut it arrives intact. One-off
+payments, by card or PayPal. There is deliberately **no direct PayPal link**:
+donations sent that way carry commercial fees, stay reversible for months, and
+expose the recipient's legal name and address to the payer.
+
+Bug reports with a log, and reports of what the app did on hardware nobody here
+owns, are worth more than money.
+
 ---
 
 ## Attribution & license
