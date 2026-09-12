@@ -14,10 +14,23 @@ namespace UpscalerManager.Core.Components;
 /// vendors keep these ABIs stable across builds — which is also why the list is short
 /// and specific rather than "any DLL".
 ///
-/// Taken from DLSS Swapper's own swappable set, with one deliberate difference: names
-/// are matched <em>case-insensitively</em>. DLSS Swapper compares exact case and gets
-/// away with it on NTFS; on the ext4 filesystems this app's primary platform uses, a
-/// game shipping <c>NvNgx_Dlss.dll</c> would simply never be seen.
+/// DLSS Swapper's swappable set is the nine vendor files below, and reading its source
+/// is worth doing before changing this list: its GameAssetType enum also declares
+/// FidelityFX SDK2, Streamline, DirectStorage and DeepDVC entries, but those are
+/// reserved slots — nothing detects or swaps them, and DllNameForGameAssetType returns
+/// an empty string for every one. It has no FSR 4 awareness at all: no amdxcffx64, no
+/// mention of FSR 4 anywhere in it.
+///
+/// So the last two entries here go past what DLSS Swapper does rather than catching up.
+/// They are the files the FSR 4 community builds ship as, which makes them the only way
+/// the swap route reaches FSR 4.
+///
+/// Names are matched <em>case-insensitively</em>, which is the other deliberate
+/// difference. DLSS Swapper's detection compares exact case — with the comment "the case
+/// of these files should never change, right?" above it — and gets away with it on NTFS;
+/// on the ext4 filesystems this app's primary platform uses, a game shipping
+/// <c>NvNgx_Dlss.dll</c> would simply never be seen. (Its zip extraction does use an
+/// ignore-case comparison, so the inconsistency is theirs rather than a blanket rule.)
 /// </summary>
 public static class SwappableDlls
 {
@@ -55,6 +68,16 @@ public static class SwappableDlls
         new SwappableDll("amd_fidelityfx_vk.dll", "FidelityFX runtime (Vulkan)", "FSR (Vulkan)",
             "The Vulkan build of the same library."),
 
+        // The FSR upscaler model itself — the file FSR 4 actually lives in, and what
+        // the community INT8 builds ship. Unlike the rest of this list, it is not
+        // loaded by the game directly: something has to load it, either the
+        // FidelityFX runtime the game ships or an OptiScaler install. Swapping it in a
+        // game that has neither achieves nothing, which the row says outright.
+        new SwappableDll("amd_fidelityfx_upscaler_dx12.dll", "FSR (FidelityFX upscaler)", "FSR upscaler",
+            "The file FSR 4 lives in. A newer build here is how a game that already loads AMD's FidelityFX runtime gets a newer FSR — including the community INT8 builds, which are the route to FSR 4 without a driver that provides it. It needs the FidelityFX runtime or OptiScaler present to be loaded at all."),
+        new SwappableDll("amdxcffx64.dll", "AMD FSR 4 runtime (or a community INT8 build)", "FSR 4 runtime",
+            "The slot AMD's FSR 4 library occupies, and the name newer community INT8 builds ship under. Same caveat: something has to load it — the driver, the FidelityFX runtime, or OptiScaler."),
+
         // ── Intel ────────────────────────────────────────────────────────────────
         new SwappableDll("libxess.dll", "XeSS", "XeSS",
             "Intel's upscaler. Runs on any modern GPU, and newer builds have improved markedly, so this is worth swapping even on non-Intel hardware."),
@@ -87,14 +110,16 @@ public static class SwappableDlls
     public static int DisplayOrder(string fileName) => fileName.ToLowerInvariant() switch
     {
         "nvngx_dlss.dll" => 0,
-        "amd_fidelityfx_dx12.dll" => 1,
-        "amd_fidelityfx_vk.dll" => 2,
-        "libxess.dll" => 3,
-        "libxess_dx11.dll" => 4,
-        "nvngx_dlssd.dll" => 5,
-        "nvngx_dlssg.dll" => 6,
-        "libxess_fg.dll" => 7,
-        "libxell.dll" => 8,
-        _ => 9,
+        "amd_fidelityfx_upscaler_dx12.dll" => 1,
+        "amdxcffx64.dll" => 2,
+        "amd_fidelityfx_dx12.dll" => 3,
+        "amd_fidelityfx_vk.dll" => 4,
+        "libxess.dll" => 5,
+        "libxess_dx11.dll" => 6,
+        "nvngx_dlssd.dll" => 7,
+        "nvngx_dlssg.dll" => 8,
+        "libxess_fg.dll" => 9,
+        "libxell.dll" => 10,
+        _ => 11,
     };
 }

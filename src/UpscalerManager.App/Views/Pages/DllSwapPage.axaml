@@ -45,8 +45,23 @@
             <StackPanel Spacing="8">
               <TextBlock TextWrapping="Wrap" FontSize="11.5"
                          Foreground="{StaticResource BrTextSecondary}"
-                         Text="Builds in your other games, and in the OptiScaler releases this app has already downloaded. Nothing is fetched for these — they work offline, and adding one copies it into the library, leaving the source untouched."/>
+                         Text="Builds in your other games, and in the OptiScaler releases and community builds this app has already downloaded. Nothing is fetched for these — they work offline, and adding one copies it into the library, leaving the source untouched."/>
               <StackPanel Name="HarvestPanel" Spacing="6"/>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- Third-party community builds, for the FSR upscaler only -->
+        <StackPanel Name="CommunitySection" Spacing="6" IsVisible="False">
+          <TextBlock Text="FSR 4 community builds" FontWeight="SemiBold"
+                     Foreground="{StaticResource BrTextPrimary}"/>
+          <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                  BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+            <StackPanel Spacing="8">
+              <TextBlock TextWrapping="Wrap" FontSize="11.5"
+                         Foreground="{StaticResource BrTextSecondary}"
+                         Text="From github.com/Agustinm28/OptiScaler-Extras — a third party, not AMD and not the OptiScaler project. These INT8 builds are the way to FSR 4 on hardware whose driver does not provide it. Entries marked pre-release are ones their author has not declared stable."/>
+              <StackPanel Name="CommunityPanel" Spacing="6"/>
             </StackPanel>
           </Border>
         </StackPanel>

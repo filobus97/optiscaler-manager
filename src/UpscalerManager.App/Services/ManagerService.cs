@@ -95,6 +95,51 @@ public sealed class ManagerService
     /// <summary>Copies a build out of a game, or out of an OptiScaler release, into the library.</summary>
     public LibraryDll HarvestBuild(HarvestableDll source) => _library.Harvest(source);
 
+    /// <summary>
+    /// FSR 4 INT8 community builds already downloaded. A no-network source for the file
+    /// FSR 4 lives in.
+    /// </summary>
+    public IReadOnlyList<HarvestableDll> CommunityBuilds(string fileName) =>
+        _library.FromCommunityBuilds(fileName);
+
+    /// <summary>
+    /// True when this DLL is one the community builds ship as, so the picker knows
+    /// whether to offer them at all.
+    /// </summary>
+    public static bool TakesCommunityBuilds(string fileName) =>
+        Fsr4Int8Build.IsKnown(fileName);
+
+    /// <summary>
+    /// Community build versions available to download, newest first, paired with
+    /// whether their author marked the release a pre-release. Reuses the same listing
+    /// the OptiScaler install screen uses rather than asking a second time.
+    /// </summary>
+    public Task<IReadOnlyList<(string Version, bool IsPreRelease)>> CommunityBuildReleasesAsync() =>
+        GetInt8ReleasesAsync();
+
+    /// <summary>
+    /// Downloads one community build and files it in the swap library.
+    ///
+    /// Goes through the existing Extras download, so the file lands in the same cache
+    /// the OptiScaler route uses and a version fetched for one route is immediately
+    /// available to the other.
+    /// </summary>
+    public async Task<LibraryDll> DownloadCommunityBuildAsync(
+        string version, string fileName, IProgress<double>? progress = null)
+    {
+        await _components.DownloadExtrasDllAsync(version, progress);
+
+        var built = _library.FromCommunityBuilds(fileName)
+            .FirstOrDefault(b => b.Path.Contains(version, StringComparison.OrdinalIgnoreCase));
+
+        if (built is null)
+            throw new InvalidOperationException(
+                $"Community build {version} downloaded, but it contains no {fileName}. " +
+                "That release may ship under the other FSR filename — try the other row.");
+
+        return _library.Harvest(built);
+    }
+
     /// <summary>What the vendor publishes for this DLL, newest first. Never automatic.</summary>
     public Task<IReadOnlyList<VendorBuild>> VendorBuildsAsync(string fileName, CancellationToken cancel = default) =>
         _vendor.AvailableAsync(fileName, cancel);

@@ -205,15 +205,35 @@ public sealed class DllLibraryService
     /// this to a fixed subdirectory would quietly stop finding anything the next time
     /// upstream moves a file.
     /// </summary>
-    public IReadOnlyList<HarvestableDll> FromOptiScalerReleases(string? onlyFileName = null)
+    public IReadOnlyList<HarvestableDll> FromOptiScalerReleases(string? onlyFileName = null) =>
+        FromCachedReleases("OptiScaler", "OptiScaler", onlyFileName);
+
+    /// <summary>
+    /// Swappable DLLs in the FSR 4 INT8 community builds this app has already
+    /// downloaded for the OptiScaler route.
+    ///
+    /// These are the only route to FSR 4 on hardware whose driver does not provide it,
+    /// and they ship as one of the two FSR upscaler filenames — so once downloaded they
+    /// are a swap source like any other, with no second download.
+    /// </summary>
+    public IReadOnlyList<HarvestableDll> FromCommunityBuilds(string? onlyFileName = null) =>
+        FromCachedReleases("Extras", "community build", onlyFileName);
+
+    /// <summary>
+    /// Swappable DLLs inside one of the cache's release folders. Shared by the
+    /// OptiScaler and community-build sources, which differ only in which folder they
+    /// read and what the row calls them.
+    /// </summary>
+    private IReadOnlyList<HarvestableDll> FromCachedReleases(
+        string cacheFolder, string label, string? onlyFileName)
     {
-        var root = Path.Combine(AppDataPaths.Cache, "OptiScaler");
+        var root = Path.Combine(AppDataPaths.Cache, cacheFolder);
         if (!Directory.Exists(root)) return Array.Empty<HarvestableDll>();
 
         var found = new List<HarvestableDll>();
         foreach (var releaseDir in SafeDirectories(root))
         {
-            var release = Path.GetFileName(releaseDir);
+            var release = $"{label} {Path.GetFileName(releaseDir)}";
             IEnumerable<string> files;
             try { files = Directory.EnumerateFiles(releaseDir, "*.dll", SearchOption.AllDirectories); }
             catch { continue; }
@@ -231,7 +251,7 @@ public sealed class DllLibraryService
 
                 found.Add(new HarvestableDll(
                     definition.FileName, version, path,
-                    $"OptiScaler {release}", Has(definition.FileName, version)));
+                    release, Has(definition.FileName, version)));
             }
         }
 

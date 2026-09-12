@@ -108,8 +108,20 @@ namespace UpscalerManager.Core.Tests
         public void ThingsThatAreNotSwappableAreRejected()
         {
             Assert.False(SwappableDlls.IsSwappable("OptiScaler.dll"));
-            Assert.False(SwappableDlls.IsSwappable("amd_fidelityfx_upscaler_dx12.dll"));
+            Assert.False(SwappableDlls.IsSwappable("nvapi64.dll"));
+            Assert.False(SwappableDlls.IsSwappable("dxgi.dll"));
             Assert.False(SwappableDlls.IsSwappable(null));
+        }
+
+        [Fact]
+        public void TheFsrUpscalerFilesAreSwappable()
+        {
+            // The FSR 4 community builds ship as one of these two names, so without
+            // them the swap route cannot reach FSR 4 at all. DLSS Swapper reserves an
+            // enum slot for the first and never detects or swaps it; this goes past
+            // what it does rather than catching up.
+            Assert.True(SwappableDlls.IsSwappable("amd_fidelityfx_upscaler_dx12.dll"));
+            Assert.True(SwappableDlls.IsSwappable("amdxcffx64.dll"));
         }
 
         // ── The library ──────────────────────────────────────────────────────
@@ -280,11 +292,26 @@ namespace UpscalerManager.Core.Tests
         {
             var release = Path.Combine(AppDataPaths.Cache, "OptiScaler", "v0.9.4");
             Directory.CreateDirectory(release);
-            foreach (var name in new[] { "OptiScaler.dll", "amd_fidelityfx_upscaler_dx12.dll", "nvapi64.dll" })
+            foreach (var name in new[] { "OptiScaler.dll", "nvapi64.dll", "dxgi.dll" })
                 File.WriteAllBytes(Path.Combine(release, name),
                     PeTestData.BuildPe(PeTestData.MachineAmd64, "1.0.0.0"));
 
             Assert.Empty(new DllLibraryService().FromOptiScalerReleases());
+        }
+
+        [Fact]
+        public void ReleasesAreASourceForTheFsrUpscalerToo()
+        {
+            // An OptiScaler release bundles the FSR upscaler it hooks, so this is a
+            // no-network source for the file FSR 4 lives in.
+            var release = Path.Combine(AppDataPaths.Cache, "OptiScaler", "v0.9.4");
+            Directory.CreateDirectory(release);
+            File.WriteAllBytes(Path.Combine(release, "amd_fidelityfx_upscaler_dx12.dll"),
+                PeTestData.BuildPe(PeTestData.MachineAmd64, "4.1.1.0"));
+
+            var found = Assert.Single(
+                new DllLibraryService().FromOptiScalerReleases("amd_fidelityfx_upscaler_dx12.dll"));
+            Assert.Equal("4.1.1.0", found.Version);
         }
 
         [Fact]
@@ -297,6 +324,35 @@ namespace UpscalerManager.Core.Tests
                 PeTestData.BuildPe(PeTestData.MachineAmd64, "2.1.0.0"));
 
             Assert.True(Assert.Single(new DllLibraryService().FromOptiScalerReleases()).InLibrary);
+        }
+
+        [Fact]
+        public void CommunityBuildsAlreadyDownloadedAreASource()
+        {
+            // Downloaded for the OptiScaler route, and immediately usable by the swap
+            // route — the cache is shared, so a version fetched once serves both.
+            var build = Path.Combine(AppDataPaths.Cache, "Extras", "4.0.2d");
+            Directory.CreateDirectory(build);
+            File.WriteAllBytes(Path.Combine(build, "amdxcffx64.dll"),
+                PeTestData.BuildPe(PeTestData.MachineAmd64, "4.0.2.0"));
+
+            var found = Assert.Single(new DllLibraryService().FromCommunityBuilds("amdxcffx64.dll"));
+            Assert.Equal("4.0.2.0", found.Version);
+            Assert.Equal("community build 4.0.2d", found.GameName);
+        }
+
+        [Fact]
+        public void BothNamesACommunityBuildShipsAsAreRecognised()
+        {
+            // Older releases ship amd_fidelityfx_upscaler_dx12.dll, newer ones ship
+            // amdxcffx64.dll. Handling only one is how every recent release stops
+            // being found.
+            Assert.True(Fsr4Int8Build.IsKnown("amd_fidelityfx_upscaler_dx12.dll"));
+            Assert.True(Fsr4Int8Build.IsKnown("amdxcffx64.dll"));
+            foreach (var name in Fsr4Int8Build.KnownDllNames)
+                Assert.True(SwappableDlls.IsSwappable(name),
+                    $"{name} is a community build filename but is not swappable, so those " +
+                    "builds could be downloaded and never offered.");
         }
 
         [Fact]

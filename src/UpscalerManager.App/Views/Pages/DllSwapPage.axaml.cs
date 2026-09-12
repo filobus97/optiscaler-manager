@@ -77,6 +77,7 @@ public partial class DllSwapPage : UserControl, IHostedPage
         RenderCurrent();
         RenderLibrary();
         RenderHarvestable();
+        RenderCommunity();
         RenderVendor();
     }
 
@@ -159,6 +160,7 @@ public partial class DllSwapPage : UserControl, IHostedPage
         // are the same thing — a build already on the disk that costs nothing to copy.
         var found = _manager.HarvestableBuilds(_slot.FileName, _game)
             .Concat(_manager.OptiScalerBuilds(_slot.FileName))
+            .Concat(_manager.CommunityBuilds(_slot.FileName))
             .Where(h => !h.InLibrary)
             .GroupBy(h => h.Version, StringComparer.OrdinalIgnoreCase)
             .Select(g => g.First())
@@ -168,8 +170,8 @@ public partial class DllSwapPage : UserControl, IHostedPage
         if (found.Count == 0)
         {
             panel.Children.Add(Label(
-                "No other build of this DLL was found in your games or in the OptiScaler "
-                + "releases you have downloaded.",
+                "No other build of this DLL was found in your games, or in the OptiScaler "
+                + "releases and community builds you have downloaded.",
                 11.5, FontWeight.Normal, "BrTextSecondary"));
             return;
         }
@@ -181,6 +183,80 @@ public partial class DllSwapPage : UserControl, IHostedPage
                 isCurrent: false,
                 action: "Add and use",
                 onAction: () => HarvestAndSwap(candidate)));
+    }
+
+    /// <summary>
+    /// FSR 4 INT8 community builds, offered only for the two filenames they ship as.
+    ///
+    /// A separate section from the vendor downloads on purpose: these come from a third
+    /// party rather than from AMD, and collapsing the two would present them as
+    /// equally official.
+    /// </summary>
+    private async void RenderCommunity()
+    {
+        var section = this.FindControl<StackPanel>("CommunitySection");
+        var panel = this.FindControl<StackPanel>("CommunityPanel");
+        if (section is null || panel is null) return;
+
+        section.IsVisible = ManagerService.TakesCommunityBuilds(_slot.FileName);
+        if (!section.IsVisible) return;
+
+        panel.Children.Clear();
+        panel.Children.Add(Label("Checking what has been published…",
+            11.5, FontWeight.Normal, "BrTextSecondary"));
+
+        IReadOnlyList<(string Version, bool IsPreRelease)> releases;
+        try
+        {
+            releases = await _manager.CommunityBuildReleasesAsync();
+        }
+        catch (Exception ex)
+        {
+            panel.Children.Clear();
+            panel.Children.Add(Label($"Could not list the community builds: {ex.Message}",
+                11.5, FontWeight.Normal, "BrTextSecondary"));
+            return;
+        }
+
+        if (!ReferenceEquals(panel, this.FindControl<StackPanel>("CommunityPanel"))) return;
+
+        panel.Children.Clear();
+        if (releases.Count == 0)
+        {
+            panel.Children.Add(Label(
+                "Nothing could be listed — the network may be unavailable.",
+                11.5, FontWeight.Normal, "BrTextSecondary"));
+            return;
+        }
+
+        foreach (var (version, isPreRelease) in releases.Take(8))
+            panel.Children.Add(BuildRow(
+                version,
+                isPreRelease ? "community build · pre-release" : "community build",
+                isCurrent: false,
+                action: "Download and use",
+                onAction: () => DownloadCommunityAndSwap(version)));
+    }
+
+    private async void DownloadCommunityAndSwap(string version)
+    {
+        SetStatus($"Downloading the {version} community build…");
+        try
+        {
+            var progress = new Progress<double>(fraction =>
+                SetStatus($"Downloading the {version} community build… {fraction:P0}"));
+
+            var entry = await _manager.DownloadCommunityBuildAsync(version, _slot.FileName, progress);
+            _manager.SwapDll(_game, _slot, entry);
+            Changed = true;
+            Reload();
+            SetStatus($"{_slot.Definition.Label} is now the {entry.Version} community build.");
+        }
+        catch (Exception ex)
+        {
+            Reload();
+            SetStatus(ex.Message);
+        }
     }
 
     /// <summary>

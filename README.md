@@ -84,10 +84,20 @@ Building from source is in [Building & running](#building--running).
 - **Swapping a DLL** replaces one of the game's own upscaler libraries with a
   different build of the same library. A game loads whichever
   `nvngx_dlss.dll` is sitting next to it, so a newer one upgrades the game with
-  nothing hooked, nothing injected and nothing to configure. Nine files are
-  swappable — DLSS, DLSS FG, DLSS RR, the FidelityFX DX12/Vulkan runtimes, XeSS,
-  XeSS DX11, XeSS FG and XeLL — and only ones **already present** are offered,
-  because this upgrades a library a game ships rather than adding one.
+  nothing hooked, nothing injected and nothing to configure. Eleven files are
+  swappable — DLSS, DLSS FG, DLSS RR, the FidelityFX DX12/Vulkan runtimes, the FSR
+  upscaler itself (both filenames it ships under), XeSS, XeSS DX11, XeSS FG and
+  XeLL — and only ones **already present** are offered, because this upgrades a
+  library a game ships rather than adding one.
+
+  The last two of those go **beyond what DLSS Swapper does**. Its swappable set is
+  the nine vendor files; its asset enum also declares FidelityFX SDK2, Streamline
+  and DirectStorage entries, but those are reserved slots that nothing detects or
+  swaps, and it has no FSR 4 awareness at all. The FSR 4 community builds ship as
+  `amd_fidelityfx_upscaler_dx12.dll` or `amdxcffx64.dll`, so including those two is
+  the only way the swap route reaches FSR 4. Note the caveat the app states on the
+  row: unlike the rest of the list, something has to *load* these — the driver, the
+  game's FidelityFX runtime, or OptiScaler.
 
   **Four places a build can come from**, in the order the picker lists them:
 
@@ -96,7 +106,9 @@ Building from source is in [Building & running](#building--running).
   | Your library | none | Builds you have already added. |
   | Your other games | none | Whatever versions your installed games ship. |
   | OptiScaler releases you have downloaded | none | A release bundles the libraries it hooks — and is the only source for AMD's FidelityFX runtimes, which AMD does not publish loose. |
+  | Community builds you have downloaded | none | The same cache the OptiScaler route uses, so a version fetched once serves both. |
   | The vendor | download | Straight from Nvidia's and Intel's own repositories. |
+  | FSR 4 community builds | download | From [`Agustinm28/OptiScaler-Extras`](https://github.com/Agustinm28/OptiScaler-Extras) — a third party, not AMD. Offered only for the two FSR upscaler filenames, in its own section, because presenting it beside the vendor downloads would imply it is equally official. |
 
   Plus importing a file by hand, at any time.
 
