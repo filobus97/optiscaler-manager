@@ -149,8 +149,8 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         var heading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         heading.Children.Add(new TextBlock
         {
-            Text = slot.Version is { Length: > 0 } v
-                ? $"{slot.Definition.Label}  {v}"
+            Text = slot.Version is { Length: > 0 }
+                ? $"{slot.Definition.Label}  {slot.VersionText}"
                 : slot.Definition.Label,
             FontSize = 13,
             FontWeight = FontWeight.SemiBold,
@@ -158,6 +158,10 @@ public partial class GameDetailsPage : UserControl, IHostedPage
             VerticalAlignment = VerticalAlignment.Center,
         });
         if (slot.IsOurs) heading.Children.Add(SourceTag("swapped by this app"));
+        // A game with the same DLL in several places is worth flagging on the row, not
+        // only inside the picker: it is the difference between a swap that works and
+        // one that appears to do nothing.
+        if (slot.CopyCount > 1) heading.Children.Add(SourceTag($"{slot.CopyCount} copies"));
 
         var text = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
         text.Children.Add(heading);
@@ -267,7 +271,7 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         var heading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         heading.Children.Add(new TextBlock
         {
-            Text = c.Version is null ? c.Technology : $"{c.Technology}  {c.Version}",
+            Text = c.Version is null ? c.Technology : $"{c.Technology}  {c.VersionText}",
             FontSize = 13,
             FontWeight = FontWeight.SemiBold,
             Foreground = Brush("BrTextPrimary"),

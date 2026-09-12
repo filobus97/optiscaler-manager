@@ -44,6 +44,7 @@ namespace UpscalerManager.Core.Models
     [JsonSerializable(typeof(LibraryEntryMeta))]
     [JsonSerializable(typeof(SwapManifest))]
     [JsonSerializable(typeof(SwappedFile))]
+    [JsonSerializable(typeof(SwappedCopy))]
     [JsonSerializable(typeof(List<SwappedFile>))]
     [JsonSerializable(typeof(OptiScalerProfile))]
     [JsonSerializable(typeof(List<OptiScalerProfile>))]

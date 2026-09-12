@@ -151,10 +151,35 @@ Building from source is in [Building & running](#building--running).
   right?"*), which is safe on NTFS and would silently miss a game shipping
   `NvNgx_Dlss.dll` on ext4 — so everything here matches case-insensitively.
 
+  **Every copy, not the first one found.** A game can ship the same upscaler library
+  in more than one directory — an Unreal title commonly carries `nvngx_dlss.dll` both
+  beside its executable and under `Engine/Binaries/ThirdParty/…` — and which one it
+  loads is the game's business. Replacing only the first was therefore a coin toss:
+  half the time the swap appeared to do nothing at all. A swap now writes to all of
+  them, each copy's original is stored separately, and the picker lists every path.
+  This one is taken straight from DLSS Swapper, whose `UpdateDllAsync` has always
+  looped over every copy.
+
+  **The version shown is the version you can look up.** For every file except two, the
+  version resource is the number a player recognises. AMD's FidelityFX runtimes are
+  the exception: they are stamped with an SDK build number, so the library providing
+  **FSR 3.1.2** reports itself as `1.0.1.38338` — a number that appears in no AMD
+  documentation and reads like a downgrade next to a game's FSR 3 library. DLSS
+  Swapper resolves it by loading the DLL and calling `ffxQuery`, which is not possible
+  here: these are Windows PEs and this is a Linux-first app. Instead the FSR version is
+  read statically out of the binary's provider version table, and rows show
+  `FSR 3.1.2  (1.0.1.38338)` — both halves, because the build number is what the app
+  reads off the file and is the only thing separating two builds of the same FSR
+  version. Checked against all sixteen FidelityFX builds the archive holds: sixteen
+  exact matches.
+
   Swaps go through the same backup-and-manifest layer as everything else: the
   original is copied out before anything is written, and the game's page can put it
   back. A revert is **refused if the DLL changed since** — a game patch is the usual
-  reason — because restoring the older original over it would undo that.
+  reason — because restoring the older original over it would undo that, and it is
+  refused for *all* copies if *any* copy has changed, because a half-reverted game is
+  the worst outcome available. A swap into a game that is currently running is refused
+  up front rather than failing obscurely part-way.
 
   ![The DLL swapper tab](docs/screenshots/swap-tab.png)
 

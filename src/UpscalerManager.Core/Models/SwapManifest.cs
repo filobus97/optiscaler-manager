@@ -17,6 +17,44 @@ public class LibraryEntryMeta
     public string AddedUtc { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// One place a swapped DLL was written, and what it takes to put that one back.
+///
+/// A game can ship the same upscaler library in several directories — an Unreal title
+/// commonly carries <c>nvngx_dlss.dll</c> both beside its executable and under
+/// <c>Engine/Binaries/ThirdParty/…</c>. Which one the game loads is the game's
+/// business, so a swap that replaced only the first was a coin toss: half the time it
+/// appeared to do nothing at all. Every copy is therefore recorded separately, because
+/// each has its own original to restore and its own hash to check.
+/// </summary>
+public class SwappedCopy
+{
+    /// <summary>The directory this copy lives in.</summary>
+    public string Directory { get; set; } = string.Empty;
+
+    /// <summary>Hash of the file as installed here, checked before reverting.</summary>
+    public string? InstalledSha256 { get; set; }
+
+    /// <summary>The version that was here before, or null when it carried none.</summary>
+    public string? OriginalVersion { get; set; }
+
+    /// <summary>Hash of the original, so a restored file can be confirmed.</summary>
+    public string? OriginalSha256 { get; set; }
+
+    /// <summary>
+    /// False when there was no file at this path before the swap — then reverting means
+    /// deleting rather than restoring.
+    /// </summary>
+    public bool ExistedBefore { get; set; } = true;
+
+    /// <summary>
+    /// Where this copy's original sits inside the per-game backup store, relative to
+    /// its files directory. Distinct per copy: two directories holding the same
+    /// filename would otherwise back up over each other and lose one original for good.
+    /// </summary>
+    public string BackupRelative { get; set; } = string.Empty;
+}
+
 /// <summary>One DLL this app replaced in a game, and what it takes to put it back.</summary>
 public class SwappedFile
 {
@@ -56,6 +94,63 @@ public class SwappedFile
     public bool ExistedBefore { get; set; } = true;
 
     public string SwappedAtUtc { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Every place this DLL was written, one entry per directory.
+    ///
+    /// The single-directory fields above predate this and are still read, so a record
+    /// written by an older version keeps reverting — see <see cref="Normalize"/>. They
+    /// are also still written, mirroring the first copy, so a manifest this version
+    /// writes stays revertible by an older build rather than looking like a swap with
+    /// no backup.
+    /// </summary>
+    public List<SwappedCopy> Copies { get; set; } = new();
+
+    /// <summary>
+    /// Fills <see cref="Copies"/> from the single-directory fields when a record
+    /// predates them, so one code path handles both.
+    ///
+    /// The legacy backup layout put the original at <c>swaps/&lt;filename&gt;</c> with
+    /// no directory component, and that path has to be preserved exactly: it is where
+    /// the only copy of a user's original DLL actually is.
+    /// </summary>
+    public void Normalize()
+    {
+        if (Copies.Count > 0 || string.IsNullOrEmpty(InstalledInDirectory)) return;
+
+        Copies.Add(new SwappedCopy
+        {
+            Directory = InstalledInDirectory,
+            InstalledSha256 = InstalledSha256,
+            OriginalVersion = OriginalVersion,
+            OriginalSha256 = OriginalSha256,
+            ExistedBefore = ExistedBefore,
+            BackupRelative = LegacyBackupRelative,
+        });
+    }
+
+    /// <summary>
+    /// The pre-multi-copy backup path: <c>swaps/&lt;filename&gt;</c>. Kept as a
+    /// constant expression rather than rebuilt at each call site so the one thing that
+    /// must not drift — where an existing user's original DLL is stored — is stated once.
+    /// </summary>
+    public string LegacyBackupRelative => System.IO.Path.Combine("swaps", FileName);
+
+    /// <summary>
+    /// Mirrors the first copy back onto the single-directory fields, so the manifest
+    /// stays readable by a version that predates <see cref="Copies"/>.
+    /// </summary>
+    public void MirrorFirstCopy()
+    {
+        if (Copies.Count == 0) return;
+
+        var first = Copies[0];
+        InstalledInDirectory = first.Directory;
+        InstalledSha256 = first.InstalledSha256;
+        OriginalVersion = first.OriginalVersion;
+        OriginalSha256 = first.OriginalSha256;
+        ExistedBefore = first.ExistedBefore;
+    }
 }
 
 /// <summary>

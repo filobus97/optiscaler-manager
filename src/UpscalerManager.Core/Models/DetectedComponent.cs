@@ -47,6 +47,24 @@ public class DetectedComponent
     /// <summary>Version read from the file, or null when it does not declare one.</summary>
     public string? Version { get; set; }
 
+    /// <summary>
+    /// The FSR version this provides, for the FidelityFX runtimes whose version
+    /// resource is an SDK build number instead — see
+    /// <see cref="Components.FidelityFxVersion"/>. Null for every other file, where
+    /// <see cref="Version"/> already means what a player expects.
+    ///
+    /// Read at scan time and cached with the rest of the analysis, because establishing
+    /// it means reading a 6.5 MB binary and the game grid renders far more often than
+    /// it scans.
+    /// </summary>
+    public string? FsrVersion { get; set; }
+
+    /// <summary>
+    /// The version as it should be shown: the FSR version where there is one, with the
+    /// build number kept alongside it.
+    /// </summary>
+    public string VersionText => Components.FidelityFxVersion.Describe(FsrVersion, Version);
+
     /// <summary>Where it sits, relative to the game folder.</summary>
     public string RelativePath { get; set; } = string.Empty;
 

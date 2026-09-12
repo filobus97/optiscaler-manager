@@ -368,6 +368,12 @@ public class GameAnalyzerService
                     Technology = def.Technology,
                     FileName = fileName,
                     Version = version,
+                    // AMD stamps its FidelityFX runtimes with an SDK build number, so
+                    // the version resource alone would tell a player nothing and read
+                    // like a downgrade beside a game's FSR 3 library.
+                    FsrVersion = Components.FidelityFxVersion.Translates(fileName)
+                        ? Components.FidelityFxVersion.FromBinary(path)
+                        : null,
                     RelativePath = MakeRelative(game.InstallPath, fullPath),
                     Role = def.Role,
                     Vendor = def.Vendor,

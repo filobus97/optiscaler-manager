@@ -92,9 +92,27 @@ public partial class DllSwapPage : UserControl, IHostedPage
 
         panel.Children.Add(Label("In the game now", 13, FontWeight.SemiBold, "BrTextPrimary"));
 
-        var version = _slot.Version is { Length: > 0 } v ? v : "no version in the file";
+        var version = _slot.Version is { Length: > 0 } ? _slot.VersionText : "no version in the file";
         panel.Children.Add(Label($"{_slot.FileName}  {version}", 12, FontWeight.Normal, "BrTextPrimary"));
-        panel.Children.Add(Label(_slot.Directory, 10.5, FontWeight.Normal, "BrTextDisabled"));
+
+        // Every place it sits, not just the first. A game carrying two copies is the
+        // case where swapping one and stopping looks like it did nothing at all, so the
+        // page says plainly that all of them are in scope.
+        foreach (var copy in _slot.Copies)
+            panel.Children.Add(Label(
+                _slot.CopyCount > 1 && copy.Version is { Length: > 0 }
+                    ? $"{copy.Directory}   ({copy.VersionText})"
+                    : copy.Directory,
+                10.5, FontWeight.Normal, "BrTextDisabled"));
+
+        if (_slot.CopyCount > 1)
+            panel.Children.Add(Label(
+                _slot.VersionsDiffer
+                    ? $"{_slot.CopyCount} copies, and they are not the same build — the game decides "
+                      + "which it loads. Swapping replaces all of them, so it stops mattering."
+                    : $"{_slot.CopyCount} copies of this DLL. The game decides which it loads, so a "
+                      + "swap replaces all of them.",
+                11.5, FontWeight.SemiBold, "BrAccent"));
 
         if (_slot.Swapped is not { } swapped)
         {

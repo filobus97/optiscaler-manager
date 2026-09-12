@@ -189,6 +189,365 @@ namespace UpscalerManager.Core.Tests
             Assert.Equal("4.1.1.0", upscaler.Version);
         }
 
+        // ── The same DLL in several places ───────────────────────────────────
+
+        /// <summary>
+        /// Writes the same DLL into a subdirectory as well, the way an Unreal title
+        /// carries one beside its executable and another under Engine/Binaries.
+        /// </summary>
+        private DetectedComponent NestedDll(string name, string version, string subdirectory)
+        {
+            var dir = Path.Combine(_gameDir, subdirectory);
+            Directory.CreateDirectory(dir);
+            File.WriteAllBytes(Path.Combine(dir, name), PeTestData.BuildPe(PeTestData.MachineAmd64, version));
+
+            var component = Component(name, version);
+            component.RelativePath = Path.Combine(subdirectory, name);
+            return component;
+        }
+
+        [Fact]
+        public void EveryCopyOfADllInAGameIsOneSlot()
+        {
+            GameDll("nvngx_dlss.dll", "310.1.0.0");
+            var nested = NestedDll("nvngx_dlss.dll", "310.1.0.0", Path.Combine("Engine", "Binaries"));
+            _game.DetectedComponents = new() { Component("nvngx_dlss.dll", "310.1.0.0"), nested };
+
+            var slot = SlotFor("nvngx_dlss.dll");
+            Assert.Equal(2, slot.CopyCount);
+            // Shallowest first, so the row names the copy a player would call "the game's".
+            Assert.Equal(_gameDir, slot.Copies[0].Directory);
+        }
+
+        [Fact]
+        public void SwappingWritesToEveryCopy()
+        {
+            // The bug this fixes: a game with two copies got one of them replaced, and
+            // which one it loaded was the game's choice — so half the time the swap
+            // appeared to do nothing whatsoever.
+            GameDll("nvngx_dlss.dll", "310.1.0.0");
+            var nested = NestedDll("nvngx_dlss.dll", "310.1.0.0", Path.Combine("Engine", "Binaries"));
+            _game.DetectedComponents = new() { Component("nvngx_dlss.dll", "310.1.0.0"), nested };
+
+            var build = AddToLibrary("nvngx_dlss.dll", "310.3.0.0");
+            var swapped = new DllSwapService().Swap(_game, SlotFor("nvngx_dlss.dll"), build);
+
+            Assert.Equal(2, swapped.Copies.Count);
+            foreach (var copy in swapped.Copies)
+            {
+                var installed = Path.Combine(copy.Directory, "nvngx_dlss.dll");
+                Assert.Equal(File.ReadAllBytes(build.Path), File.ReadAllBytes(installed));
+            }
+        }
+
+        [Fact]
+        public void EachCopysOriginalIsStoredSeparately()
+        {
+            // Two directories holding the same filename backing up to one path would
+            // destroy one of the two originals, with nothing left to say which.
+            GameDll("nvngx_dlss.dll", "310.1.0.0");
+            var nested = NestedDll("nvngx_dlss.dll", "300.0.0.0", Path.Combine("Engine", "Binaries"));
+            _game.DetectedComponents = new() { Component("nvngx_dlss.dll", "310.1.0.0"), nested };
+
+            var swapped = new DllSwapService().Swap(
+                _game, SlotFor("nvngx_dlss.dll"), AddToLibrary("nvngx_dlss.dll", "310.3.0.0"));
+
+            var paths = swapped.Copies.Select(c => c.BackupRelative).ToList();
+            Assert.Equal(2, paths.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+
+            var files = new BackupStoreService().GetFilesDir(_gameDir);
+            foreach (var copy in swapped.Copies)
+                Assert.True(File.Exists(Path.Combine(files, copy.BackupRelative)),
+                    $"the original from {copy.Directory} was not stored at {copy.BackupRelative}");
+
+            // And each stored original is the build that was actually in that directory.
+            Assert.Contains(swapped.Copies, c => c.OriginalVersion == "310.1.0.0");
+            Assert.Contains(swapped.Copies, c => c.OriginalVersion == "300.0.0.0");
+        }
+
+        [Fact]
+        public void RevertingPutsEveryCopyBack()
+        {
+            GameDll("nvngx_dlss.dll", "310.1.0.0");
+            var nested = NestedDll("nvngx_dlss.dll", "300.0.0.0", Path.Combine("Engine", "Binaries"));
+            _game.DetectedComponents = new() { Component("nvngx_dlss.dll", "310.1.0.0"), nested };
+
+            var root = Path.Combine(_gameDir, "nvngx_dlss.dll");
+            var deep = Path.Combine(_gameDir, "Engine", "Binaries", "nvngx_dlss.dll");
+            var originalRoot = File.ReadAllBytes(root);
+            var originalDeep = File.ReadAllBytes(deep);
+
+            var service = new DllSwapService();
+            var swapped = service.Swap(
+                _game, SlotFor("nvngx_dlss.dll"), AddToLibrary("nvngx_dlss.dll", "310.3.0.0"));
+            service.Revert(_game, swapped);
+
+            Assert.Equal(originalRoot, File.ReadAllBytes(root));
+            Assert.Equal(originalDeep, File.ReadAllBytes(deep));
+            Assert.Empty(service.LoadManifest(_game).Files);
+        }
+
+        [Fact]
+        public void ACopyThatIsNewToTheGameIsDeletedOnRevertWhileTheOtherIsRestored()
+        {
+            // One directory has the file, the other does not. Reverting has to restore
+            // the first and remove the second, not treat both the same way.
+            GameDll("libxess.dll", "2.0.0.0");
+            var dir = Path.Combine(_gameDir, "Binaries");
+            Directory.CreateDirectory(dir);
+
+            var nested = Component("libxess.dll", "2.0.0.0");
+            nested.RelativePath = Path.Combine("Binaries", "libxess.dll");
+            // Deliberately not written to disk, so the slot's second copy points at a
+            // directory with no file in it.
+            File.WriteAllBytes(Path.Combine(dir, "libxess.dll"), PeTestData.BuildPe(PeTestData.MachineAmd64, "2.0.0.0"));
+            _game.DetectedComponents = new() { Component("libxess.dll", "2.0.0.0"), nested };
+
+            var service = new DllSwapService();
+            var swapped = service.Swap(
+                _game, SlotFor("libxess.dll"), AddToLibrary("libxess.dll", "2.0.2.0"));
+            Assert.Equal(2, swapped.Copies.Count);
+            Assert.All(swapped.Copies, c => Assert.True(c.ExistedBefore));
+
+            service.Revert(_game, swapped);
+            Assert.True(File.Exists(Path.Combine(_gameDir, "libxess.dll")));
+            Assert.True(File.Exists(Path.Combine(dir, "libxess.dll")));
+        }
+
+        [Fact]
+        public void ASecondSwapDoesNotReBackUpAnyCopy()
+        {
+            GameDll("nvngx_dlss.dll", "310.1.0.0");
+            var nested = NestedDll("nvngx_dlss.dll", "310.1.0.0", "Binaries");
+            _game.DetectedComponents = new() { Component("nvngx_dlss.dll", "310.1.0.0"), nested };
+
+            var service = new DllSwapService();
+            service.Swap(_game, SlotFor("nvngx_dlss.dll"), AddToLibrary("nvngx_dlss.dll", "310.2.0.0"));
+
+            // Re-read the slot: it now carries the swap record, as the UI's would.
+            var second = service.Swap(
+                _game, SlotFor("nvngx_dlss.dll"), AddToLibrary("nvngx_dlss.dll", "310.3.0.0"));
+
+            Assert.Equal(2, second.Copies.Count);
+            // Both originals still say 310.1.0.0 — the game's build, not the first swap's.
+            Assert.All(second.Copies, c => Assert.Equal("310.1.0.0", c.OriginalVersion));
+
+            var files = new BackupStoreService().GetFilesDir(_gameDir);
+            foreach (var copy in second.Copies)
+            {
+                var stored = Path.Combine(files, copy.BackupRelative);
+                Assert.Equal("310.1.0.0", DllLibraryService.VersionOf(PeFileInspector.Inspect(stored)));
+            }
+        }
+
+        [Fact]
+        public void OneCopyDisappearingIsNotAStaleSwap()
+        {
+            // A partially verified game is not a swap that has gone away: the record
+            // still describes real files and still holds their originals.
+            GameDll("nvngx_dlss.dll", "310.1.0.0");
+            var nested = NestedDll("nvngx_dlss.dll", "310.1.0.0", "Binaries");
+            _game.DetectedComponents = new() { Component("nvngx_dlss.dll", "310.1.0.0"), nested };
+
+            var service = new DllSwapService();
+            service.Swap(_game, SlotFor("nvngx_dlss.dll"), AddToLibrary("nvngx_dlss.dll", "310.3.0.0"));
+
+            File.Delete(Path.Combine(_gameDir, "Binaries", "nvngx_dlss.dll"));
+            Assert.Equal(0, service.ForgetStaleSwaps(_game));
+
+            // Both gone: now there is nothing left to point at.
+            File.Delete(Path.Combine(_gameDir, "nvngx_dlss.dll"));
+            Assert.Equal(1, service.ForgetStaleSwaps(_game));
+        }
+
+        [Fact]
+        public void ARecordWrittenBeforeMultiCopySupportStillReverts()
+        {
+            // The migration that matters most: an existing user's swaps.json has the
+            // single-directory fields and no Copies list, and its original sits at the
+            // old backup path. Getting this wrong loses their game's original DLL.
+            GameDll("nvngx_dlss.dll", "310.1.0.0");
+            _game.DetectedComponents = new() { Component("nvngx_dlss.dll", "310.1.0.0") };
+
+            var target = Path.Combine(_gameDir, "nvngx_dlss.dll");
+            var original = File.ReadAllBytes(target);
+
+            // Stage the file and backup exactly as the old code would have left them.
+            var store = new BackupStoreService();
+            var legacyRelative = Path.Combine("swaps", "nvngx_dlss.dll");
+            store.BackupFile(_gameDir, _gameDir, "nvngx_dlss.dll", legacyRelative);
+            File.WriteAllBytes(target, PeTestData.BuildPe(PeTestData.MachineAmd64, "310.3.0.0"));
+
+            var legacy = new SwappedFile
+            {
+                FileName = "nvngx_dlss.dll",
+                InstalledInDirectory = _gameDir,
+                InstalledVersion = "310.3.0.0",
+                SourceLabel = "imported",
+                InstalledSha256 = FileHash.Sha256(target),
+                OriginalVersion = "310.1.0.0",
+                OriginalSha256 = FileHash.Sha256(Path.Combine(store.GetFilesDir(_gameDir), legacyRelative)),
+                ExistedBefore = true,
+            };
+            Assert.Empty(legacy.Copies);   // exactly what an old manifest deserialises to
+
+            Directory.CreateDirectory(store.GetBackupRoot(_gameDir));
+            File.WriteAllText(
+                Path.Combine(store.GetBackupRoot(_gameDir), "swaps.json"),
+                System.Text.Json.JsonSerializer.Serialize(
+                    new SwapManifest { GameName = _game.Name, Files = { legacy } },
+                    OptimizerContext.Default.SwapManifest));
+
+            var service = new DllSwapService();
+            var loaded = Assert.Single(service.LoadManifest(_game).Files);
+            var copy = Assert.Single(loaded.Copies);
+            Assert.Equal(_gameDir, copy.Directory);
+            Assert.Equal(legacyRelative, copy.BackupRelative);
+
+            service.Revert(_game, loaded);
+            Assert.Equal(original, File.ReadAllBytes(target));
+        }
+
+        [Fact]
+        public void AFirstSwapKeepsTheOldBackupPathSoAnOlderBuildCouldStillRevertIt()
+        {
+            // Downgrading the app should not strand a swap: the first copy's original
+            // stays where a version without Copies would look for it, and the flat
+            // fields keep mirroring it.
+            GameDll("nvngx_dlss.dll", "310.1.0.0");
+            _game.DetectedComponents = new() { Component("nvngx_dlss.dll", "310.1.0.0") };
+
+            var swapped = new DllSwapService().Swap(
+                _game, SlotFor("nvngx_dlss.dll"), AddToLibrary("nvngx_dlss.dll", "310.3.0.0"));
+
+            var copy = Assert.Single(swapped.Copies);
+            Assert.Equal(Path.Combine("swaps", "nvngx_dlss.dll"), copy.BackupRelative);
+            Assert.Equal(copy.Directory, swapped.InstalledInDirectory);
+            Assert.Equal(copy.OriginalSha256, swapped.OriginalSha256);
+            Assert.Equal(copy.InstalledSha256, swapped.InstalledSha256);
+        }
+
+        [Fact]
+        public void RevertingIsRefusedWhenAnyCopyIsNoLongerOurs()
+        {
+            // Checking every copy before touching any of them: a partial revert would
+            // leave the game mixing its original in one place with our build in another.
+            GameDll("nvngx_dlss.dll", "310.1.0.0");
+            var nested = NestedDll("nvngx_dlss.dll", "310.1.0.0", "Binaries");
+            _game.DetectedComponents = new() { Component("nvngx_dlss.dll", "310.1.0.0") , nested };
+
+            var service = new DllSwapService();
+            var swapped = service.Swap(
+                _game, SlotFor("nvngx_dlss.dll"), AddToLibrary("nvngx_dlss.dll", "310.3.0.0"));
+
+            // A game patch replaces only the nested copy.
+            var patched = Path.Combine(_gameDir, "Binaries", "nvngx_dlss.dll");
+            File.WriteAllBytes(patched, PeTestData.BuildPe(PeTestData.MachineAmd64, "320.0.0.0"));
+
+            var error = Assert.Throws<InvalidOperationException>(() => service.Revert(_game, swapped));
+            Assert.Contains("Binaries", error.Message);
+
+            // Nothing was touched, so the root copy is still ours.
+            Assert.Equal("310.3.0.0", DllLibraryService.VersionOf(
+                PeFileInspector.Inspect(Path.Combine(_gameDir, "nvngx_dlss.dll"))));
+
+            // Forcing it through restores everything.
+            service.Revert(_game, swapped, force: true);
+            Assert.Equal("310.1.0.0", DllLibraryService.VersionOf(
+                PeFileInspector.Inspect(Path.Combine(_gameDir, "nvngx_dlss.dll"))));
+        }
+
+        [Fact]
+        public void CopiesAtDifferentVersionsAreFlagged()
+        {
+            GameDll("nvngx_dlss.dll", "310.1.0.0");
+            var nested = NestedDll("nvngx_dlss.dll", "300.0.0.0", "Binaries");
+            _game.DetectedComponents = new() { Component("nvngx_dlss.dll", "310.1.0.0"), nested };
+
+            Assert.True(SlotFor("nvngx_dlss.dll").VersionsDiffer);
+        }
+
+        [Fact]
+        public void TheSameDirectoryReachedTwiceIsOneCopy()
+        {
+            // The scan can reach a directory by two routes; swapping it twice would
+            // back the file up over itself.
+            GameDll("nvngx_dlss.dll", "310.1.0.0");
+            _game.DetectedComponents = new()
+            {
+                Component("nvngx_dlss.dll", "310.1.0.0"),
+                Component("nvngx_dlss.dll", "310.1.0.0"),
+            };
+
+            Assert.Equal(1, SlotFor("nvngx_dlss.dll").CopyCount);
+        }
+
+        [Fact]
+        public void NothingIsReportedAsRunningOutOfADirectoryThatDoesNotExist()
+        {
+            // The pre-flight check only ever improves an error message, so it must
+            // never be the thing that breaks a swap.
+            Assert.Null(DllSwapService.RunningProcessIn("/nonexistent/game"));
+            Assert.Null(DllSwapService.RunningProcessIn(""));
+        }
+
+        [Fact]
+        public void AProcessRunningAnywhereUnderTheGameIsFound()
+        {
+            // The contract is "is anything running out of this tree", subdirectories
+            // included — a game's executable usually lives in one. It names a process,
+            // not necessarily this one: the test host shares its tree with the Roslyn
+            // compiler server, and either answer is correct for the question asked.
+            var self = Environment.ProcessPath;
+            if (self is null) return;   // single-file publish quirk; nothing to assert
+
+            var found = DllSwapService.RunningProcessIn(Path.GetDirectoryName(self)!);
+
+            Assert.NotNull(found);
+            Assert.DoesNotContain(Path.DirectorySeparatorChar, found);
+        }
+
+        [Fact]
+        public void AnEmptyDirectoryHasNothingRunningInIt()
+        {
+            var empty = Path.Combine(Path.GetTempPath(), "idle-" + Guid.NewGuid().ToString("N")[..8]);
+            Directory.CreateDirectory(empty);
+            try { Assert.Null(DllSwapService.RunningProcessIn(empty)); }
+            finally { try { Directory.Delete(empty, true); } catch { } }
+        }
+
+        [Fact]
+        public void ASwapIsRefusedWhileSomethingIsRunningInTheGame()
+        {
+            // Writing over a DLL a running game has mapped either fails or is ignored
+            // until it restarts — either way the player is told they swapped something
+            // that did not change. Refusing up front and saying why is kinder.
+            var host = Path.GetDirectoryName(Environment.ProcessPath);
+            if (host is null) return;
+
+            var running = new Game { Name = "Busy Game", InstallPath = host };
+            running.DetectedComponents = new() { Component("nvngx_dlss.dll", "310.1.0.0") };
+            File.WriteAllBytes(
+                Path.Combine(host, "nvngx_dlss.dll"), PeTestData.BuildPe(PeTestData.MachineAmd64, "310.1.0.0"));
+
+            try
+            {
+                var service = new DllSwapService();
+                var slot = Assert.Single(service.Slots(running));
+                var error = Assert.Throws<InvalidOperationException>(
+                    () => service.Swap(running, slot, AddToLibrary("nvngx_dlss.dll", "310.3.0.0")));
+
+                Assert.Contains("running", error.Message);
+                // And it refused before touching anything.
+                Assert.Equal("310.1.0.0", DllLibraryService.VersionOf(
+                    PeFileInspector.Inspect(Path.Combine(host, "nvngx_dlss.dll"))));
+            }
+            finally
+            {
+                try { File.Delete(Path.Combine(host, "nvngx_dlss.dll")); } catch { }
+            }
+        }
+
         // ── The library ──────────────────────────────────────────────────────
 
         [Fact]
