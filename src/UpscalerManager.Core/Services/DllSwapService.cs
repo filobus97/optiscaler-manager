@@ -477,8 +477,13 @@ public sealed class DllSwapService
     ///
     /// Reads <c>/proc</c> directly rather than shelling out, and treats every failure
     /// as "nothing found": this only ever improves an error message or prevents a
-    /// pointless write, so it must never be the thing that breaks a swap. On a platform
-    /// without <c>/proc</c> it simply answers null and the swap proceeds as before.
+    /// pointless write, so it must never be the thing that breaks a swap.
+    ///
+    /// Linux only, and deliberately not reimplemented for Windows. There, overwriting a
+    /// DLL a process has loaded fails with a sharing violation whose own message
+    /// already says the file is in use — so the swap is refused either way, and walking
+    /// the process table would add a slow, permission-prone lookup to say the same
+    /// thing. On Windows this answers null and the write goes ahead to fail honestly.
     /// </summary>
     internal static string? RunningProcessIn(string installPath)
     {

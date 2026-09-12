@@ -498,6 +498,11 @@ namespace UpscalerManager.Core.Tests
             // included — a game's executable usually lives in one. It names a process,
             // not necessarily this one: the test host shares its tree with the Roslyn
             // compiler server, and either answer is correct for the question asked.
+            // Reading the process table this way is a Linux facility. On Windows the
+            // check answers null by design, and the OS's own sharing-violation message
+            // carries the same information, so there is nothing to assert there.
+            if (!Directory.Exists("/proc")) return;
+
             var self = Environment.ProcessPath;
             if (self is null) return;   // single-file publish quirk; nothing to assert
 
@@ -522,6 +527,8 @@ namespace UpscalerManager.Core.Tests
             // Writing over a DLL a running game has mapped either fails or is ignored
             // until it restarts — either way the player is told they swapped something
             // that did not change. Refusing up front and saying why is kinder.
+            if (!Directory.Exists("/proc")) return;   // Linux only; see above
+
             var host = Path.GetDirectoryName(Environment.ProcessPath);
             if (host is null) return;
 
