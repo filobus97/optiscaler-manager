@@ -119,6 +119,24 @@ namespace UpscalerManager.Core.Models
         /// </summary>
         public bool GamepadNavigation { get; set; } = true;
 
+        /// <summary>
+        /// Offer the vendors' own releases as a swap download source. On by default:
+        /// it is the original publisher, and nothing is fetched without a press.
+        /// </summary>
+        public bool SwapVendorDownloads { get; set; } = true;
+
+        /// <summary>
+        /// Offer the DLSS Swapper project's archive as a swap download source.
+        ///
+        /// On by default, because for several files it is the only source that exists —
+        /// AMD does not publish the FidelityFX runtimes loose and Nvidia keeps no old
+        /// DLSS builds available — and because the alternative is a user who cannot
+        /// swap anything they do not already own. It remains a third-party mirror,
+        /// which is why it has a switch of its own: turning it off removes the section
+        /// from every picker, and nothing else changes.
+        /// </summary>
+        public bool SwapRepositoryDownloads { get; set; } = true;
+
         // Window state persistence
         public double WindowWidth { get; set; } = 1200;
         public double WindowHeight { get; set; } = 720;

@@ -75,6 +75,10 @@ public static class UpscalerCatalog
             "Picks which FidelityFX version to load."),
         new TechDefinition("amd_fidelityfx_vk.dll", "FidelityFX runtime (Vulkan)", TechRole.Runtime, "AMD",
             "The Vulkan build of AMD's FidelityFX library."),
+        new TechDefinition("amd_fidelityfx_denoiser_dx12.dll", "FidelityFX denoiser (DX12)", TechRole.Runtime, "AMD",
+            "AMD's ray-tracing denoiser, loaded through the FidelityFX runtime."),
+        new TechDefinition("amd_fidelityfx_radiancecache_dx12.dll", "FidelityFX radiance cache (DX12)", TechRole.Runtime, "AMD",
+            "AMD's radiance cache, loaded through the FidelityFX runtime."),
         new TechDefinition("OptiPatcher.asi", "OptiPatcher", TechRole.Runtime, "OptiScaler project",
             "Patches a game's \"is this an Nvidia card?\" checks in memory, so DLSS options stay visible."),
     };

@@ -1108,16 +1108,33 @@ namespace UpscalerManager.Core.Services
             name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ||
             name.EndsWith(".7z", StringComparison.OrdinalIgnoreCase);
 
-        public async Task<string> DownloadExtrasDllAsync(string version, IProgress<double>? progress = null)
+        /// <summary>
+        /// Fetches one OptiScaler-Extras release and extracts every swappable DLL it
+        /// carries into the per-version cache, returning that directory.
+        ///
+        /// Every swappable DLL, not just the INT8 upscaler: these releases are drops of
+        /// a whole matched FidelityFX set, so a release that carries a patched upscaler
+        /// usually carries the runtime built alongside it too. Taking only the one file
+        /// meant the swap route could never offer any of the others no matter how many
+        /// releases had been downloaded — the archive held them and the cache threw them
+        /// away.
+        ///
+        /// Names are kept exactly as the release ships them, because the name is what
+        /// OptiScaler loads. Destinations go through <see cref="SafeDestinationPath"/>,
+        /// so an entry called <c>../../x</c> cannot write outside the cache.
+        /// </summary>
+        public async Task<string> DownloadExtrasReleaseAsync(string version, IProgress<double>? progress = null)
         {
             var extractDir = GetExtrasDllCachePath(version);
-            var cached = Components.Fsr4Int8Build.FindIn(extractDir);
 
-            if (cached is not null)
+            // Already unpacked. Judged by the INT8 file rather than by the directory
+            // existing, so a release unpacked by an older build — which kept only that
+            // one file — is re-fetched once and gains the rest.
+            if (Components.Fsr4Int8Build.FindIn(extractDir) is { } cached
+                && Directory.EnumerateFiles(extractDir, "*.dll").Count() > 1)
             {
-                var dllPath = cached;
-                Log.Write($"[ExtrasDownload] DLL for v{version} already cached at {dllPath}");
-                return dllPath;
+                Log.Write($"[ExtrasDownload] Release v{version} already cached at {extractDir}");
+                return extractDir;
             }
 
             var downloadUrl = CachedAssetUrl(_extrasCache.Releases, version)
@@ -1136,7 +1153,6 @@ namespace UpscalerManager.Core.Services
                 // Stream download with retry and per-attempt timeout
                 await StreamToFileAsync(() => _httpClient, downloadUrl, tempZip, progress, 20 * 1024 * 1024);
 
-                // Extract only the target DLL with path validation (off the UI thread)
                 Log.Write($"[ExtrasDownload] Extracting from {Path.GetFileName(tempZip)}");
                 await Task.Run(() =>
                 {
@@ -1144,15 +1160,13 @@ namespace UpscalerManager.Core.Services
                     foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
                     {
                         var name = Path.GetFileName(entry.Key ?? "");
-                        if (!Components.Fsr4Int8Build.IsKnown(name)) continue;
+                        if (!Components.SwappableDlls.IsSwappable(name)) continue;
 
-                        // Keep the name the release ships: it is what OptiScaler loads.
                         var dest = SafeDestinationPath(extractDir, name);
                         using var entryStream = entry.OpenEntryStream();
                         using var outStream = File.Create(dest);
                         entryStream.CopyTo(outStream, 81920);
                         Log.Write($"[ExtrasDownload] Extracted {name} to {dest}");
-                        break;
                     }
                 });
             }
@@ -1161,24 +1175,34 @@ namespace UpscalerManager.Core.Services
                 try { if (File.Exists(tempZip)) File.Delete(tempZip); } catch { }
             }
 
+            // A wrong-architecture or truncated file should fail here rather than next
+            // to a game's exe, so everything unpacked gets the same check a
+            // hand-imported DLL gets, and anything that fails it is removed again.
+            foreach (var path in Directory.EnumerateFiles(extractDir, "*.dll").ToList())
+            {
+                var inspected = PeFileInspector.Inspect(path);
+                if (inspected.IsValidPe && inspected.Is64Bit) continue;
+
+                Log.Write($"[ExtrasDownload] Discarding {Path.GetFileName(path)}: not a valid 64-bit DLL.");
+                try { File.Delete(path); } catch { }
+            }
+
+            return extractDir;
+        }
+
+        /// <summary>
+        /// The FSR 4 INT8 upscaler out of one Extras release, for the OptiScaler install
+        /// route — which needs that one specific file and cannot proceed without it.
+        /// </summary>
+        public async Task<string> DownloadExtrasDllAsync(string version, IProgress<double>? progress = null)
+        {
+            var extractDir = await DownloadExtrasReleaseAsync(version, progress);
+
             var extracted = Components.Fsr4Int8Build.FindIn(extractDir);
             if (extracted is null)
                 throw new Exception(
                     "No FSR 4 INT8 DLL found inside the downloaded archive (expected " +
                     string.Join(" or ", Components.Fsr4Int8Build.KnownDllNames) + ").");
-
-            // Same check a DLL you import by hand gets. A download is not more
-            // trustworthy than a local file, so do not let it skip validation: a
-            // truncated transfer or a wrong-architecture build should fail here rather
-            // than next to the game's exe.
-            var pe = PeFileInspector.Inspect(extracted);
-            if (!pe.IsValidPe || !pe.Is64Bit)
-            {
-                try { File.Delete(extracted); } catch { }
-                throw new Exception(
-                    $"The downloaded {Path.GetFileName(extracted)} is not a valid 64-bit DLL " +
-                    $"(from {downloadUrl}). Nothing was installed.");
-            }
 
             return extracted;
         }

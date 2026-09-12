@@ -93,6 +93,65 @@ public partial class SettingsPage : UserControl, IHostedPage
         };
     }
 
+    /// <summary>
+    /// The two swap download sources that are not the vendor's own path. Both default
+    /// on; the point of the switches is that a user who would rather only install files
+    /// already on their own disk can have exactly that.
+    /// </summary>
+    private void SetupSwapSourcesCard()
+    {
+        var vendor = this.FindControl<CheckBox>("ChkVendorDownloads");
+        var repository = this.FindControl<CheckBox>("ChkRepositoryDownloads");
+        if (vendor is null || repository is null) return;
+
+        // Set before the handler can fire, so loading the page does not write config.
+        vendor.IsChecked = _manager.SwapVendorDownloadsEnabled;
+        repository.IsChecked = _manager.SwapRepositoryDownloadsEnabled;
+        _swapSourcesReady = true;
+
+        RefreshSwapSourceNote();
+    }
+
+    private bool _swapSourcesReady;
+
+    private void OnSwapSourceChanged(object? sender, RoutedEventArgs e)
+    {
+        if (!_swapSourcesReady) return;
+
+        if (this.FindControl<CheckBox>("ChkVendorDownloads") is { } vendor)
+            _manager.SwapVendorDownloadsEnabled = vendor.IsChecked == true;
+        if (this.FindControl<CheckBox>("ChkRepositoryDownloads") is { } repository)
+            _manager.SwapRepositoryDownloadsEnabled = repository.IsChecked == true;
+
+        RefreshSwapSourceNote();
+    }
+
+    /// <summary>
+    /// Says what turning both off actually costs, because it is not obvious: the swap
+    /// route keeps working, but only with builds the user already has.
+    /// </summary>
+    private void RefreshSwapSourceNote()
+    {
+        if (this.FindControl<TextBlock>("RepositoryNoteText") is not { } note) return;
+
+        var vendor = _manager.SwapVendorDownloadsEnabled;
+        var repository = _manager.SwapRepositoryDownloadsEnabled;
+
+        note.Text = (vendor, repository) switch
+        {
+            (false, false) =>
+                "Both off: swapping still works, but only with builds already in your games, "
+                + "in releases this app downloaded, or files you import yourself.",
+            (true, false) =>
+                "The archive is off. Old DLSS builds and the FidelityFX runtimes will not be "
+                + "offered — the vendors do not publish those.",
+            (false, true) =>
+                "The vendors' own releases are off. The archive still covers the same files, "
+                + "one step further from the publisher.",
+            _ => "Both on. Nothing is downloaded until you press a row.",
+        };
+    }
+
     /// <summary>Starts on the first control so a controller has somewhere to move from.</summary>
     public void FocusFirst() => this.FindControl<ComboBox>("MenuKeyCombo")?.Focus(NavigationMethod.Directional);
 
@@ -123,6 +182,7 @@ public partial class SettingsPage : UserControl, IHostedPage
         SetupMenuKey();
         SetupGamepadCard();
         WireGameListSettings();
+        SetupSwapSourcesCard();
         SetupAboutCard();
         RefreshNukemStatus();
         if (_manager.IsNukemFgCached) RefreshNukemUpdateStatusAsync(); // async: flag a newer Nukem release

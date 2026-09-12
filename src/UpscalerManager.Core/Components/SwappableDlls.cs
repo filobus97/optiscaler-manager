@@ -14,16 +14,21 @@ namespace UpscalerManager.Core.Components;
 /// vendors keep these ABIs stable across builds — which is also why the list is short
 /// and specific rather than "any DLL".
 ///
-/// DLSS Swapper's swappable set is the nine vendor files below, and reading its source
-/// is worth doing before changing this list: its GameAssetType enum also declares
-/// FidelityFX SDK2, Streamline, DirectStorage and DeepDVC entries, but those are
-/// reserved slots — nothing detects or swaps them, and DllNameForGameAssetType returns
-/// an empty string for every one. It has no FSR 4 awareness at all: no amdxcffx64, no
+/// The list is drawn from two references, checked against their source rather than
+/// assumed. DLSS Swapper swaps nine vendor files, and its archive — see
+/// <see cref="DllRepository"/> — carries builds of exactly those nine. Its
+/// GameAssetType enum additionally declares FidelityFX SDK2, Streamline, DirectStorage
+/// and DeepDVC entries, but those are reserved slots: nothing detects or swaps them,
+/// DllNameForGameAssetType returns an empty string for every one, and the live manifest
+/// carries their sections empty. It has no FSR 4 awareness at all — no amdxcffx64, no
 /// mention of FSR 4 anywhere in it.
 ///
-/// So the last two entries here go past what DLSS Swapper does rather than catching up.
-/// They are the files the FSR 4 community builds ship as, which makes them the only way
-/// the swap route reaches FSR 4.
+/// OptiScaler's own DllNames.h is the second reference, and the more complete one for
+/// AMD: it loads six FidelityFX libraries by name (runtime, loader, upscaler, frame
+/// generation, denoiser and radiance cache on DX12, plus the Vulkan runtime). Those are
+/// all here, which is where this list goes past DLSS Swapper rather than catching up —
+/// as are the two names the FSR 4 community builds ship under, the only route the swap
+/// path has to FSR 4 at all.
 ///
 /// Names are matched <em>case-insensitively</em>, which is the other deliberate
 /// difference. DLSS Swapper's detection compares exact case — with the comment "the case
@@ -67,6 +72,14 @@ public static class SwappableDlls
             "The library that loads AMD's upscaler on DX12. Swapping it is how a game gets a newer FSR without OptiScaler — when the game uses the FidelityFX runtime rather than linking FSR directly."),
         new SwappableDll("amd_fidelityfx_vk.dll", "FidelityFX runtime (Vulkan)", "FSR (Vulkan)",
             "The Vulkan build of the same library."),
+        new SwappableDll("amd_fidelityfx_loader_dx12.dll", "FidelityFX loader (DX12)", "FidelityFX loader",
+            "Picks which FidelityFX version to load. A game ships either this or the runtime above — OptiScaler tries the loader first — so whichever one is present is the one to swap."),
+        new SwappableDll("amd_fidelityfx_framegeneration_dx12.dll", "FSR Frame Generation", "FSR Frame Generation",
+            "AMD's frame generation. Swapping it changes how generated frames look, and like Nvidia's it is the most likely of the set to misbehave against a game built for an older build."),
+        new SwappableDll("amd_fidelityfx_denoiser_dx12.dll", "FidelityFX denoiser (DX12)", "FidelityFX denoiser",
+            "AMD's ray-tracing denoiser, loaded through the FidelityFX runtime."),
+        new SwappableDll("amd_fidelityfx_radiancecache_dx12.dll", "FidelityFX radiance cache (DX12)", "FidelityFX radiance cache",
+            "AMD's radiance cache. Not an upscaler, but it ships and swaps the same way."),
 
         // The FSR upscaler model itself — the file FSR 4 actually lives in, and what
         // the community INT8 builds ship. Unlike the rest of this list, it is not
@@ -109,17 +122,25 @@ public static class SwappableDlls
     /// </summary>
     public static int DisplayOrder(string fileName) => fileName.ToLowerInvariant() switch
     {
+        // Upscalers first — the swaps that change how a game looks.
         "nvngx_dlss.dll" => 0,
         "amd_fidelityfx_upscaler_dx12.dll" => 1,
         "amdxcffx64.dll" => 2,
-        "amd_fidelityfx_dx12.dll" => 3,
-        "amd_fidelityfx_vk.dll" => 4,
-        "libxess.dll" => 5,
-        "libxess_dx11.dll" => 6,
-        "nvngx_dlssd.dll" => 7,
-        "nvngx_dlssg.dll" => 8,
-        "libxess_fg.dll" => 9,
-        "libxell.dll" => 10,
-        _ => 11,
+        "libxess.dll" => 3,
+        "libxess_dx11.dll" => 4,
+        "nvngx_dlssd.dll" => 5,
+        // Then frame generation.
+        "nvngx_dlssg.dll" => 6,
+        "amd_fidelityfx_framegeneration_dx12.dll" => 7,
+        "libxess_fg.dll" => 8,
+        // Then the runtimes an upscaler is loaded through.
+        "amd_fidelityfx_dx12.dll" => 9,
+        "amd_fidelityfx_loader_dx12.dll" => 10,
+        "amd_fidelityfx_vk.dll" => 11,
+        // Then everything that ships the same way without being an upscaler.
+        "amd_fidelityfx_denoiser_dx12.dll" => 12,
+        "amd_fidelityfx_radiancecache_dx12.dll" => 13,
+        "libxell.dll" => 14,
+        _ => 15,
     };
 }

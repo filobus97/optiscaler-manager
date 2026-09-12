@@ -149,6 +149,29 @@
           </StackPanel>
         </Border>
 
+        <!-- ── DLL swapper ──────────────────────────────────────────────────── -->
+        <TextBlock Text="DLL swapper" FontSize="15" FontWeight="Bold" Margin="0,10,0,0"
+                   Foreground="{StaticResource BrTextPrimary}"/>
+        <TextBlock Text="Only used when swapping a game's own upscaler DLL for a newer build. Ignored when installing OptiScaler." FontSize="11.5" TextWrapping="Wrap" Margin="0,-10,0,0"
+                   Foreground="{StaticResource BrTextSecondary}"/>
+
+        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+          <StackPanel Spacing="6">
+            <TextBlock Text="Download sources" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" FontSize="11.5" Foreground="{StaticResource BrTextSecondary}"
+                       Text="Builds in your own games, and in releases this app has already downloaded, are always offered — they need no network. These two sources reach further, and both are off the vendor's own path, so they can be switched off."/>
+            <CheckBox Name="ChkVendorDownloads" Content="Download from the vendor's own releases"
+                      IsCheckedChanged="OnSwapSourceChanged"
+                      ToolTip.Tip="Nvidia's and Intel's public repositories. The original publisher, but only recent tags — they do not keep old builds available."/>
+            <CheckBox Name="ChkRepositoryDownloads" Content="Download from the DLSS Swapper archive"
+                      IsCheckedChanged="OnSwapSourceChanged"
+                      ToolTip.Tip="A third-party mirror of shipped builds, hosted by the DLSS Swapper project. The only source for old DLSS releases and for the FidelityFX runtimes, which AMD does not publish on their own. Downloads are checked against the hashes its index publishes."/>
+            <TextBlock Name="RepositoryNoteText" TextWrapping="Wrap" FontSize="11" Margin="0,2,0,0"
+                       Foreground="{StaticResource BrTextSecondary}"/>
+          </StackPanel>
+        </Border>
+
         <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,4,0,0">
           <Button Name="SupportButton" Content="Support the project  &#x2197;"
                   Click="OnOpenSupportPage"

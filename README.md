@@ -84,49 +84,72 @@ Building from source is in [Building & running](#building--running).
 - **Swapping a DLL** replaces one of the game's own upscaler libraries with a
   different build of the same library. A game loads whichever
   `nvngx_dlss.dll` is sitting next to it, so a newer one upgrades the game with
-  nothing hooked, nothing injected and nothing to configure. Eleven files are
-  swappable — DLSS, DLSS FG, DLSS RR, the FidelityFX DX12/Vulkan runtimes, the FSR
-  upscaler itself (both filenames it ships under), XeSS, XeSS DX11, XeSS FG and
-  XeLL — and only ones **already present** are offered, because this upgrades a
+  nothing hooked, nothing injected and nothing to configure. Fifteen files are
+  swappable — DLSS, DLSS FG, DLSS RR; the whole FidelityFX family (the DX12 runtime
+  and loader, the upscaler under both filenames it ships as, frame generation, the
+  denoiser, the radiance cache, and the Vulkan runtime); and XeSS, XeSS DX11, XeSS FG
+  and XeLL. Only files **already present** are offered, because this upgrades a
   library a game ships rather than adding one.
 
-  The last two of those go **beyond what DLSS Swapper does**. Its swappable set is
-  the nine vendor files; its asset enum also declares FidelityFX SDK2, Streamline
-  and DirectStorage entries, but those are reserved slots that nothing detects or
-  swaps, and it has no FSR 4 awareness at all. The FSR 4 community builds ship as
-  `amd_fidelityfx_upscaler_dx12.dll` or `amdxcffx64.dll`, so including those two is
-  the only way the swap route reaches FSR 4. Note the caveat the app states on the
-  row: unlike the rest of the list, something has to *load* these — the driver, the
-  game's FidelityFX runtime, or OptiScaler.
+  That list is drawn from two references, each read rather than assumed. DLSS
+  Swapper's swappable set is nine vendor files; its asset enum also declares
+  FidelityFX SDK2, Streamline, DirectStorage and DeepDVC entries, but those are
+  reserved slots — nothing detects or swaps them, `DllNameForGameAssetType` returns an
+  empty string for each, and the live manifest carries their sections empty. It has no
+  FSR 4 awareness at all. OptiScaler's own `DllNames.h` is the fuller reference for
+  AMD: it loads six FidelityFX libraries by name, and all six are here. Note the
+  caveat the app states on the FSR upscaler rows: unlike the rest of the list,
+  something has to *load* those — the driver, the game's FidelityFX runtime, or
+  OptiScaler.
 
-  **Four places a build can come from**, in the order the picker lists them:
+  **Where a build can come from**, in the order the picker lists them:
 
   | Source | Network | Notes |
   | --- | --- | --- |
   | Your library | none | Builds you have already added. |
   | Your other games | none | Whatever versions your installed games ship. |
-  | OptiScaler releases you have downloaded | none | A release bundles the libraries it hooks — and is the only source for AMD's FidelityFX runtimes, which AMD does not publish loose. |
-  | Community builds you have downloaded | none | The same cache the OptiScaler route uses, so a version fetched once serves both. |
+  | OptiScaler releases you have downloaded | none | A release bundles the libraries it hooks. |
+  | Community releases you have downloaded | none | The same cache the OptiScaler route uses, so a version fetched once serves both. |
+  | FSR 4 community builds | download | From [`Agustinm28/OptiScaler-Extras`](https://github.com/Agustinm28/OptiScaler-Extras) — a third party, not AMD. The only route to FSR 4, in its own section because presenting it beside the vendor downloads would imply it is equally official. |
+  | The DLSS Swapper archive | download | ~229 archived builds of nine vendor files. A third-party mirror, hash-checked. |
   | The vendor | download | Straight from Nvidia's and Intel's own repositories. |
-  | FSR 4 community builds | download | From [`Agustinm28/OptiScaler-Extras`](https://github.com/Agustinm28/OptiScaler-Extras) — a third party, not AMD. Offered only for the two FSR upscaler filenames, in its own section, because presenting it beside the vendor downloads would imply it is equally official. |
 
   Plus importing a file by hand, at any time.
 
-  **Downloads come from the vendor, never from a mirror this project runs.** Nvidia
-  publishes `nvngx_dlss`, `nvngx_dlssd` and `nvngx_dlssg` at
-  [`NVIDIA/DLSS`](https://github.com/NVIDIA/DLSS), and Intel publishes `libxess`,
-  `libxess_dx11`, `libxess_fg` and `libxell` at
-  [`intel/xess`](https://github.com/intel/xess) — so the app fetches the file the
-  user asked for from the company that made it, exactly as it already fetches
-  OptiScaler from the OptiScaler project.
+  The two download sources that are not the vendor's own path each have a switch in
+  **Settings → DLL swapper**. Turn both off and swapping still works, with builds
+  already on your disk.
 
-  That is a deliberate distinction. Nvidia's SDK licence says plainly that you *"may
-  not distribute or sublicense the SDK as a stand-alone product"* — so this project
-  hosts nothing, and never will. Intel's licence is more permissive (it allows
-  redistribution of the unmodified binary) but takes the same route, because it is
-  also the more reliable one: no volunteer's hosting bill stands between you and the
-  file. Nothing downloads automatically — these are 60–80 MB each, and only an
-  explicit press fetches one.
+  **On the two mirrors.** The vendor route fetches from the company that made the
+  file: Nvidia publishes `nvngx_dlss`, `nvngx_dlssd` and `nvngx_dlssg` at
+  [`NVIDIA/DLSS`](https://github.com/NVIDIA/DLSS), Intel publishes `libxess`,
+  `libxess_dx11`, `libxess_fg` and `libxell` at
+  [`intel/xess`](https://github.com/intel/xess). But vendors keep only recent tags,
+  and **AMD publishes the FidelityFX runtimes nowhere at all** — which is exactly the
+  gap the [DLSS Swapper](https://github.com/beeradmoore/dlss-swapper) project's
+  archive fills. Its value is not code but history: every DLSS release back to
+  1.0.0.0 in 2018, nine builds of `amd_fidelityfx_dx12.dll`, the XeSS family —
+  scraped out of shipped games and vendor SDK zips over years, indexed by a manifest
+  on GitHub Pages and hosted by one volunteer. No amount of local scanning
+  reconstructs a build you never owned.
+
+  So this app **links to that archive and mirrors nothing**. The bytes come from their
+  host on an explicit press, the manifest's own `dll_source` field is shown on each
+  row so you can see where a file originally came from, and the download is checked
+  against the `zip_md5_hash` and `md5_hash` the index publishes before anything is
+  installed — then against the same 64-bit-PE-with-a-version check a hand-imported
+  file gets. Nvidia's SDK licence says plainly that you *"may not distribute or
+  sublicense the SDK as a stand-alone product"*, so **this project hosts nothing, and
+  never will.** Nothing downloads automatically; DLSS builds run to 50 MB each.
+
+  Two pieces of DLSS Swapper's hygiene were worth copying outright: verifying the
+  archive hash *before* opening it, and preferring a stale cached index to no index at
+  all when the network is down. One was deliberately not copied — its Authenticode
+  check, since there is no `wintrust` on Linux; the manifest's recorded signature
+  state is shown on the row instead of enforced. And its detection compares filenames
+  **exact-case** (with the comment *"the case of these files should never change,
+  right?"*), which is safe on NTFS and would silently miss a game shipping
+  `NvNgx_Dlss.dll` on ext4 — so everything here matches case-insensitively.
 
   Swaps go through the same backup-and-manifest layer as everything else: the
   original is copied out before anything is written, and the game's page can put it
@@ -135,10 +158,16 @@ Building from source is in [Building & running](#building--running).
 
   ![The DLL swapper tab](docs/screenshots/swap-tab.png)
 
-  Picking a build for one of them opens its own page — your library, and the builds
-  found in your other games:
+  Picking a build for one of them opens its own page — what is in the game now, what
+  is already on your disk, and what can be downloaded:
 
   ![Swapping a DLL](docs/screenshots/swap.png)
+
+  Scrolled down, the download sources. These are real rows: DLSS builds from 2025
+  with their branch labels, where each was originally scraped from, and how big the
+  transfer is before you commit to it.
+
+  ![Swap download sources](docs/screenshots/swap-sources.png)
 
 - **Installing OptiScaler** downloads and installs the *real OptiScaler
   release from source* (`optiscaler/OptiScaler` on GitHub) — **latest by default,
@@ -241,12 +270,21 @@ inside the Adrenalin driver package, so it is strictly **bring-your-own**, suppl
 from a local file, folder or archive you already possess and copied into a private
 cache.
 
-Community builds are downloaded only when you explicitly pick them — currently the
-FSR 4 INT8 builds from the third-party
-[`Agustinm28/OptiScaler-Extras`](https://github.com/Agustinm28/OptiScaler-Extras)
-repository. Note that recent INT8 builds ship *under the same filename*
-(`amdxcffx64.dll`) — that is a community-built replacement occupying the same slot, not
-AMD's binary. See [Importing your own DLLs](#importing-your-own-dlls-and-ini-profiles).
+Third-party sources are fetched only when you explicitly pick them, and each has its
+own switch:
+
+- the FSR 4 INT8 builds from
+  [`Agustinm28/OptiScaler-Extras`](https://github.com/Agustinm28/OptiScaler-Extras).
+  Note that recent INT8 builds ship *under the same filename* (`amdxcffx64.dll`) —
+  that is a community-built replacement occupying the same slot, not AMD's binary.
+- the [DLSS Swapper](https://github.com/beeradmoore/dlss-swapper) archive of shipped
+  vendor builds, for the nine files it covers. A mirror rather than the publisher, so
+  it is labelled as one on every row, hash-checked on download, and switchable off in
+  **Settings → DLL swapper**.
+
+Neither is mirrored here: both are fetched from their own hosts, and this project
+hosts no binaries whatsoever. See
+[Importing your own DLLs](#importing-your-own-dlls-and-ini-profiles).
 
 ---
 
@@ -605,6 +643,13 @@ Upscaler Manager is built on the work of others and preserves their attribution:
   with upstream and carries nothing of its own.
 - The mod this app configures is **OptiScaler**, by the
   [upstream OptiScaler team](https://github.com/optiscaler/OptiScaler).
+- The DLL swapper's design and its download archive come from
+  **[DLSS Swapper](https://github.com/beeradmoore/dlss-swapper)**, by
+  **[Brad Moore (beeradmoore)](https://github.com/beeradmoore)** and its
+  contributors — also GPL-3.0. No code was copied; what was taken is the swappable
+  set, the hash-then-extract download discipline, and the archive of vendor builds
+  this app links to and does not mirror. The years of collecting those builds are the
+  part that could not be reimplemented.
 
 This program is distributed in the hope that it will be useful, but **WITHOUT ANY
 WARRANTY**; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A

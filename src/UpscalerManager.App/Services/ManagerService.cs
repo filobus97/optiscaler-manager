@@ -32,6 +32,7 @@ public sealed class ManagerService
     {
         _components = new ComponentManagementService(manualProvider);
         _vendor = new VendorDllService(_library);
+        _repository = new DllRepositoryService(_library);
     }
 
     // ── GPU banner ──────────────────────────────────────────────────────────
@@ -61,6 +62,7 @@ public sealed class ManagerService
     private readonly DllSwapService _swaps = new();
     private readonly DllLibraryService _library = new();
     private readonly VendorDllService _vendor;
+    private readonly DllRepositoryService _repository;
 
     /// <summary>
     /// One row per swappable DLL present in this game. Stale records are dropped first,
@@ -96,18 +98,25 @@ public sealed class ManagerService
     public LibraryDll HarvestBuild(HarvestableDll source) => _library.Harvest(source);
 
     /// <summary>
-    /// FSR 4 INT8 community builds already downloaded. A no-network source for the file
-    /// FSR 4 lives in.
+    /// Builds already unpacked from OptiScaler-Extras releases. A no-network source,
+    /// and the only route the swap path has to FSR 4.
     /// </summary>
     public IReadOnlyList<HarvestableDll> CommunityBuilds(string fileName) =>
         _library.FromCommunityBuilds(fileName);
 
     /// <summary>
-    /// True when this DLL is one the community builds ship as, so the picker knows
-    /// whether to offer them at all.
+    /// True when the community releases are worth offering for this DLL.
+    ///
+    /// The whole FidelityFX family, not just the two names an INT8 upscaler ships as.
+    /// These releases are drops of a matched set — a patched upscaler alongside the
+    /// runtime it was built against — so gating on the upscaler's filename alone hid
+    /// the source on exactly the pages where nothing else could supply the file.
+    /// Whether a given release actually carries the file being asked for is settled by
+    /// looking inside it, not guessed from its name.
     /// </summary>
     public static bool TakesCommunityBuilds(string fileName) =>
-        Fsr4Int8Build.IsKnown(fileName);
+        fileName.StartsWith("amd_fidelityfx", StringComparison.OrdinalIgnoreCase)
+        || Fsr4Int8Build.IsKnown(fileName);
 
     /// <summary>
     /// Community build versions available to download, newest first, paired with
@@ -118,31 +127,75 @@ public sealed class ManagerService
         GetInt8ReleasesAsync();
 
     /// <summary>
-    /// Downloads one community build and files it in the swap library.
+    /// Downloads one community release and files the requested DLL from it in the swap
+    /// library.
     ///
-    /// Goes through the existing Extras download, so the file lands in the same cache
-    /// the OptiScaler route uses and a version fetched for one route is immediately
-    /// available to the other.
+    /// Goes through the existing Extras download, so the release lands in the same
+    /// cache the OptiScaler route uses and a version fetched for one route is
+    /// immediately available to the other.
     /// </summary>
     public async Task<LibraryDll> DownloadCommunityBuildAsync(
         string version, string fileName, IProgress<double>? progress = null)
     {
-        await _components.DownloadExtrasDllAsync(version, progress);
+        var extracted = await _components.DownloadExtrasReleaseAsync(version, progress);
 
         var built = _library.FromCommunityBuilds(fileName)
             .FirstOrDefault(b => b.Path.Contains(version, StringComparison.OrdinalIgnoreCase));
 
         if (built is null)
+        {
+            // Say what the release did carry. "It isn't in there" on its own leaves a
+            // user re-pressing rows to find out which one is.
+            var alternatives = SafeFileNames(extracted)
+                .Where(SwappableDlls.IsSwappable)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
             throw new InvalidOperationException(
-                $"Community build {version} downloaded, but it contains no {fileName}. " +
-                "That release may ship under the other FSR filename — try the other row.");
+                $"Community build {version} downloaded, but it carries no {fileName}. " +
+                (alternatives.Count > 0
+                    ? $"It holds {string.Join(", ", alternatives)} — those rows can use it."
+                    : "It holds none of the swappable DLLs."));
+        }
 
         return _library.Harvest(built);
     }
 
+    private static IEnumerable<string> SafeFileNames(string directory)
+    {
+        try { return Directory.EnumerateFiles(directory).Select(Path.GetFileName).OfType<string>().ToList(); }
+        catch { return Array.Empty<string>(); }
+    }
+
+    // ── The DLSS Swapper archive ────────────────────────────────────────────
+
+    /// <summary>
+    /// True when the DLSS Swapper archive carries builds of this DLL, so the picker
+    /// knows whether to show that section at all.
+    /// </summary>
+    public static bool TakesRepositoryBuilds(string fileName) => DllRepository.Covers(fileName);
+
+    /// <summary>
+    /// What the archive holds for this DLL, newest first. Reads a cached index, so
+    /// opening a picker costs nothing after the first time in a day.
+    /// </summary>
+    public Task<IReadOnlyList<RepositoryBuild>> RepositoryBuildsAsync(
+        string fileName, CancellationToken cancel = default) =>
+        SwapRepositoryDownloadsEnabled
+            ? _repository.AvailableAsync(fileName, cancel)
+            : Task.FromResult<IReadOnlyList<RepositoryBuild>>(Array.Empty<RepositoryBuild>());
+
+    /// <summary>Downloads one archived build into the library, hashes checked.</summary>
+    public Task<LibraryDll> DownloadRepositoryBuildAsync(
+        RepositoryBuild build, IProgress<double>? progress = null, CancellationToken cancel = default) =>
+        _repository.DownloadAsync(build, progress, cancel);
+
     /// <summary>What the vendor publishes for this DLL, newest first. Never automatic.</summary>
     public Task<IReadOnlyList<VendorBuild>> VendorBuildsAsync(string fileName, CancellationToken cancel = default) =>
-        _vendor.AvailableAsync(fileName, cancel);
+        SwapVendorDownloadsEnabled
+            ? _vendor.AvailableAsync(fileName, cancel)
+            : Task.FromResult<IReadOnlyList<VendorBuild>>(Array.Empty<VendorBuild>());
 
     /// <summary>Downloads one vendor build into the library.</summary>
     public Task<LibraryDll> DownloadVendorBuildAsync(
@@ -247,6 +300,26 @@ public sealed class ManagerService
     {
         get => _components.Config.GamepadNavigation;
         set { _components.Config.GamepadNavigation = value; _components.SaveConfiguration(); }
+    }
+
+    /// <summary>
+    /// Whether the vendors' own releases are offered as a swap download source.
+    /// </summary>
+    public bool SwapVendorDownloadsEnabled
+    {
+        get => _components.Config.SwapVendorDownloads;
+        set { _components.Config.SwapVendorDownloads = value; _components.SaveConfiguration(); }
+    }
+
+    /// <summary>
+    /// Whether the DLSS Swapper archive is offered as a swap download source. See
+    /// <see cref="AppConfiguration.SwapRepositoryDownloads"/> for why it defaults on
+    /// and why it has a switch at all.
+    /// </summary>
+    public bool SwapRepositoryDownloadsEnabled
+    {
+        get => _components.Config.SwapRepositoryDownloads;
+        set { _components.Config.SwapRepositoryDownloads = value; _components.SaveConfiguration(); }
     }
 
     /// <summary>

@@ -9,6 +9,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
 using UpscalerManager.App.Services;
+using UpscalerManager.Core.Components;
 using UpscalerManager.Core.Models;
 using UpscalerManager.Core.Services;
 
@@ -78,6 +79,7 @@ public partial class DllSwapPage : UserControl, IHostedPage
         RenderLibrary();
         RenderHarvestable();
         RenderCommunity();
+        RenderRepository();
         RenderVendor();
     }
 
@@ -260,6 +262,123 @@ public partial class DllSwapPage : UserControl, IHostedPage
     }
 
     /// <summary>
+    /// What the DLSS Swapper archive holds.
+    ///
+    /// This is the only source that reaches builds the user never owned — past DLSS
+    /// releases going back to 2018, and the FidelityFX runtimes, which AMD does not
+    /// publish loose. Listed on open because that is the question the page exists to
+    /// answer, but the index is cached for a day and nothing is fetched until a row is
+    /// pressed.
+    /// </summary>
+    private async void RenderRepository()
+    {
+        var section = this.FindControl<StackPanel>("RepositorySection");
+        var panel = this.FindControl<StackPanel>("RepositoryPanel");
+        if (section is null || panel is null) return;
+
+        section.IsVisible = ManagerService.TakesRepositoryBuilds(_slot.FileName)
+            && _manager.SwapRepositoryDownloadsEnabled;
+        if (!section.IsVisible) return;
+
+        Text("RepositoryNoteText",
+            $"From the {DllRepository.SourceName} project's archive of shipped builds — a "
+            + "third-party mirror, not the vendor. Downloads come from their host on a press "
+            + "and are checked against the hashes their index publishes before anything is "
+            + "installed. Nothing is mirrored by this project.");
+
+        panel.Children.Clear();
+        panel.Children.Add(Label("Reading the archive's index…",
+            11.5, FontWeight.Normal, "BrTextSecondary"));
+
+        IReadOnlyList<RepositoryBuild> builds;
+        try
+        {
+            builds = await _manager.RepositoryBuildsAsync(_slot.FileName);
+        }
+        catch (Exception ex)
+        {
+            panel.Children.Clear();
+            panel.Children.Add(Label($"Could not read the archive's index: {ex.Message}",
+                11.5, FontWeight.Normal, "BrTextSecondary"));
+            return;
+        }
+
+        // The page can be re-rendered while this is in flight; bail if it has been.
+        if (!ReferenceEquals(panel, this.FindControl<StackPanel>("RepositoryPanel"))) return;
+
+        panel.Children.Clear();
+
+        // Development builds last: they exist in the archive but are not what a player
+        // wants unless they went looking.
+        var offered = builds
+            .Where(b => !b.InLibrary)
+            .OrderBy(b => b.IsDevFile)
+            .ThenBy(b => b.Version, VersionOrder.Descending)
+            .Take(10)
+            .ToList();
+
+        if (offered.Count == 0)
+        {
+            panel.Children.Add(Label(
+                builds.Count == 0
+                    ? "The archive's index could not be read, or it holds nothing for this file."
+                    : "You already hold every build the archive has for this file.",
+                11.5, FontWeight.Normal, "BrTextSecondary"));
+            return;
+        }
+
+        foreach (var build in offered)
+            panel.Children.Add(BuildRow(
+                DescribeRepositoryVersion(build),
+                DescribeRepositorySource(build),
+                isCurrent: IsInstalled(build.Version),
+                action: "Download and use",
+                onAction: () => DownloadRepositoryAndSwap(build)));
+    }
+
+    /// <summary>
+    /// How an archived build is titled. The file version leads, because that is what
+    /// the app reads off a real file and therefore what the "in the game now" row shows
+    /// — but for the FidelityFX runtimes that number is an SDK build nobody quotes, so
+    /// the vendor's own label rides alongside it.
+    /// </summary>
+    private static string DescribeRepositoryVersion(RepositoryBuild build) =>
+        build.Label.Length > 0 && !build.Version.StartsWith(build.Label, StringComparison.Ordinal)
+            ? $"{build.Version}  ·  {build.Label}"
+            : build.Version;
+
+    private static string DescribeRepositorySource(RepositoryBuild build)
+    {
+        var parts = new System.Collections.Generic.List<string> { DllRepository.SourceName };
+        if (build.Provenance.Length > 0) parts.Add($"originally from {build.Provenance}");
+        if (build.IsDevFile) parts.Add("development build");
+        if (!build.SignatureValid) parts.Add("unsigned or signature not verified");
+        if (DllRepositoryService.DescribeSize(build.ZipFileSize) is { Length: > 0 } size) parts.Add(size);
+        return string.Join(" · ", parts);
+    }
+
+    private async void DownloadRepositoryAndSwap(RepositoryBuild build)
+    {
+        SetStatus($"Downloading {build.FileName} {build.Version}…");
+        try
+        {
+            var progress = new Progress<double>(fraction =>
+                SetStatus($"Downloading {build.FileName} {build.Version}… {fraction:P0}"));
+
+            var entry = await _manager.DownloadRepositoryBuildAsync(build, progress);
+            _manager.SwapDll(_game, _slot, entry);
+            Changed = true;
+            Reload();
+            SetStatus($"{_slot.Definition.Label} is now {entry.Version}.");
+        }
+        catch (Exception ex)
+        {
+            Reload();
+            SetStatus(ex.Message);
+        }
+    }
+
+    /// <summary>
     /// What the vendor publishes. Listed on open, because knowing whether a newer build
     /// exists is the reason to be on this page — but nothing is fetched until a row is
     /// pressed, and these files run to tens of megabytes.
@@ -269,6 +388,13 @@ public partial class DllSwapPage : UserControl, IHostedPage
         var panel = this.FindControl<StackPanel>("VendorPanel");
         if (panel is null) return;
         panel.Children.Clear();
+
+        if (!_manager.SwapVendorDownloadsEnabled)
+        {
+            Text("VendorNoteText",
+                "Turned off in Settings, under DLL swapper. Nothing is asked of the vendor.");
+            return;
+        }
 
         if (UpscalerManager.Core.Components.VendorDllSource.For(_slot.FileName) is not { } source)
         {

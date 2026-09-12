@@ -83,6 +83,7 @@ public sealed class StorageInventoryService
         items.AddRange(ScanDownloadedComponents());
         items.AddRange(ScanCoverArt());
         items.AddRange(ScanSwapLibrary());
+        items.AddRange(ScanRepositoryIndex());
         items.AddRange(ScanUserImports());
         items.AddRange(ScanBackups());
         return items;
@@ -129,6 +130,26 @@ public sealed class StorageInventoryService
         yield return new StorageItem(StorageTier.Downloaded, "Cover images",
             $"{files.Length} cover(s)", dir, bytes,
             "Re-downloaded automatically when a game is next scanned.");
+    }
+
+    /// <summary>
+    /// The cached index of the DLSS Swapper archive — half a megabyte of JSON, not the
+    /// builds themselves, which land in the swap library like any other source.
+    ///
+    /// Freely deletable: it is re-fetched the next time a picker is opened, and doing so
+    /// is also how a user sees a build that landed in the archive within the last day.
+    /// </summary>
+    private IEnumerable<StorageItem> ScanRepositoryIndex()
+    {
+        var dir = Path.Combine(_cacheDir, "DllRepository");
+        if (!Directory.Exists(dir)) yield break;
+
+        var files = Directory.GetFiles(dir);
+        if (files.Length == 0) yield break;
+
+        yield return new StorageItem(StorageTier.Downloaded, "DLL archive index",
+            "DLSS Swapper build list", dir, files.Sum(FileSize),
+            "Re-fetched the next time a swap picker is opened.");
     }
 
     /// <summary>

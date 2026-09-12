@@ -146,7 +146,7 @@ public sealed class VendorDllService
         try
         {
             Log.Write($"[Vendor] Downloading {source.FileName} {build.Version} from {source.Vendor}.");
-            await DownloadToAsync(url, destination, progress, cancel);
+            await LargeFileDownload.ToFileAsync(url, destination, progress, cancel);
 
             var entry = _library.Import(destination);
             Log.Write($"[Vendor] Added {entry.FileName} {entry.Version} from {source.Vendor}.");
@@ -158,46 +158,4 @@ public sealed class VendorDllService
         }
     }
 
-    /// <summary>
-    /// How long the transfer may go without a single byte arriving before it is given
-    /// up on. An idle timeout, not a total one: these files are tens of megabytes, and a
-    /// deadline long enough for a slow connection would leave a genuinely dead one
-    /// hanging for just as long.
-    /// </summary>
-    private static readonly TimeSpan StallTimeout = TimeSpan.FromSeconds(60);
-
-    private static async Task DownloadToAsync(
-        string url, string destination, IProgress<double>? progress, CancellationToken cancel)
-    {
-        // The large-file client has no overall deadline, so the idle timeout below is
-        // the only thing that ends a stalled transfer.
-        using var idle = CancellationTokenSource.CreateLinkedTokenSource(cancel);
-        idle.CancelAfter(StallTimeout);
-
-        using var response = await NetworkService.GetLargeFileClient()
-            .GetAsync(url, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, idle.Token);
-        response.EnsureSuccessStatusCode();
-
-        var total = response.Content.Headers.ContentLength;
-        await using var source = await response.Content.ReadAsStreamAsync(idle.Token);
-        await using var file = File.Create(destination);
-
-        var buffer = new byte[81920];
-        long written = 0;
-        int read;
-        while ((read = await source.ReadAsync(buffer, idle.Token)) > 0)
-        {
-            await file.WriteAsync(buffer.AsMemory(0, read), idle.Token);
-            written += read;
-            // Progress means the connection is alive, so the clock starts again.
-            idle.CancelAfter(StallTimeout);
-            if (total is > 0) progress?.Report((double)written / total.Value);
-        }
-
-        // A silently truncated transfer produces a file that still looks like a DLL at
-        // the front, which the PE check would happily accept.
-        if (total is > 0 && written != total.Value)
-            throw new IOException(
-                $"The download stopped after {written:N0} of {total.Value:N0} bytes. Nothing was added.");
-    }
 }

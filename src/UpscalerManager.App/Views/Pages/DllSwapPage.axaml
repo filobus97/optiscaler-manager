@@ -66,6 +66,20 @@
           </Border>
         </StackPanel>
 
+        <!-- The DLSS Swapper project's archive of past vendor builds -->
+        <StackPanel Name="RepositorySection" Spacing="6" IsVisible="False">
+          <TextBlock Text="The DLSS Swapper archive" FontWeight="SemiBold"
+                     Foreground="{StaticResource BrTextPrimary}"/>
+          <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
+                  BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+            <StackPanel Spacing="8">
+              <TextBlock Name="RepositoryNoteText" TextWrapping="Wrap" FontSize="11.5"
+                         Foreground="{StaticResource BrTextSecondary}"/>
+              <StackPanel Name="RepositoryPanel" Spacing="6"/>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
         <!-- Straight from the vendor -->
         <StackPanel Spacing="6">
           <TextBlock Text="Download from the vendor" FontWeight="SemiBold"

@@ -124,6 +124,71 @@ namespace UpscalerManager.Core.Tests
             Assert.True(SwappableDlls.IsSwappable("amdxcffx64.dll"));
         }
 
+        [Fact]
+        public void EveryFidelityFxLibraryOptiScalerLoadsByNameIsSwappable()
+        {
+            // Read out of OptiScaler's own DllNames.h rather than guessed: these are
+            // the six FidelityFX libraries it loads by name (DEFINE_NAME_VECTORS for
+            // ffxDx12, ffxDx12Upscaler, ffxDx12FG, ffxDx12Denoiser, ffxDx12Radiance and
+            // ffxVk). A game ships whichever ones it needs, so any that are missing
+            // here are files a user can see in their game folder and not swap.
+            foreach (var name in new[]
+            {
+                "amd_fidelityfx_dx12.dll",
+                "amd_fidelityfx_loader_dx12.dll",
+                "amd_fidelityfx_upscaler_dx12.dll",
+                "amd_fidelityfx_framegeneration_dx12.dll",
+                "amd_fidelityfx_denoiser_dx12.dll",
+                "amd_fidelityfx_radiancecache_dx12.dll",
+                "amd_fidelityfx_vk.dll",
+            })
+                Assert.True(SwappableDlls.IsSwappable(name),
+                    $"OptiScaler loads {name} by name, so a game can be carrying it.");
+        }
+
+        [Fact]
+        public void EverySwappableFileIsAlsoOneTheScanDescribes()
+        {
+            // A file that can be swapped but is not in the catalogue would be installed
+            // into a game and then never appear in its technology list, so the page
+            // would show a swap the game page cannot account for.
+            foreach (var dll in SwappableDlls.All)
+                Assert.NotNull(UpscalerCatalog.For(dll.FileName));
+        }
+
+        [Fact]
+        public void EverySwappableFileHasItsOwnPlaceInTheOrdering()
+        {
+            // Two files sharing a display order sort unpredictably against each other,
+            // so the rows on a game page would move between renders.
+            var orders = SwappableDlls.All.Select(d => SwappableDlls.DisplayOrder(d.FileName)).ToList();
+            Assert.Equal(orders.Count, orders.Distinct().Count());
+        }
+
+        [Fact]
+        public void ACommunityReleaseSuppliesWhicheverSwappableFilesItCarries()
+        {
+            // The reason this matters: these releases are drops of a matched FidelityFX
+            // set, and the cache used to keep only the INT8 upscaler out of each one. A
+            // user looking at the FSR runtime row saw nothing on offer no matter how
+            // many releases they had downloaded, because the runtime had been thrown
+            // away at extraction time.
+            var release = Path.Combine(AppDataPaths.Cache, "Extras", "4.1.1b");
+            Directory.CreateDirectory(release);
+            File.WriteAllBytes(Path.Combine(release, "amdxcffx64.dll"),
+                PeTestData.BuildPe(PeTestData.MachineAmd64, "4.1.1.0"));
+            File.WriteAllBytes(Path.Combine(release, "amd_fidelityfx_dx12.dll"),
+                PeTestData.BuildPe(PeTestData.MachineAmd64, "1.0.1.41314"));
+
+            var library = new DllLibraryService();
+
+            var runtime = Assert.Single(library.FromCommunityBuilds("amd_fidelityfx_dx12.dll"));
+            Assert.Equal("1.0.1.41314", runtime.Version);
+
+            var upscaler = Assert.Single(library.FromCommunityBuilds("amdxcffx64.dll"));
+            Assert.Equal("4.1.1.0", upscaler.Version);
+        }
+
         // ── The library ──────────────────────────────────────────────────────
 
         [Fact]
