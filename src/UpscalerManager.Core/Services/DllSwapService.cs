@@ -29,10 +29,6 @@ public sealed record SwapCopy(
 {
     /// <summary>The version as it should be shown to a player.</summary>
     public string VersionText => Components.FidelityFxLayout.Describe(FileName, Version, FsrVersion);
-
-    /// <summary>Which part of AMD's FidelityFX runtime this copy is, if any.</summary>
-    public Components.FidelityFxRole Role =>
-        Components.FidelityFxLayout.Identify(FileName, Version, FsrVersion);
 }
 
 /// <summary>One swappable DLL as it currently stands in a game.</summary>
@@ -61,12 +57,8 @@ public sealed record SwapSlot(
     /// <summary>The first copy's version, written the way a player should read it.</summary>
     public string VersionText => Copies.Count > 0 ? Copies[0].VersionText : "unknown version";
 
-    /// <summary>
-    /// Which part of AMD's FidelityFX runtime sits here, if any. A build of a different
-    /// part cannot stand in for it, however new its version looks.
-    /// </summary>
-    public Components.FidelityFxRole FidelityFxRole =>
-        Copies.Count > 0 ? Copies[0].Role : Components.FidelityFxRole.NotFidelityFx;
+    /// <summary>True when this app has stopped swapping this file and the row is revert-only.</summary>
+    public bool IsRetired => SwappableDlls.IsRetired(FileName);
 
     /// <summary>How many places this DLL sits in.</summary>
     public int CopyCount => Copies.Count;
@@ -113,6 +105,9 @@ public sealed record SwapSlot(
 /// <em>every</em> copy of the DLL in the game, not the first one found. Its
 /// <c>UpdateDllAsync</c> loops over all assets of a type; this originally did not, and
 /// on a game carrying two copies the swap was a coin toss.
+///
+/// Scope is DLSS and XeSS — see <see cref="SwappableDlls"/> for why AMD's FidelityFX
+/// files are no longer swapped, and how an existing swap of one is still undone.
 ///
 public sealed class DllSwapService
 {
@@ -225,6 +220,13 @@ public sealed class DllSwapService
         {
             if (SwappableDlls.For(component.FileName) is not { } definition) continue;
 
+            // A file this app no longer swaps still needs a row where it already swapped
+            // one, so the game can be put back. Nowhere else: offering it again is
+            // exactly what was withdrawn.
+            if (SwappableDlls.IsRetired(definition.FileName)
+                && !manifest.Files.Any(f => f.FileName.Equals(definition.FileName, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
             var path = DllLibraryService.ResolveComponentPath(game, component);
             if (path is null) continue;
 
@@ -269,6 +271,15 @@ public sealed class DllSwapService
     /// </summary>
     private static SwapVerdict Judge(string fileName, SwappedFile? swapped, InstallationManifest? optiScaler)
     {
+        // A file this app has stopped swapping. The row exists to undo the swap that is
+        // there, so reverting stays available and installing anything new does not.
+        if (SwappableDlls.IsRetired(fileName))
+            return SwapVerdict.No(
+                $"This app no longer swaps {fileName} — AMD's FidelityFX files changed shape often "
+                + "enough that a swap here was as likely to break a game as improve it, and OptiScaler "
+                + "does the job properly by bringing its own upscaler. Reverting to your game's own "
+                + "build still works.");
+
         // Already ours: reverting is always allowed, so this is not a refusal.
         if (swapped is not null) return SwapVerdict.Ok;
 
@@ -338,20 +349,6 @@ public sealed class DllSwapService
         if (slot.Copies.Count == 0)
             throw new InvalidOperationException(
                 $"{slot.FileName} is no longer in {game.Name}. Re-scan the game and try again.");
-
-        // An SDK 1 FidelityFX monolith and an SDK 2 loader share a filename and are not
-        // interchangeable. Checked against the build's own bytes rather than its
-        // version, because a version alone cannot tell a 2.3.0 loader from anything
-        // else, and installing the wrong generation leaves a game with no upscaler at
-        // all — offered from a row that called it an upgrade.
-        var slotRole = slot.FidelityFxRole;
-        if (slotRole != Components.FidelityFxRole.NotFidelityFx)
-        {
-            var buildRole = RoleOfBuild(build);
-            if (!Components.FidelityFxLayout.Interchangeable(slotRole, buildRole))
-                throw new InvalidOperationException(
-                    Components.FidelityFxLayout.ExplainMismatch(slot.FileName, slotRole, buildRole));
-        }
 
         // A game that is running has its DLLs mapped, and writing over one either fails
         // or is ignored until the game restarts — either way the player is told they
@@ -453,23 +450,6 @@ public sealed class DllSwapService
         Log.Write($"[Swap] {game.Name}: {slot.FileName} -> {build.Version} ({build.SourceLabel}) " +
                   $"in {existing.Copies.Count} place(s).");
         return existing;
-    }
-
-    /// <summary>
-    /// What a library build actually is, for the generation check.
-    ///
-    /// Reads the provider table off the build itself, since that is the only thing that
-    /// separates an SDK 1 monolith from an SDK 2 loader carrying the same filename. Only
-    /// for the two ambiguous names — every other module is settled by its name, and
-    /// reading a 28 MB upscaler to confirm what it is called would be waste.
-    /// </summary>
-    internal static Components.FidelityFxRole RoleOfBuild(LibraryDll build)
-    {
-        var effect = Components.FidelityFxVersion.Translates(build.FileName)
-            ? Components.FidelityFxVersion.FromBinary(build.Path)
-            : null;
-
-        return Components.FidelityFxLayout.Identify(build.FileName, build.Version, effect);
     }
 
     /// <summary>

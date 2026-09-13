@@ -27,11 +27,10 @@ namespace UpscalerManager.Core.Tests
         public void Dispose() => _appData.Dispose();
 
         /// <summary>
-        /// Two real <c>fsr_31_dx12</c> records and one real <c>dlss</c> record, as the
-        /// live manifest serves them. 1.0.1.38338 is a build seen in the wild — it is
-        /// what Star Wars Outlaws ships — which is the point: this is the file AMD does
-        /// not publish loose, so before this source the only builds available were
-        /// whichever ones a user's other games happened to carry.
+        /// Two real <c>xess</c> records and one real <c>dlss</c> record, as the live
+        /// manifest serves them. Copied verbatim rather than invented, so a change in
+        /// the manifest's shape shows up as a real failure instead of a test that agrees
+        /// with a guess.
         /// </summary>
         private const string RealManifestExcerpt = """
         {
@@ -54,40 +53,40 @@ namespace UpscalerManager.Core.Tests
               "dll_source": "TechPowerUp"
             }
           ],
-          "fsr_31_dx12": [
+          "xess": [
             {
-              "version": "1.0.1.38338",
-              "version_number": 281474976747408,
-              "internal_name": "3.1.1",
-              "internal_name_extra": "2.3.2",
-              "additional_label": "3.1.1",
-              "md5_hash": "46F7049B30404D8C4EF685A13EF0BC43",
-              "zip_md5_hash": "D855E93AA6156C4BB45D2E0924EDE72B",
-              "download_url": "https://dlss-swapper-downloads.beeradmoore.com/fsr_31_dx12/fsr_31_dx12_v1.0.1.38338_46F7049B30404D8C4EF685A13EF0BC43.zip",
-              "file_description": "DX12 AMD FidelityFX Library",
+              "version": "1.0.0.59",
+              "version_number": 281474976710715,
+              "internal_name": "",
+              "internal_name_extra": "",
+              "additional_label": "",
+              "md5_hash": "FEB7639E1043D0DC88D638C21871F566",
+              "zip_md5_hash": "C88B7EA94FD1113A404BC88B77BBFFC9",
+              "download_url": "https://dlss-swapper-downloads.beeradmoore.com/xess/xess_v1.0.0.59_FEB7639E1043D0DC88D638C21871F566.zip",
+              "file_description": "XeSS SDK",
               "signed_datetime": "0001-01-01T00:00:00",
               "is_signature_valid": true,
               "is_dev_file": false,
-              "file_size": 6475992,
-              "zip_file_size": 2406675,
-              "dll_source": "Horizon Zero Dawn Remastered"
+              "file_size": 9271976,
+              "zip_file_size": 3558544,
+              "dll_source": "XeSS.SDK.1.0.zip"
             },
             {
-              "version": "1.0.1.41314",
-              "version_number": 281474976750384,
-              "internal_name": "3.1.4",
-              "internal_name_extra": "2.3.2",
-              "additional_label": "3.1.4",
-              "md5_hash": "CFCD38F47665DDFF195B80C62E3B57E2",
-              "zip_md5_hash": "6E0F9EDDE4C3604AB32F257DF59F8F00",
-              "download_url": "https://dlss-swapper-downloads.beeradmoore.com/fsr_31_dx12/fsr_31_dx12_v1.0.1.41314_CFCD38F47665DDFF195B80C62E3B57E2.zip",
-              "file_description": "DX12 AMD FidelityFX Library",
+              "version": "1.1.0.18",
+              "version_number": 281479271677970,
+              "internal_name": "",
+              "internal_name_extra": "",
+              "additional_label": "",
+              "md5_hash": "C9FB6BB716A087FD537790BEBE710D4C",
+              "zip_md5_hash": "F9D81641F23A0B0802EAA5C35C7825D0",
+              "download_url": "https://dlss-swapper-downloads.beeradmoore.com/xess/xess_v1.1.0.18_C9FB6BB716A087FD537790BEBE710D4C.zip",
+              "file_description": "XeSS SDK",
               "signed_datetime": "0001-01-01T00:00:00",
               "is_signature_valid": true,
               "is_dev_file": false,
-              "file_size": 6470360,
-              "zip_file_size": 2395294,
-              "dll_source": "F1 2024"
+              "file_size": 15275688,
+              "zip_file_size": 7323839,
+              "dll_source": "Forza Horizon 5"
             }
           ],
           "directstorage": [],
@@ -104,31 +103,27 @@ namespace UpscalerManager.Core.Tests
         [Fact]
         public void BuildsAreReadOutOfTheLiveManifestShape()
         {
-            var builds = DllRepositoryService.ParseBuilds(
-                RealManifestExcerpt, FileFor("amd_fidelityfx_dx12.dll"));
+            var builds = DllRepositoryService.ParseBuilds(RealManifestExcerpt, FileFor("libxess.dll"));
 
             Assert.Equal(2, builds.Count);
 
-            var outlaws = builds.Single(b => b.Version == "1.0.1.38338");
-            Assert.Equal("amd_fidelityfx_dx12.dll", outlaws.FileName);
-            Assert.Equal("3.1.1", outlaws.Label);
-            Assert.Equal("Horizon Zero Dawn Remastered", outlaws.Provenance);
-            Assert.Equal("D855E93AA6156C4BB45D2E0924EDE72B", outlaws.ZipMd5);
-            Assert.Equal("46F7049B30404D8C4EF685A13EF0BC43", outlaws.DllMd5);
-            Assert.Equal(2406675, outlaws.ZipFileSize);
-            Assert.True(outlaws.SignatureValid);
-            Assert.False(outlaws.IsDevFile);
+            var forza = builds.Single(b => b.Version == "1.1.0.18");
+            Assert.Equal("libxess.dll", forza.FileName);
+            Assert.Equal("Forza Horizon 5", forza.Provenance);
+            Assert.Equal("F9D81641F23A0B0802EAA5C35C7825D0", forza.ZipMd5);
+            Assert.Equal("C9FB6BB716A087FD537790BEBE710D4C", forza.DllMd5);
+            Assert.Equal(7323839, forza.ZipFileSize);
+            Assert.True(forza.SignatureValid);
+            Assert.False(forza.IsDevFile);
         }
 
         [Fact]
         public void TheVersionKeyedOnIsTheOneReadOffARealFile()
         {
             // The library, the "in the game now" row and the "installed" marker all key
-            // on the version the binary reports. Keying a row on the marketing label
-            // instead — 3.1.1 rather than 1.0.1.38338 — would make every row claim to
-            // be new.
-            var builds = DllRepositoryService.ParseBuilds(
-                RealManifestExcerpt, FileFor("amd_fidelityfx_dx12.dll"));
+            // on the version the binary reports, so a row keyed on anything else would
+            // claim to be new when it is not.
+            var builds = DllRepositoryService.ParseBuilds(RealManifestExcerpt, FileFor("libxess.dll"));
 
             Assert.All(builds, b => Assert.Matches(@"^\d+(\.\d+){3}$", b.Version));
         }
@@ -171,7 +166,7 @@ namespace UpscalerManager.Core.Tests
             // not offered — the remaining good records still are.
             const string json = """
             {
-              "fsr_31_dx12": [
+              "xess": [
                 { "version": "1.0.0.1", "zip_md5_hash": "AA", "download_url": "" },
                 { "version": "1.0.0.2", "zip_md5_hash": "", "download_url": "https://example.invalid/a.zip" },
                 { "version": "", "zip_md5_hash": "BB", "download_url": "https://example.invalid/b.zip" },
@@ -180,8 +175,7 @@ namespace UpscalerManager.Core.Tests
             }
             """;
 
-            var build = Assert.Single(DllRepositoryService.ParseBuilds(
-                json, FileFor("amd_fidelityfx_dx12.dll")));
+            var build = Assert.Single(DllRepositoryService.ParseBuilds(json, FileFor("libxess.dll")));
             Assert.Equal("1.0.0.4", build.Version);
         }
 
@@ -222,23 +216,13 @@ namespace UpscalerManager.Core.Tests
         }
 
         [Fact]
-        public void TheArchiveCoversNineFilesWithDistinctKeys()
+        public void TheArchiveCoversSevenFilesWithDistinctKeys()
         {
-            Assert.Equal(9, DllRepository.All.Count);
-            Assert.Equal(9, DllRepository.All.Select(f => f.ManifestKey).Distinct().Count());
-            Assert.Equal(9, DllRepository.All.Select(f => f.FileName).Distinct(StringComparer.OrdinalIgnoreCase).Count());
-        }
-
-        [Fact]
-        public void TheFidelityFxRuntimesAreCoveredBecauseAmdPublishesNoneOfThem()
-        {
-            // This is the gap the archive exists to fill here. Neither runtime is
-            // downloadable from AMD, so without it the only builds a user could reach
-            // were whatever their other games shipped.
-            Assert.True(DllRepository.Covers("amd_fidelityfx_dx12.dll"));
-            Assert.True(DllRepository.Covers("amd_fidelityfx_vk.dll"));
-            Assert.Null(VendorDllSource.For("amd_fidelityfx_dx12.dll"));
-            Assert.Null(VendorDllSource.For("amd_fidelityfx_vk.dll"));
+            // Seven of the manifest's nine: its two FSR sections are ignored, because
+            // this app no longer swaps AMD's FidelityFX files.
+            Assert.Equal(7, DllRepository.All.Count);
+            Assert.Equal(7, DllRepository.All.Select(f => f.ManifestKey).Distinct().Count());
+            Assert.Equal(7, DllRepository.All.Select(f => f.FileName).Distinct(StringComparer.OrdinalIgnoreCase).Count());
         }
 
         [Fact]
@@ -261,7 +245,7 @@ namespace UpscalerManager.Core.Tests
             // A game on ext4 shipping NvNgx_Dlss.dll is the case DLSS Swapper's own
             // exact-case detection misses.
             Assert.True(DllRepository.Covers("NVNGX_DLSS.DLL"));
-            Assert.True(DllRepository.Covers("Amd_FidelityFX_Dx12.dll"));
+            Assert.True(DllRepository.Covers("LibXeSS_DX11.dll"));
             Assert.False(DllRepository.Covers(null));
         }
 
@@ -272,13 +256,12 @@ namespace UpscalerManager.Core.Tests
         {
             // The archive is a mirror of files scraped from elsewhere, so a library row
             // saying only "downloaded" would lose the half that matters for judging it.
-            var build = DllRepositoryService.ParseBuilds(
-                RealManifestExcerpt, FileFor("amd_fidelityfx_dx12.dll"))
-                .Single(b => b.Version == "1.0.1.38338");
+            var build = DllRepositoryService.ParseBuilds(RealManifestExcerpt, FileFor("libxess.dll"))
+                .Single(b => b.Version == "1.1.0.18");
 
             var label = DllRepositoryService.SourceLabelFor(build);
             Assert.Contains(DllRepository.SourceName, label);
-            Assert.Contains("Horizon Zero Dawn Remastered", label);
+            Assert.Contains("Forza Horizon 5", label);
         }
 
         [Fact]

@@ -136,7 +136,26 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         list.Children.Clear();
 
         var slots = _manager.SwapSlots(_row.Game);
-        if (empty is not null) empty.IsVisible = slots.Count == 0;
+
+        if (empty is not null)
+        {
+            empty.IsVisible = slots.Count == 0;
+
+            // A game whose only upscaler is FSR would otherwise get a bare "nothing to
+            // replace" and no idea why, when the answer is on the other tab.
+            var hasFidelityFx = _row.Game.DetectedComponents.Any(
+                c => c.FileName.StartsWith("amd_fidelityfx", StringComparison.OrdinalIgnoreCase)
+                     || c.FileName.Equals("amdxcffx64.dll", StringComparison.OrdinalIgnoreCase));
+
+            empty.Text = slots.Count == 0 && hasFidelityFx
+                ? "Swapping covers DLSS and XeSS, and this game's upscaler is AMD's FSR. Those "
+                  + "files are not swapped: AMD reorganised them between SDK generations, and FSR 4 "
+                  + "lives in a module most games do not ship at all — so there is usually nothing "
+                  + "to replace. OptiScaler is the route here. It brings its own upscaler and drives "
+                  + "it from the FSR option the game already has: see the OptiScaler tab."
+                : "None of the swappable libraries is present in this game, so there is nothing to "
+                  + "replace. Swapping upgrades a library a game already ships; it cannot add one.";
+        }
 
         foreach (var slot in slots)
             list.Children.Add(SwapRow(slot));

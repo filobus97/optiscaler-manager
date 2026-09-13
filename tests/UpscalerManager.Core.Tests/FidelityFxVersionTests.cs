@@ -149,10 +149,15 @@ namespace UpscalerManager.Core.Tests
         }
 
         [Fact]
-        public void EveryTranslatedFileIsOneWeCanSwap()
+        public void EveryTranslatedFileIsOneWeStillDescribe()
         {
+            // Translation is for the game page's benefit, not the swapper's — these
+            // files are detected and labelled but no longer swapped.
             foreach (var name in new[] { "amd_fidelityfx_dx12.dll", "amd_fidelityfx_vk.dll" })
-                Assert.True(SwappableDlls.IsSwappable(name));
+            {
+                Assert.NotNull(UpscalerCatalog.For(name));
+                Assert.False(SwappableDlls.IsSwappable(name));
+            }
         }
 
         // ── How it reads ────────────────────────────────────────────────────

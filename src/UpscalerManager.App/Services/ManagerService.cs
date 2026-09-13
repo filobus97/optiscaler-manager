@@ -97,79 +97,10 @@ public sealed class ManagerService
     /// <summary>Copies a build out of a game, or out of an OptiScaler release, into the library.</summary>
     public LibraryDll HarvestBuild(HarvestableDll source) => _library.Harvest(source);
 
-    /// <summary>
-    /// Builds already unpacked from OptiScaler-Extras releases. A no-network source,
-    /// and the only route the swap path has to FSR 4.
-    /// </summary>
-    public IReadOnlyList<HarvestableDll> CommunityBuilds(string fileName) =>
-        _library.FromCommunityBuilds(fileName);
-
-    /// <summary>
-    /// True when the community releases can actually supply this DLL.
-    ///
-    /// Only the two names an FSR 4 upscaler ships as. v0.26.0 widened this to the whole
-    /// FidelityFX family on the reasoning that these releases are drops of a matched set
-    /// — a patched upscaler alongside the runtime it was built against — and that was an
-    /// assumption, not a fact. They ship the upscaler. So the widening put a
-    /// "Download and use" button on the FSR (DX12) row that could only ever fail, and
-    /// telling a user afterwards that the release did not contain the file is no
-    /// substitute for not offering it.
-    ///
-    /// A source is offered only where it can deliver. Where it cannot,
-    /// <see cref="Views.Pages.DllSwapPage"/> says where the FSR version does come from
-    /// instead.
-    /// </summary>
-    public static bool TakesCommunityBuilds(string fileName) => Fsr4Int8Build.IsKnown(fileName);
-
-    /// <summary>
-    /// Community build versions available to download, newest first, paired with
-    /// whether their author marked the release a pre-release. Reuses the same listing
-    /// the OptiScaler install screen uses rather than asking a second time.
-    /// </summary>
-    public Task<IReadOnlyList<(string Version, bool IsPreRelease)>> CommunityBuildReleasesAsync() =>
-        GetInt8ReleasesAsync();
-
-    /// <summary>
-    /// Downloads one community release and files the requested DLL from it in the swap
-    /// library.
-    ///
-    /// Goes through the existing Extras download, so the release lands in the same
-    /// cache the OptiScaler route uses and a version fetched for one route is
-    /// immediately available to the other.
-    /// </summary>
-    public async Task<LibraryDll> DownloadCommunityBuildAsync(
-        string version, string fileName, IProgress<double>? progress = null)
-    {
-        var extracted = await _components.DownloadExtrasReleaseAsync(version, progress);
-
-        var built = _library.FromCommunityBuilds(fileName)
-            .FirstOrDefault(b => b.Path.Contains(version, StringComparison.OrdinalIgnoreCase));
-
-        if (built is null)
-        {
-            // Say what the release did carry. "It isn't in there" on its own leaves a
-            // user re-pressing rows to find out which one is.
-            var alternatives = SafeFileNames(extracted)
-                .Where(SwappableDlls.IsSwappable)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            throw new InvalidOperationException(
-                $"Community build {version} downloaded, but it carries no {fileName}. " +
-                (alternatives.Count > 0
-                    ? $"It holds {string.Join(", ", alternatives)} — those rows can use it."
-                    : "It holds none of the swappable DLLs."));
-        }
-
-        return _library.Harvest(built);
-    }
-
-    private static IEnumerable<string> SafeFileNames(string directory)
-    {
-        try { return Directory.EnumerateFiles(directory).Select(Path.GetFileName).OfType<string>().ToList(); }
-        catch { return Array.Empty<string>(); }
-    }
+    // NOTE: the community FSR 4 builds used to be a swap source here. They are not
+    // any more: this app no longer swaps AMD's FidelityFX files at all, for the reasons
+    // in SwappableDlls. The Extras download itself stays — the OptiScaler install route
+    // uses it to inject an INT8 upscaler, which is a different thing and works.
 
     // ── The DLSS Swapper archive ────────────────────────────────────────────
 

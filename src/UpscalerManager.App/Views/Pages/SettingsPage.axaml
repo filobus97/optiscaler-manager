@@ -152,7 +152,7 @@
         <!-- ── DLL swapper ──────────────────────────────────────────────────── -->
         <TextBlock Text="DLL swapper" FontSize="15" FontWeight="Bold" Margin="0,10,0,0"
                    Foreground="{StaticResource BrTextPrimary}"/>
-        <TextBlock Text="Only used when swapping a game's own upscaler DLL for a newer build. Ignored when installing OptiScaler." FontSize="11.5" TextWrapping="Wrap" Margin="0,-10,0,0"
+        <TextBlock Text="Only used when swapping a game's own DLSS or XeSS library for a newer build. FSR is handled by OptiScaler, not by swapping." FontSize="11.5" TextWrapping="Wrap" Margin="0,-10,0,0"
                    Foreground="{StaticResource BrTextSecondary}"/>
 
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"

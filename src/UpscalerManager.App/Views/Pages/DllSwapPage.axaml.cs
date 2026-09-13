@@ -75,74 +75,11 @@ public partial class DllSwapPage : UserControl, IHostedPage
             Text("WarningText", _slot.Verdict.Reason);
         }
 
-        RenderGuidance();
         RenderCurrent();
         RenderLibrary();
         RenderHarvestable();
-        RenderCommunity();
         RenderRepository();
         RenderVendor();
-    }
-
-    /// <summary>
-    /// Where the FSR version actually comes from, said on the rows where this file is
-    /// not the answer.
-    ///
-    /// The FidelityFX runtime and loader do not decide which FSR a game runs — the
-    /// upscaler module does. Without this the page is silently misleading: it offers
-    /// builds of a runtime to someone who came here to get FSR 4, and the only thing
-    /// that told them otherwise used to be a download that failed after the fact.
-    /// </summary>
-    private void RenderGuidance()
-    {
-        var box = this.FindControl<Border>("GuidanceBox");
-        var panel = this.FindControl<StackPanel>("GuidancePanel");
-        if (box is null || panel is null) return;
-
-        var role = _slot.FidelityFxRole;
-        box.IsVisible = role is FidelityFxRole.Loader or FidelityFxRole.Monolith;
-        if (!box.IsVisible) return;
-
-        panel.Children.Clear();
-        panel.Children.Add(Label("Looking for FSR 4?", 12.5, FontWeight.SemiBold, "BrTextPrimary"));
-
-        // Does this game actually carry an upscaler module? That decides whether the
-        // swap route can reach FSR 4 here at all, and it is the difference between
-        // "use the other row" and "swapping cannot do this".
-        var upscaler = SwappableSiblings()
-            .FirstOrDefault(s => s.FidelityFxRole == FidelityFxRole.Upscaler);
-
-        if (upscaler is not null)
-        {
-            panel.Children.Add(Label(
-                $"Not from this file. {_slot.FileName} loads AMD's upscaler; the FSR version is set "
-                + $"by {upscaler.FileName}, which this game has at {upscaler.VersionText}. Go back and "
-                + $"open the \u201c{upscaler.Definition.Label}\u201d row — the community FSR 4 builds "
-                + "are offered there.",
-                11.5, FontWeight.Normal, "BrTextSecondary"));
-            return;
-        }
-
-        panel.Children.Add(Label(
-            $"Not from this file, and not by swapping. {_slot.FileName} loads AMD's upscaler rather "
-            + "than containing it, and the FSR version comes from amd_fidelityfx_upscaler_dx12.dll — "
-            + "which this game does not ship. Swapping can only replace a library a game already "
-            + "has, so there is nothing here to upgrade to FSR 4.",
-            11.5, FontWeight.Normal, "BrTextSecondary"));
-        panel.Children.Add(Label(
-            "OptiScaler is the route for this game: it brings its own upscaler and drives it from "
-            + "the game's existing FSR or DLSS option. Install it from the OptiScaler tab.",
-            11.5, FontWeight.Normal, "BrTextSecondary"));
-    }
-
-    /// <summary>
-    /// The other swappable files in this game, so a row can say what sits beside it.
-    /// Failures are swallowed: this only ever adds an explanation.
-    /// </summary>
-    private IReadOnlyList<SwapSlot> SwappableSiblings()
-    {
-        try { return _manager.SwapSlots(_game); }
-        catch { return System.Array.Empty<SwapSlot>(); }
     }
 
     /// <summary>What is in the game now, and the way back if this app put it there.</summary>
@@ -214,19 +151,14 @@ public partial class DllSwapPage : UserControl, IHostedPage
         if (panel is null) return;
         panel.Children.Clear();
 
-        var held = _manager.LibraryBuilds(_slot.FileName);
-        var builds = held.Where(b => CouldReplaceCurrent(b.Version)).ToList();
-        var withheld = held.Count - builds.Count;
-
+        var builds = _manager.LibraryBuilds(_slot.FileName);
         if (builds.Count == 0)
         {
-            panel.Children.Add(GenerationNote(withheld) ?? Label(
+            panel.Children.Add(Label(
                 "Nothing held yet. Add one from a game below, or import a file you already have.",
                 11.5, FontWeight.Normal, "BrTextSecondary"));
             return;
         }
-
-        if (GenerationNote(withheld) is { } libraryNote) panel.Children.Add(libraryNote);
 
         foreach (var build in builds)
             panel.Children.Add(BuildRow(
@@ -247,108 +179,28 @@ public partial class DllSwapPage : UserControl, IHostedPage
         // are the same thing — a build already on the disk that costs nothing to copy.
         var found = _manager.HarvestableBuilds(_slot.FileName, _game)
             .Concat(_manager.OptiScalerBuilds(_slot.FileName))
-            .Concat(_manager.CommunityBuilds(_slot.FileName))
             .Where(h => !h.InLibrary)
             .GroupBy(h => h.Version, StringComparer.OrdinalIgnoreCase)
             .Select(g => g.First())
             .OrderBy(h => h.Version, UpscalerManager.Core.Models.VersionOrder.Descending)
             .ToList();
 
-        var usable = found.Where(h => CouldReplaceCurrent(h.Version)).ToList();
-        var skipped = found.Count - usable.Count;
-
-        if (usable.Count == 0)
+        if (found.Count == 0)
         {
-            panel.Children.Add(GenerationNote(skipped) ?? Label(
+            panel.Children.Add(Label(
                 "No other build of this DLL was found in your games, or in the OptiScaler "
-                + "releases and community builds you have downloaded.",
+                + "releases you have downloaded.",
                 11.5, FontWeight.Normal, "BrTextSecondary"));
             return;
         }
 
-        if (GenerationNote(skipped) is { } harvestNote) panel.Children.Add(harvestNote);
-
-        foreach (var candidate in usable)
+        foreach (var candidate in found)
             panel.Children.Add(BuildRow(
                 candidate.Version,
                 $"in {candidate.GameName}",
                 isCurrent: false,
                 action: "Add and use",
                 onAction: () => HarvestAndSwap(candidate)));
-    }
-
-    /// <summary>
-    /// FSR 4 INT8 community builds, offered only for the two filenames they ship as.
-    ///
-    /// A separate section from the vendor downloads on purpose: these come from a third
-    /// party rather than from AMD, and collapsing the two would present them as
-    /// equally official.
-    /// </summary>
-    private async void RenderCommunity()
-    {
-        var section = this.FindControl<StackPanel>("CommunitySection");
-        var panel = this.FindControl<StackPanel>("CommunityPanel");
-        if (section is null || panel is null) return;
-
-        section.IsVisible = ManagerService.TakesCommunityBuilds(_slot.FileName);
-        if (!section.IsVisible) return;
-
-        panel.Children.Clear();
-        panel.Children.Add(Label("Checking what has been published…",
-            11.5, FontWeight.Normal, "BrTextSecondary"));
-
-        IReadOnlyList<(string Version, bool IsPreRelease)> releases;
-        try
-        {
-            releases = await _manager.CommunityBuildReleasesAsync();
-        }
-        catch (Exception ex)
-        {
-            panel.Children.Clear();
-            panel.Children.Add(Label($"Could not list the community builds: {ex.Message}",
-                11.5, FontWeight.Normal, "BrTextSecondary"));
-            return;
-        }
-
-        if (!ReferenceEquals(panel, this.FindControl<StackPanel>("CommunityPanel"))) return;
-
-        panel.Children.Clear();
-        if (releases.Count == 0)
-        {
-            panel.Children.Add(Label(
-                "Nothing could be listed — the network may be unavailable.",
-                11.5, FontWeight.Normal, "BrTextSecondary"));
-            return;
-        }
-
-        foreach (var (version, isPreRelease) in releases.Take(8))
-            panel.Children.Add(BuildRow(
-                version,
-                isPreRelease ? "community build · pre-release" : "community build",
-                isCurrent: false,
-                action: "Download and use",
-                onAction: () => DownloadCommunityAndSwap(version)));
-    }
-
-    private async void DownloadCommunityAndSwap(string version)
-    {
-        SetStatus($"Downloading the {version} community build…");
-        try
-        {
-            var progress = new Progress<double>(fraction =>
-                SetStatus($"Downloading the {version} community build… {fraction:P0}"));
-
-            var entry = await _manager.DownloadCommunityBuildAsync(version, _slot.FileName, progress);
-            _manager.SwapDll(_game, _slot, entry);
-            Changed = true;
-            Reload();
-            SetStatus($"{_slot.Definition.Label} is now the {entry.Version} community build.");
-        }
-        catch (Exception ex)
-        {
-            Reload();
-            SetStatus(ex.Message);
-        }
     }
 
     /// <summary>
@@ -400,11 +252,8 @@ public partial class DllSwapPage : UserControl, IHostedPage
 
         // Development builds last: they exist in the archive but are not what a player
         // wants unless they went looking.
-        var candidates = builds.Where(b => !b.InLibrary).ToList();
-        var compatible = candidates.Where(b => CouldReplaceCurrent(b.Version)).ToList();
-        var wrongGeneration = candidates.Count - compatible.Count;
-
-        var offered = compatible
+        var offered = builds
+            .Where(b => !b.InLibrary)
             .OrderBy(b => b.IsDevFile)
             .ThenBy(b => b.Version, VersionOrder.Descending)
             .Take(10)
@@ -412,15 +261,13 @@ public partial class DllSwapPage : UserControl, IHostedPage
 
         if (offered.Count == 0)
         {
-            panel.Children.Add(GenerationNote(wrongGeneration) ?? Label(
+            panel.Children.Add(Label(
                 builds.Count == 0
                     ? "The archive's index could not be read, or it holds nothing for this file."
                     : "You already hold every build the archive has for this file.",
                 11.5, FontWeight.Normal, "BrTextSecondary"));
             return;
         }
-
-        if (GenerationNote(wrongGeneration) is { } archiveNote) panel.Children.Add(archiveNote);
 
         foreach (var build in offered)
             panel.Children.Add(BuildRow(
@@ -535,11 +382,9 @@ public partial class DllSwapPage : UserControl, IHostedPage
 
         foreach (var build in offered)
             panel.Children.Add(BuildRow(
-                build.Label,
-                build.IsSdkRelease
-                    ? $"from {build.Vendor} — the module as shipped in that SDK release"
-                    : $"from {build.Vendor}",
-                isCurrent: !build.IsSdkRelease && IsInstalled(build.Version),
+                build.Version,
+                $"from {build.Vendor}",
+                isCurrent: IsInstalled(build.Version),
                 action: "Download and use",
                 onAction: () => DownloadAndSwap(build)));
     }
@@ -583,49 +428,6 @@ public partial class DllSwapPage : UserControl, IHostedPage
             Background = Brush("BrBgSurface"),
             Child = grid,
         };
-    }
-
-    /// <summary>
-    /// Whether a build of this version could stand in for what is in the game.
-    ///
-    /// Judged from the version alone, which is enough to hide the rows that plainly
-    /// cannot work: an SDK 1 FidelityFX monolith is 1.x, an SDK 2 loader 2.x, an effect
-    /// module 4.x. Offering a 1.0.1 monolith to a game running a 2.3.0 loader is not an
-    /// upgrade, it is a game that stops upscaling — and the archive holds nine of them
-    /// under exactly that filename.
-    ///
-    /// Deliberately not the last line of defence. This reads no files, so a mislabelled
-    /// build can still slip through; <see cref="DllSwapService.Swap"/> reads the
-    /// candidate's own provider table and refuses there.
-    /// </summary>
-    private bool CouldReplaceCurrent(string? version)
-    {
-        var current = _slot.FidelityFxRole;
-        if (current == FidelityFxRole.NotFidelityFx) return true;
-
-        var candidate = FidelityFxLayout.Identify(_slot.FileName, version, null);
-        return FidelityFxLayout.Interchangeable(current, candidate);
-    }
-
-    /// <summary>
-    /// Said once per section when rows were withheld, so a user does not conclude the
-    /// source is empty when it is actually full of the wrong generation.
-    /// </summary>
-    private Control? GenerationNote(int withheld)
-    {
-        if (withheld == 0) return null;
-
-        var current = _slot.FidelityFxRole;
-        var what = current == FidelityFxRole.Loader
-            ? "are older SDK 1 libraries, and this game runs an SDK 2 loader"
-            : "are for a different generation of AMD's FidelityFX runtime";
-
-        return Label(
-            $"{withheld} build(s) here {what}, so they are not offered. "
-            + (current == FidelityFxRole.Loader
-                ? "The FSR version in this game comes from amd_fidelityfx_upscaler_dx12.dll — swap that instead."
-                : string.Empty),
-            11.5, FontWeight.Normal, "BrTextSecondary");
     }
 
     private bool IsInstalled(string version) =>

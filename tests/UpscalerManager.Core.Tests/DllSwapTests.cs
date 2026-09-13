@@ -114,24 +114,30 @@ namespace UpscalerManager.Core.Tests
         }
 
         [Fact]
-        public void TheFsrUpscalerFilesAreSwappable()
+        public void TheFsrUpscalerFilesAreNoLongerSwapped()
         {
-            // The FSR 4 community builds ship as one of these two names, so without
-            // them the swap route cannot reach FSR 4 at all. DLSS Swapper reserves an
-            // enum slot for the first and never detects or swaps it; this goes past
-            // what it does rather than catching up.
-            Assert.True(SwappableDlls.IsSwappable("amd_fidelityfx_upscaler_dx12.dll"));
-            Assert.True(SwappableDlls.IsSwappable("amdxcffx64.dll"));
+            // These were the route to FSR 4 by swapping, and the reason that route was
+            // withdrawn: most games ship neither file, so there was nothing to replace,
+            // and OptiScaler brings its own upscaler instead. Still recognised, so an
+            // existing swap of one can be undone.
+            foreach (var name in new[] { "amd_fidelityfx_upscaler_dx12.dll", "amdxcffx64.dll" })
+            {
+                Assert.False(SwappableDlls.IsSwappable(name));
+                Assert.True(SwappableDlls.IsRetired(name));
+            }
         }
 
         [Fact]
-        public void EveryFidelityFxLibraryOptiScalerLoadsByNameIsSwappable()
+        public void EveryFidelityFxLibraryOptiScalerLoadsByNameIsStillDescribed()
         {
             // Read out of OptiScaler's own DllNames.h rather than guessed: these are
             // the six FidelityFX libraries it loads by name (DEFINE_NAME_VECTORS for
             // ffxDx12, ffxDx12Upscaler, ffxDx12FG, ffxDx12Denoiser, ffxDx12Radiance and
             // ffxVk). A game ships whichever ones it needs, so any that are missing
             // here are files a user can see in their game folder and not swap.
+            // Not swapped any more, but a game's page still has to identify and label
+            // every one of them — that is a detection concern, and OptiScaler puts
+            // several of these files there itself.
             foreach (var name in new[]
             {
                 "amd_fidelityfx_dx12.dll",
@@ -142,8 +148,10 @@ namespace UpscalerManager.Core.Tests
                 "amd_fidelityfx_radiancecache_dx12.dll",
                 "amd_fidelityfx_vk.dll",
             })
-                Assert.True(SwappableDlls.IsSwappable(name),
-                    $"OptiScaler loads {name} by name, so a game can be carrying it.");
+            {
+                Assert.NotNull(UpscalerCatalog.For(name));
+                Assert.False(SwappableDlls.IsSwappable(name));
+            }
         }
 
         [Fact]
@@ -586,21 +594,96 @@ namespace UpscalerManager.Core.Tests
         }
 
         [Fact]
-        public void AFidelityFxRuntimeIsNotOfferedTheCommunityFsr4Builds()
+        public void AFidelityFxFileGetsNoSwapRowAtAll()
         {
-            // The failure reported against v0.28.0: the FSR (DX12) row offered the
-            // community 4.1.1b build, the download ran, and only then did the app say
-            // the release contained no amd_fidelityfx_dx12.dll. A source that cannot
-            // deliver must not be offered in the first place.
+            // Swapping is DLSS and XeSS now. A game carrying AMD's runtime simply has no
+            // swap row for it — the FSR route is OptiScaler, on the other tab.
             GameDll("amd_fidelityfx_dx12.dll", "1.0.1.38338");
             _game.DetectedComponents = new() { Component("amd_fidelityfx_dx12.dll", "1.0.1.38338") };
 
-            var slot = SlotFor("amd_fidelityfx_dx12.dll");
-            Assert.Equal(FidelityFxRole.Monolith, slot.FidelityFxRole);
+            Assert.Empty(new DllSwapService().Slots(_game));
+        }
 
-            // The upscaler is where those builds go, and it is a different file.
-            Assert.True(Fsr4Int8Build.IsKnown("amd_fidelityfx_upscaler_dx12.dll"));
-            Assert.False(Fsr4Int8Build.IsKnown(slot.FileName));
+        [Fact]
+        public void AnExistingFidelityFxSwapKeepsItsRowSoItCanStillBeUndone()
+        {
+            // The hazard in withdrawing a file: someone may already have swapped one,
+            // and their game's original is in this app's backup store with nothing else
+            // pointing at it. Dropping the name outright would leave that game carrying
+            // a file this app installed, with no way to undo it and a backup the Storage
+            // page would offer to delete.
+            GameDll("amd_fidelityfx_dx12.dll", "1.0.1.38338");
+            _game.DetectedComponents = new() { Component("amd_fidelityfx_dx12.dll", "1.0.1.38338") };
+
+            var target = Path.Combine(_gameDir, "amd_fidelityfx_dx12.dll");
+            var original = File.ReadAllBytes(target);
+
+            // Stage a swap exactly as a previous version of the app would have left it.
+            var store = new BackupStoreService();
+            var backupRelative = Path.Combine("swaps", "amd_fidelityfx_dx12.dll");
+            store.BackupFile(_gameDir, _gameDir, "amd_fidelityfx_dx12.dll", backupRelative);
+            File.WriteAllBytes(target, PeTestData.BuildPe(PeTestData.MachineAmd64, "1.0.1.41314"));
+
+            var record = new SwappedFile
+            {
+                FileName = "amd_fidelityfx_dx12.dll",
+                InstalledInDirectory = _gameDir,
+                InstalledVersion = "1.0.1.41314",
+                SourceLabel = "from the DLSS Swapper archive",
+                InstalledSha256 = FileHash.Sha256(target),
+                OriginalVersion = "1.0.1.38338",
+                OriginalSha256 = FileHash.Sha256(Path.Combine(store.GetFilesDir(_gameDir), backupRelative)),
+                ExistedBefore = true,
+            };
+            Directory.CreateDirectory(store.GetBackupRoot(_gameDir));
+            File.WriteAllText(
+                Path.Combine(store.GetBackupRoot(_gameDir), "swaps.json"),
+                System.Text.Json.JsonSerializer.Serialize(
+                    new SwapManifest { GameName = _game.Name, Files = { record } },
+                    OptimizerContext.Default.SwapManifest));
+
+            var service = new DllSwapService();
+            var slot = Assert.Single(service.Slots(_game));
+
+            Assert.True(slot.IsRetired);
+            Assert.True(slot.IsOurs);
+            // Revert-only: the row exists to undo, not to install something new.
+            Assert.False(slot.Verdict.Allowed);
+            Assert.Contains("no longer swaps", slot.Verdict.Reason);
+
+            service.Revert(_game, slot.Swapped!);
+            Assert.Equal(original, File.ReadAllBytes(target));
+            Assert.Empty(service.LoadManifest(_game).Files);
+        }
+
+        [Fact]
+        public void AFidelityFxBackupIsStillCountedAsLiveWhileTheSwapStands()
+        {
+            // The Storage page must not offer to delete the only copy of a game's
+            // original just because the file is no longer swappable.
+            GameDll("amd_fidelityfx_dx12.dll", "1.0.1.38338");
+
+            var store = new BackupStoreService();
+            Directory.CreateDirectory(store.GetBackupRoot(_gameDir));
+            File.WriteAllText(
+                Path.Combine(store.GetBackupRoot(_gameDir), "swaps.json"),
+                System.Text.Json.JsonSerializer.Serialize(
+                    new SwapManifest
+                    {
+                        GameName = _game.Name,
+                        Files =
+                        {
+                            new SwappedFile
+                            {
+                                FileName = "amd_fidelityfx_dx12.dll",
+                                InstalledInDirectory = _gameDir,
+                                ExistedBefore = true,
+                            },
+                        },
+                    },
+                    OptimizerContext.Default.SwapManifest));
+
+            Assert.True(new DllSwapService().HasSwapsForDirectory(_gameDir));
         }
 
         // ── The library ──────────────────────────────────────────────────────
@@ -821,17 +904,18 @@ namespace UpscalerManager.Core.Tests
         }
 
         [Fact]
-        public void BothNamesACommunityBuildShipsAsAreRecognised()
+        public void BothNamesACommunityBuildShipsAsAreStillRecognisedForTheOptiScalerRoute()
         {
             // Older releases ship amd_fidelityfx_upscaler_dx12.dll, newer ones ship
-            // amdxcffx64.dll. Handling only one is how every recent release stops
-            // being found.
+            // amdxcffx64.dll. Handling only one is how every recent release stops being
+            // found — and the OptiScaler install route still downloads these to inject
+            // an INT8 upscaler, which is a different mechanism and works.
             Assert.True(Fsr4Int8Build.IsKnown("amd_fidelityfx_upscaler_dx12.dll"));
             Assert.True(Fsr4Int8Build.IsKnown("amdxcffx64.dll"));
+
+            // But neither is offered as a swap any more.
             foreach (var name in Fsr4Int8Build.KnownDllNames)
-                Assert.True(SwappableDlls.IsSwappable(name),
-                    $"{name} is a community build filename but is not swappable, so those " +
-                    "builds could be downloaded and never offered.");
+                Assert.False(SwappableDlls.IsSwappable(name));
         }
 
         [Fact]

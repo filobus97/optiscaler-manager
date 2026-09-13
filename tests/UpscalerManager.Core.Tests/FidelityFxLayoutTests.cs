@@ -88,52 +88,6 @@ namespace UpscalerManager.Core.Tests
                 FidelityFxLayout.Identify("AMD_FidelityFX_Upscaler_DX12.DLL", "4.1.1.2740", null));
         }
 
-        // ── Refusing to mix generations ─────────────────────────────────────
-
-        [Fact]
-        public void AMonolithAndALoaderAreNotInterchangeable()
-        {
-            // The archive holds nine SDK 1 builds of amd_fidelityfx_dx12.dll. Installing
-            // one into a game running an SDK 2 loader leaves SDK 1 code — which AMD has
-            // deprecated — with the game's separate SDK 2 modules it cannot drive.
-            Assert.False(FidelityFxLayout.Interchangeable(FidelityFxRole.Loader, FidelityFxRole.Monolith));
-            Assert.False(FidelityFxLayout.Interchangeable(FidelityFxRole.Monolith, FidelityFxRole.Loader));
-        }
-
-        [Fact]
-        public void AnEffectModuleCannotStandInForARuntime()
-        {
-            Assert.False(FidelityFxLayout.Interchangeable(FidelityFxRole.Loader, FidelityFxRole.Upscaler));
-            Assert.False(FidelityFxLayout.Interchangeable(FidelityFxRole.Upscaler, FidelityFxRole.FrameGeneration));
-        }
-
-        [Fact]
-        public void TheSameRoleAlwaysIs()
-        {
-            foreach (var role in System.Enum.GetValues<FidelityFxRole>())
-                Assert.True(FidelityFxLayout.Interchangeable(role, role));
-        }
-
-        [Fact]
-        public void NonFidelityFxFilesAreNeverBlocked()
-        {
-            // Every other swappable DLL has exactly one meaning, so this check must not
-            // become a way for them to be refused.
-            Assert.True(FidelityFxLayout.Interchangeable(FidelityFxRole.NotFidelityFx, FidelityFxRole.Monolith));
-            Assert.True(FidelityFxLayout.Interchangeable(FidelityFxRole.Upscaler, FidelityFxRole.NotFidelityFx));
-        }
-
-        [Fact]
-        public void TheRefusalSaysWhatToDoInstead()
-        {
-            var message = FidelityFxLayout.ExplainMismatch(
-                "amd_fidelityfx_dx12.dll", FidelityFxRole.Loader, FidelityFxRole.Monolith);
-
-            // The actionable part: the FSR version lives in the upscaler module.
-            Assert.Contains("amd_fidelityfx_upscaler_dx12.dll", message);
-            Assert.Contains("SDK 2", message);
-        }
-
         // ── How each role is written ────────────────────────────────────────
 
         [Fact]
@@ -196,7 +150,7 @@ namespace UpscalerManager.Core.Tests
         // ── Every module is swappable and catalogued ────────────────────────
 
         [Fact]
-        public void EveryFidelityFxRoleMapsToAFileWeCanSwapAndDescribe()
+        public void EveryFidelityFxRoleMapsToAFileWeStillDescribe()
         {
             foreach (var name in new[]
             {
@@ -209,119 +163,95 @@ namespace UpscalerManager.Core.Tests
                 "amd_fidelityfx_radiancecache_dx12.dll",
             })
             {
-                Assert.True(SwappableDlls.IsSwappable(name), $"{name} is not swappable");
                 Assert.NotNull(UpscalerCatalog.For(name));
+                Assert.NotNull(SwappableDlls.For(name));   // described, for revert and labelling
                 Assert.NotEqual(FidelityFxRole.NotFidelityFx,
                     FidelityFxLayout.Identify(name, "2.3.0.2740", null));
             }
         }
 
-        // ── AMD as a vendor source ──────────────────────────────────────────
+        // ── No longer swapped, still revertible ─────────────────────────────
 
         [Fact]
-        public void AmdPublishesTheSdk2ModulesItself()
+        public void NoFidelityFxFileIsOfferedForSwappingAnyMore()
         {
-            // This project previously asserted the opposite — that AMD did not publish
-            // these loose and only OptiScaler's releases carried them. The signed
-            // binaries are committed to FidelityFX-SDK under Kits/FidelityFX/signedbin,
-            // which is what makes FSR 4 reachable from AMD rather than only from a
-            // community rebuild.
-            var upscaler = VendorDllSource.For("amd_fidelityfx_upscaler_dx12.dll");
-            Assert.NotNull(upscaler);
-            Assert.Equal("AMD", upscaler.Vendor);
-            Assert.Contains("signedbin", upscaler.PathInRepo);
-            Assert.True(upscaler.TagIsSdkVersion);
-            Assert.Contains("MIT", upscaler.Licence);
-        }
-
-        [Fact]
-        public void AmdIsNotOfferedForTheAmbiguousLegacyNames()
-        {
-            // amd_fidelityfx_dx12.dll does not exist in SDK 2 at all, and AMD no longer
-            // publishes the SDK 1 monolith. Offering a download here could only mean
-            // renaming a file, and a DLL's name is what the game loads.
-            Assert.Null(VendorDllSource.For("amd_fidelityfx_dx12.dll"));
-            Assert.Null(VendorDllSource.For("amd_fidelityfx_vk.dll"));
-        }
-
-        [Fact]
-        public void OnlySdk2TagsAreOfferedForTheModules()
-        {
-            // Checked against the real repository: the modules appear from v2.0.0 and
-            // are absent at v1.1.4, where the path 404s.
-            var source = VendorDllSource.For("amd_fidelityfx_upscaler_dx12.dll")!;
-
-            Assert.True(VendorDllSource.TagCanSupply(source, "v2.0.0"));
-            Assert.True(VendorDllSource.TagCanSupply(source, "v2.3.0"));
-            Assert.False(VendorDllSource.TagCanSupply(source, "v1.1.4"));
-            Assert.False(VendorDllSource.TagCanSupply(source, "fsr3-v3.0.4"));
-
-            // Nvidia's and Intel's tags name the file's own version, so none are filtered.
-            var dlss = VendorDllSource.For("nvngx_dlss.dll")!;
-            Assert.True(VendorDllSource.TagCanSupply(dlss, "v310.9.1"));
-            Assert.True(VendorDllSource.TagCanSupply(dlss, "v1.0.0"));
-        }
-
-        [Fact]
-        public void EveryAmdSourcePointsAtAFileWeCanSwap()
-        {
-            foreach (var source in VendorDllSource.All.Where(s => s.Vendor == "AMD"))
+            // The decision this release implements. Swapping is DLSS and XeSS; AMD's
+            // files changed shape between SDK generations, and FSR 4 is not in any file
+            // most games ship, so OptiScaler is the route for FSR.
+            foreach (var name in new[]
             {
-                Assert.True(SwappableDlls.IsSwappable(source.FileName));
-                Assert.EndsWith(source.FileName, source.PathInRepo);
+                "amd_fidelityfx_dx12.dll",
+                "amd_fidelityfx_vk.dll",
+                "amd_fidelityfx_loader_dx12.dll",
+                "amd_fidelityfx_upscaler_dx12.dll",
+                "amd_fidelityfx_framegeneration_dx12.dll",
+                "amd_fidelityfx_denoiser_dx12.dll",
+                "amd_fidelityfx_radiancecache_dx12.dll",
+                "amdxcffx64.dll",
+            })
+            {
+                Assert.False(SwappableDlls.IsSwappable(name), $"{name} is still offered for swapping");
+                Assert.True(SwappableDlls.IsRetired(name), $"{name} is not retired, so an existing swap could not be undone");
+
+                // Still described, so a row can explain itself and a revert can name it.
+                Assert.NotNull(SwappableDlls.For(name));
+                Assert.NotNull(UpscalerCatalog.For(name));
             }
         }
 
         [Fact]
-        public void TheModuleUrlIsBuiltAgainstTheSdkTag()
+        public void WhatIsLeftIsExactlyDlssAndXeSS()
         {
-            var source = VendorDllSource.For("amd_fidelityfx_upscaler_dx12.dll")!;
             Assert.Equal(
-                "https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/v2.3.0/"
-                + "Kits/FidelityFX/signedbin/amd_fidelityfx_upscaler_dx12.dll",
-                VendorDllSource.UrlFor(source, "v2.3.0"));
-        }
-
-        // ── Which sources can actually deliver ──────────────────────────────
-
-        [Fact]
-        public void TheCommunityReleasesAreOnlyOfferedForTheFilesTheyShip()
-        {
-            // The bug this pins down: v0.26.0 offered the community FSR 4 builds on the
-            // FSR (DX12) row too, reasoning that those releases are matched sets
-            // carrying the runtime alongside the upscaler. They are not — they ship the
-            // upscaler. So the row had a "Download and use" button that could only fail,
-            // and the failure arrived after the download.
-            Assert.True(ManagerSurface.TakesCommunityBuilds("amdxcffx64.dll"));
-            Assert.True(ManagerSurface.TakesCommunityBuilds("amd_fidelityfx_upscaler_dx12.dll"));
-
-            Assert.False(ManagerSurface.TakesCommunityBuilds("amd_fidelityfx_dx12.dll"));
-            Assert.False(ManagerSurface.TakesCommunityBuilds("amd_fidelityfx_vk.dll"));
-            Assert.False(ManagerSurface.TakesCommunityBuilds("amd_fidelityfx_loader_dx12.dll"));
-            Assert.False(ManagerSurface.TakesCommunityBuilds("nvngx_dlss.dll"));
+                new[]
+                {
+                    "libxell.dll", "libxess.dll", "libxess_dx11.dll", "libxess_fg.dll",
+                    "nvngx_dlss.dll", "nvngx_dlssd.dll", "nvngx_dlssg.dll",
+                },
+                SwappableDlls.All.Select(d => d.FileName).OrderBy(n => n, System.StringComparer.Ordinal));
         }
 
         [Fact]
-        public void EveryNameAnInt8BuildShipsAsIsOfferedTheCommunitySource()
+        public void AnOfferedFileIsNeverAlsoRetired()
         {
-            // Stated the other way round, so the two lists cannot drift: anything the
-            // community section is offered for must be a name an INT8 build ships as.
-            foreach (var name in Fsr4Int8Build.KnownDllNames)
-                Assert.True(ManagerSurface.TakesCommunityBuilds(name));
-        }
-    }
-}
+            foreach (var offered in SwappableDlls.All)
+                Assert.False(SwappableDlls.IsRetired(offered.FileName));
 
-namespace UpscalerManager.Core.Tests
-{
-    /// <summary>
-    /// The gating rule the app layer applies, restated here so it can be tested without
-    /// referencing the UI project. Kept identical to
-    /// <c>ManagerService.TakesCommunityBuilds</c>, and both point at
-    /// <see cref="Fsr4Int8Build"/> so there is one list rather than two.
-    /// </summary>
-    internal static class ManagerSurface
-    {
-        public static bool TakesCommunityBuilds(string fileName) => Fsr4Int8Build.IsKnown(fileName);
+            foreach (var retired in SwappableDlls.Retired)
+                Assert.False(SwappableDlls.IsSwappable(retired.FileName));
+        }
+
+        [Fact]
+        public void EveryOfferedFileStillHasItsOwnPlaceInTheOrdering()
+        {
+            var orders = SwappableDlls.All.Select(d => SwappableDlls.DisplayOrder(d.FileName)).ToList();
+            Assert.Equal(orders.Count, orders.Distinct().Count());
+        }
+
+        [Fact]
+        public void NoDownloadSourceOffersAFileWeNoLongerSwap()
+        {
+            // A source pointing at a retired file would fetch something, import it, and
+            // then have nowhere to install it.
+            foreach (var source in VendorDllSource.All)
+                Assert.True(SwappableDlls.IsSwappable(source.FileName),
+                    $"{source.FileName} is a vendor download but is no longer swappable");
+
+            foreach (var file in DllRepository.All)
+                Assert.True(SwappableDlls.IsSwappable(file.FileName),
+                    $"{file.FileName} is an archive download but is no longer swappable");
+        }
+
+        [Fact]
+        public void NeitherTheArchiveNorAnyVendorCoversFidelityFxNow()
+        {
+            foreach (var name in new[] { "amd_fidelityfx_dx12.dll", "amd_fidelityfx_vk.dll",
+                                         "amd_fidelityfx_upscaler_dx12.dll", "amdxcffx64.dll" })
+            {
+                Assert.False(DllRepository.Covers(name));
+                Assert.Null(VendorDllSource.For(name));
+            }
+        }
+
     }
 }

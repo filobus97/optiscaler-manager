@@ -39,7 +39,10 @@ public enum FidelityFxRole
 /// Which generation of AMD's FidelityFX runtime a file belongs to, and what it holds.
 ///
 /// <para><b>The thing that makes this necessary.</b> AMD restructured the runtime in
-/// FidelityFX SDK 2.0.0. Before it, <c>amd_fidelityfx_dx12.dll</c> was a monolith
+/// FidelityFX SDK 2.0.0. This app no longer <em>swaps</em> these files — see
+/// <see cref="SwappableDlls"/> — but it still has to identify and label them, because
+/// "which FSR version is this game running" is the same question whether OptiScaler or
+/// the game itself put the files there. Before SDK 2.0.0, <c>amd_fidelityfx_dx12.dll</c> was a monolith
 /// containing every effect — upscaling included. From 2.0.0 the effects were split into
 /// separate modules behind a loader, and AMD's documentation is explicit:</para>
 ///
@@ -139,57 +142,6 @@ public static class FidelityFxLayout
         var head = dot > 0 ? version[..dot] : version;
         return int.TryParse(head, out var major) ? major : null;
     }
-
-    /// <summary>
-    /// True when a build can stand in for what is currently in the game.
-    ///
-    /// An SDK 1 monolith and an SDK 2 loader occupy the same filename and are not
-    /// interchangeable: AMD deprecated the SDK 1 effects to SDK 1, so a monolith cannot
-    /// serve a game whose upscaler, frame generation and denoiser are separate SDK 2
-    /// modules, and a loader cannot serve a game that expects the effects to be inside
-    /// the file. Swapping across that line produces a game that does not start, or one
-    /// that silently loses its upscaler — from a row that offered it as an upgrade.
-    /// </summary>
-    public static bool Interchangeable(FidelityFxRole current, FidelityFxRole candidate) =>
-        current == candidate
-        || current == FidelityFxRole.NotFidelityFx
-        || candidate == FidelityFxRole.NotFidelityFx;
-
-    /// <summary>Why a cross-generation swap was refused, in terms a player can act on.</summary>
-    public static string ExplainMismatch(string fileName, FidelityFxRole current, FidelityFxRole candidate) =>
-        (current, candidate) switch
-        {
-            (FidelityFxRole.Loader, FidelityFxRole.Monolith) =>
-                $"The {fileName} in this game is a FidelityFX SDK 2 loader, and this build is an "
-                + "older SDK 1 library with the effects inside it. AMD deprecated the SDK 1 "
-                + "effects, so the game's separate upscaler and frame-generation modules would "
-                + "have nothing able to load them. To change the FSR version here, swap "
-                + "amd_fidelityfx_upscaler_dx12.dll instead — that is where FSR 4 lives.",
-
-            (FidelityFxRole.Monolith, FidelityFxRole.Loader) =>
-                $"The {fileName} in this game is an SDK 1 library with the effects inside it, and "
-                + "this build is an SDK 2 loader that contains no effect code at all. Installing "
-                + "it would leave the game with nothing to upscale with.",
-
-            (FidelityFxRole.Loader, FidelityFxRole.Upscaler) or
-            (FidelityFxRole.Monolith, FidelityFxRole.Upscaler) =>
-                $"This build is an upscaling module rather than a {fileName}. It belongs in "
-                + "amd_fidelityfx_upscaler_dx12.dll.",
-
-            _ => $"This build is a {Noun(candidate)} and the {fileName} in this game is a "
-                 + $"{Noun(current)}. They are not interchangeable.",
-        };
-
-    private static string Noun(FidelityFxRole role) => role switch
-    {
-        FidelityFxRole.Monolith => "FidelityFX SDK 1 library",
-        FidelityFxRole.Loader => "FidelityFX SDK 2 loader",
-        FidelityFxRole.Upscaler => "FSR upscaling module",
-        FidelityFxRole.FrameGeneration => "FSR frame generation module",
-        FidelityFxRole.Denoiser => "FidelityFX denoiser module",
-        FidelityFxRole.RadianceCache => "FidelityFX radiance cache module",
-        _ => "file of a different kind",
-    };
 
     /// <summary>
     /// How a FidelityFX file's version should be written for a player.

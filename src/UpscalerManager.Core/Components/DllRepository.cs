@@ -54,18 +54,14 @@ public static class DllRepository
     public sealed record RepositoryFile(string ManifestKey, string FileName, string Vendor);
 
     /// <summary>
-    /// The nine files the manifest carries, keyed by its own naming. The keys are the
-    /// manifest's, not ours: <c>fsr_31_dx12</c> is DLSS Swapper's name for
-    /// <c>amd_fidelityfx_dx12.dll</c> and has held builds past FSR 3.1 for a while, so
-    /// it is a historical label rather than a version constraint.
+    /// The files taken from the manifest, keyed by its own naming. Its two FSR sections
+    /// are omitted, so this is seven of its nine.
     /// </summary>
     public static readonly IReadOnlyList<RepositoryFile> All = new[]
     {
         new RepositoryFile("dlss", "nvngx_dlss.dll", "Nvidia"),
         new RepositoryFile("dlss_g", "nvngx_dlssg.dll", "Nvidia"),
         new RepositoryFile("dlss_d", "nvngx_dlssd.dll", "Nvidia"),
-        new RepositoryFile("fsr_31_dx12", "amd_fidelityfx_dx12.dll", "AMD"),
-        new RepositoryFile("fsr_31_vk", "amd_fidelityfx_vk.dll", "AMD"),
         new RepositoryFile("xess", "libxess.dll", "Intel"),
         new RepositoryFile("xess_dx11", "libxess_dx11.dll", "Intel"),
         new RepositoryFile("xess_fg", "libxess_fg.dll", "Intel"),
