@@ -6,14 +6,14 @@
   <Grid RowDefinitions="Auto,*,Auto">
 
     <StackPanel Grid.Row="0" Spacing="4">
-      <TextBlock Name="HeadingText" FontWeight="SemiBold" FontSize="14"
-                 Foreground="{StaticResource BrTextPrimary}"/>
-      <TextBlock Name="ExplanationText" TextWrapping="Wrap" FontSize="12"
-                 Foreground="{StaticResource BrTextSecondary}"/>
+      <TextBlock Name="HeadingText" FontWeight="SemiBold" FontSize="{StaticResource SizeHeading}"
+ Foreground="{StaticResource BrTextPrimary}"/>
+      <TextBlock Name="ExplanationText" TextWrapping="Wrap"
+ Foreground="{StaticResource BrTextSecondary}"/>
       <Border Name="WarningBox" IsVisible="False" Margin="0,6,0,0" Padding="10" CornerRadius="6"
-              Background="#3D1F1F" BorderBrush="{StaticResource BrError}" BorderThickness="1">
-        <TextBlock Name="WarningText" TextWrapping="Wrap" FontSize="12"
-                   Foreground="{StaticResource BrTextPrimary}"/>
+ Background="{StaticResource BrBgElevated}" BorderBrush="{StaticResource BrError}" BorderThickness="1">
+        <TextBlock Name="WarningText" TextWrapping="Wrap"
+ Foreground="{StaticResource BrTextPrimary}"/>
       </Border>
     </StackPanel>
 
@@ -22,16 +22,16 @@
 
         <!-- What is in the game right now, and how to undo it -->
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+ BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Name="CurrentPanel" Spacing="8"/>
         </Border>
 
         <!-- Builds already held -->
         <StackPanel Spacing="6">
           <TextBlock Text="In your library" FontWeight="SemiBold"
-                     Foreground="{StaticResource BrTextPrimary}"/>
+ Foreground="{StaticResource BrTextPrimary}"/>
           <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                  BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+ BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
             <StackPanel Name="LibraryPanel" Spacing="6"/>
           </Border>
         </StackPanel>
@@ -39,13 +39,13 @@
         <!-- Builds sitting in the user's other games -->
         <StackPanel Spacing="6">
           <TextBlock Text="Already on your disk" FontWeight="SemiBold"
-                     Foreground="{StaticResource BrTextPrimary}"/>
+ Foreground="{StaticResource BrTextPrimary}"/>
           <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                  BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+ BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
             <StackPanel Spacing="8">
-              <TextBlock TextWrapping="Wrap" FontSize="11.5"
-                         Foreground="{StaticResource BrTextSecondary}"
-                         Text="Builds in your other games, and in the OptiScaler releases this app has already downloaded. Nothing is fetched for these — they work offline, and adding one copies it into the library, leaving the source untouched."/>
+              <TextBlock TextWrapping="Wrap" FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"
+ Text="Builds in your other games, and in the OptiScaler releases this app has already downloaded. Nothing is fetched for these — they work offline, and adding one copies it into the library, leaving the source untouched."/>
               <StackPanel Name="HarvestPanel" Spacing="6"/>
             </StackPanel>
           </Border>
@@ -54,12 +54,12 @@
         <!-- The DLSS Swapper project's archive of past vendor builds -->
         <StackPanel Name="RepositorySection" Spacing="6" IsVisible="False">
           <TextBlock Text="The DLSS Swapper archive" FontWeight="SemiBold"
-                     Foreground="{StaticResource BrTextPrimary}"/>
+ Foreground="{StaticResource BrTextPrimary}"/>
           <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                  BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+ BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
             <StackPanel Spacing="8">
-              <TextBlock Name="RepositoryNoteText" TextWrapping="Wrap" FontSize="11.5"
-                         Foreground="{StaticResource BrTextSecondary}"/>
+              <TextBlock Name="RepositoryNoteText" TextWrapping="Wrap" FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
               <StackPanel Name="RepositoryPanel" Spacing="6"/>
             </StackPanel>
           </Border>
@@ -68,12 +68,12 @@
         <!-- Straight from the vendor -->
         <StackPanel Spacing="6">
           <TextBlock Text="Download from the vendor" FontWeight="SemiBold"
-                     Foreground="{StaticResource BrTextPrimary}"/>
+ Foreground="{StaticResource BrTextPrimary}"/>
           <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                  BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+ BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
             <StackPanel Spacing="8">
-              <TextBlock Name="VendorNoteText" TextWrapping="Wrap" FontSize="11.5"
-                         Foreground="{StaticResource BrTextSecondary}"/>
+              <TextBlock Name="VendorNoteText" TextWrapping="Wrap" FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
               <StackPanel Name="VendorPanel" Spacing="6"/>
             </StackPanel>
           </Border>
@@ -85,10 +85,10 @@
     <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10" Margin="0,16,0,0">
       <Button Name="ImportButton" Content="Import a DLL…" Click="OnImport"
               ToolTip.Tip="Pick a DLL you already have. It has to be a 64-bit build of one of the swappable files, and carry a version — otherwise there is no way to tell it apart from what is already in the game."/>
-      <TextBlock Name="StatusText" VerticalAlignment="Center" FontSize="12" TextWrapping="Wrap"
-                 Foreground="{StaticResource BrTextSecondary}"/>
+      <TextBlock Name="StatusText" VerticalAlignment="Center" TextWrapping="Wrap"
+ Foreground="{StaticResource BrTextSecondary}"/>
       <Button Name="CloseButton" Content="Done" Click="OnClose" IsCancel="True"
-              HorizontalAlignment="Right"
+ HorizontalAlignment="Right"
               ToolTip.Tip="Back to the game (Esc, or B on a controller)."/>
     </StackPanel>
   </Grid>

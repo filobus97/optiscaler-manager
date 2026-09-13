@@ -363,8 +363,8 @@ public partial class SettingsPage : UserControl, IHostedPage
             list.Children.Add(new TextBlock
             {
                 Text = "No custom DLLs yet.",
-                FontSize = 12,
-                Foreground = new SolidColorBrush(Color.Parse("#8A8AAA")),
+                FontSize = 12.5,
+                Foreground = Brush("BrTextSecondary"),
             });
             return;
         }
@@ -377,7 +377,7 @@ public partial class SettingsPage : UserControl, IHostedPage
             {
                 Text = $"{entry.Name}   v{entry.FileVersion ?? "?"}   ({signed})",
                 VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-                Foreground = new SolidColorBrush(Color.Parse("#E4E4EF")),
+                Foreground = Brush("BrTextPrimary"),
             });
             var del = new Button { Content = "Delete", Classes = { "BtnDanger" }, FontSize = 11, Padding = new Avalonia.Thickness(10, 4) };
             Grid.SetColumn(del, 1);
@@ -393,12 +393,15 @@ public partial class SettingsPage : UserControl, IHostedPage
         }
     }
 
+    private static IBrush Brush(string key) =>
+        Avalonia.Application.Current?.FindResource(key) as IBrush ?? Brushes.Gray;
+
     private void SetResult(string message, bool error = false)
     {
         var result = this.FindControl<TextBlock>("ResultText");
         if (result is null) return;
         result.Text = message;
-        result.Foreground = new SolidColorBrush(Color.Parse(error ? "#E06060" : "#8B73F8"));
+        result.Foreground = Brush(error ? "BrError" : "BrSuccess");
     }
 
     private async void OnImportDlls(object? sender, RoutedEventArgs e)
@@ -484,8 +487,8 @@ public partial class SettingsPage : UserControl, IHostedPage
             list.Children.Add(new TextBlock
             {
                 Text = "No custom .ini profiles yet.",
-                FontSize = 12,
-                Foreground = new SolidColorBrush(Color.Parse("#8A8AAA")),
+                FontSize = 12.5,
+                Foreground = Brush("BrTextSecondary"),
             });
             return;
         }
@@ -497,7 +500,7 @@ public partial class SettingsPage : UserControl, IHostedPage
             {
                 Text = profile.Name,
                 VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-                Foreground = new SolidColorBrush(Color.Parse("#E4E4EF")),
+                Foreground = Brush("BrTextPrimary"),
             });
             var del = new Button { Content = "Delete", Classes = { "BtnDanger" }, FontSize = 11, Padding = new Avalonia.Thickness(10, 4) };
             Grid.SetColumn(del, 1);

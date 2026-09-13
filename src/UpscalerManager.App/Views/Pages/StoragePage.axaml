@@ -6,10 +6,10 @@
   <Grid RowDefinitions="Auto,*,Auto">
 
     <StackPanel Grid.Row="0" Spacing="4">
-      <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                 Text="Everything this app has written to disk. Nothing here is removed automatically — every version you have ever installed is kept — so this is where you reclaim the space."/>
-      <TextBlock Name="TotalText" FontSize="12" FontWeight="SemiBold"
-                 Foreground="{StaticResource BrTextPrimary}"/>
+      <TextBlock TextWrapping="Wrap" Foreground="{StaticResource BrTextSecondary}"
+ Text="Everything this app has written to disk. Nothing here is removed automatically — every version you have ever installed is kept — so this is where you reclaim the space."/>
+      <TextBlock Name="TotalText" FontWeight="SemiBold"
+ Foreground="{StaticResource BrTextPrimary}"/>
     </StackPanel>
 
     <ScrollViewer Grid.Row="1" Margin="0,14,0,0">
@@ -17,10 +17,10 @@
     </ScrollViewer>
 
     <Border Grid.Row="2" Name="StatusBar" IsVisible="False" Margin="0,12,0,0" Padding="12,8"
-            CornerRadius="{StaticResource RadiusMedium}"
-            Background="{StaticResource BrBgSurface}">
-      <TextBlock Name="StatusText" FontSize="12" TextWrapping="Wrap"
-                 Foreground="{StaticResource BrTextSecondary}"/>
+ CornerRadius="{StaticResource RadiusCard}"
+ Background="{StaticResource BrBgSurface}">
+      <TextBlock Name="StatusText" TextWrapping="Wrap"
+ Foreground="{StaticResource BrTextSecondary}"/>
     </Border>
   </Grid>
 </UserControl>

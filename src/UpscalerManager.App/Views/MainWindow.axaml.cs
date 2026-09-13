@@ -51,9 +51,9 @@ public partial class MainWindow : Window
         if (!Program.RelaunchedAfterUpdate)
             _ = CheckForAppUpdateAsync(); // fire-and-forget; silent unless a newer release exists
         await RescanAsync();
-        // Set last so it wins over the scan's "Found N game(s)" status.
+        // Set last so it wins over the scan's game count.
         if (Program.RelaunchedAfterUpdate)
-            _vm.StatusText = $"Updated to v{_manager.AppVersion} ✓  •  Found {_vm.Games.Count} game(s).";
+            _vm.StatusText = $"Updated to v{_manager.AppVersion}  •  {Count(_vm.Games.Count)}.";
     }
 
     private async Task CheckForAppUpdateAsync()
@@ -107,20 +107,25 @@ public partial class MainWindow : Window
         var gpu = _manager.DetectPrimaryGpu();
         if (gpu is null)
         {
-            _vm.GpuText = "GPU: not detected (install path guards still apply).";
+            _vm.GpuText = "GPU: not detected";
             _vm.GpuBrush = Brushes.Gray;
             return;
         }
 
-        _vm.GpuText = $"GPU: {gpu.Name}  •  {gpu.Vendor}  •  {gpu.VideoMemoryGB}";
+        _vm.GpuText = $"{gpu.Name}  •  {gpu.Vendor}  •  {gpu.VideoMemoryGB}";
         _vm.GpuBrush = gpu.Vendor switch
         {
-            GpuVendor.AMD => new SolidColorBrush(Color.Parse("#E0402A")),
-            GpuVendor.NVIDIA => new SolidColorBrush(Color.Parse("#5CB87E")),
-            GpuVendor.Intel => new SolidColorBrush(Color.Parse("#4A90D4")),
+            GpuVendor.AMD => Brush("BrTechAmd"),
+            GpuVendor.NVIDIA => Brush("BrTechNvidia"),
+            GpuVendor.Intel => Brush("BrTechIntel"),
             _ => Brushes.Gray,
         };
     }
+
+    private static string Count(int games) => games == 1 ? "1 game" : $"{games} games";
+
+    private static IBrush Brush(string key) =>
+        Application.Current?.FindResource(key) as IBrush ?? Brushes.Gray;
 
     private void RefreshImportSummary()
     {
@@ -130,7 +135,7 @@ public partial class MainWindow : Window
         var iniCount = _manager.GetIniProfiles().Count(p => !p.IsBuiltIn);
         parts.Add(iniCount > 0 ? $"OptiScaler.ini profiles: {iniCount}" : "OptiScaler.ini profiles: none");
         parts.Add(_manager.IsNukemFgCached ? "Nukem FG: imported" : "Nukem FG: not imported");
-        _vm.ImportSummary = "Imported — " + string.Join("  •  ", parts) + ".  Pick these per install.";
+        _vm.ImportSummary = "Imported — " + string.Join("  •  ", parts) + ".";
     }
 
     private async Task RescanAsync()
@@ -149,7 +154,7 @@ public partial class MainWindow : Window
             }
             _vm.HideGamesWithoutUpscaler = _manager.HideGamesWithoutUpscaler;
             _vm.RefreshVisibleGames();
-            _vm.StatusText = $"Found {_vm.Games.Count} game(s).";
+            _vm.StatusText = $"{Count(_vm.Games.Count)}.";
 
             // Cover art loads after the list is on screen, not as part of the scan:
             // it is decoration, and waiting on the network for it would hold up the

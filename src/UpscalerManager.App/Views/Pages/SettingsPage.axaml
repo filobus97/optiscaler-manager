@@ -6,85 +6,85 @@
   <Grid RowDefinitions="Auto,*,Auto">
 
     <StackPanel Grid.Row="0" Spacing="4">
-      <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                 Text="Grouped by what each setting affects: the app, and what it installs into your games. Anything you bring your own is supplied by you and kept in a private cache — never downloaded for you."/>
+      <TextBlock TextWrapping="Wrap" Foreground="{StaticResource BrTextSecondary}"
+ Text="Grouped by what each setting affects: the app, and what it installs into your games. Anything you bring your own is supplied by you and kept in a private cache — never downloaded for you."/>
     </StackPanel>
 
     <ScrollViewer Grid.Row="1" Margin="0,14,0,0">
       <StackPanel Spacing="16">
-        <TextBlock Text="The app itself" FontSize="15" FontWeight="Bold"
-                   Foreground="{StaticResource BrTextPrimary}"/>
-        <TextBlock Text="Settings for Upscaler Manager, not for anything it installs." FontSize="11.5" TextWrapping="Wrap" Margin="0,-10,0,0"
-                   Foreground="{StaticResource BrTextSecondary}"/>
+        <TextBlock Text="The app itself" FontSize="{StaticResource SizeHeading}" FontWeight="Bold"
+ Foreground="{StaticResource BrTextPrimary}"/>
+        <TextBlock Text="Settings for Upscaler Manager, not for anything it installs." FontSize="{StaticResource SizeCaption}" TextWrapping="Wrap" Margin="0,-10,0,0"
+ Foreground="{StaticResource BrTextSecondary}"/>
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+ BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="8">
             <TextBlock Text="Game list" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
-            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                       Text="Some games have no upscaling library at all. Neither route can help those: OptiScaler hooks an upscaler a game already has rather than adding one, and there is nothing to swap."/>
+            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource BrTextSecondary}"
+ Text="Some games have no upscaling library at all. Neither route can help those: OptiScaler hooks an upscaler a game already has rather than adding one, and there is nothing to swap."/>
             <CheckBox Name="ChkHideNoUpscaler" Content="Hide games with no upscaler"
                       ToolTip.Tip="Hides them from the grid — they are still scanned, so turning this off shows them again immediately, and a game whose libraries sit somewhere the scan does not reach is never lost for good. The status bar says how many are hidden."/>
           </StackPanel>
         </Border>
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+ BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="8">
             <TextBlock Text="Controller" FontWeight="SemiBold"
-                       Foreground="{StaticResource BrTextPrimary}"/>
-            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                       Text="Navigate the whole app with a game controller: D-pad or left stick to move between cards and controls, right stick to scroll, A to open or confirm, B to go back, shoulders to jump between controls. Works on the desktop and in Steam Gaming Mode."/>
+ Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource BrTextSecondary}"
+ Text="Navigate the whole app with a game controller: D-pad or left stick to move between cards and controls, right stick to scroll, A to open or confirm, B to go back, shoulders to jump between controls. Works on the desktop and in Steam Gaming Mode."/>
             <CheckBox Name="GamepadCheck" Content="Enable controller navigation"
-                      Foreground="{StaticResource BrTextPrimary}" FontSize="12"
+ Foreground="{StaticResource BrTextPrimary}"
                       ToolTip.Tip="Reads the controller directly. If something else (Steam Input) is already mapping it to the keyboard, that is detected and navigation is left to it automatically — turn this off only if you want the controller ignored entirely. Takes effect on the next start."/>
-            <TextBlock Name="GamepadStatusText" TextWrapping="Wrap" FontSize="12"
-                       Foreground="{StaticResource BrTextSecondary}"/>
+            <TextBlock Name="GamepadStatusText" TextWrapping="Wrap"
+ Foreground="{StaticResource BrTextSecondary}"/>
           </StackPanel>
         </Border>
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+ BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="8">
             <TextBlock Text="Storage" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
-            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                       Text="Downloaded component versions, the files you imported, and per-game backups. Nothing is removed automatically, so this is where you see what is being kept and reclaim the space."/>
+            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource BrTextSecondary}"
+ Text="Downloaded component versions, the files you imported, and per-game backups. Nothing is removed automatically, so this is where you see what is being kept and reclaim the space."/>
             <Button Name="StorageButton" Content="Manage storage  &#x203A;" HorizontalAlignment="Left"
-                    Click="OnManageStorage"
+ Click="OnManageStorage"
                     ToolTip.Tip="Shows everything the app has written to disk, with sizes, grouped by how safe each thing is to remove."/>
           </StackPanel>
         </Border>
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgSurface}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+ BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="8">
             <TextBlock Text="About &amp; updates" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
-            <TextBlock Name="AppVersionText" TextWrapping="Wrap" FontSize="12"
-                       Foreground="{StaticResource BrTextSecondary}"/>
-            <TextBlock Name="LogPathText" TextWrapping="Wrap" FontSize="11.5"
-                       Foreground="{StaticResource BrTextSecondary}"/>
+            <TextBlock Name="AppVersionText" TextWrapping="Wrap"
+ Foreground="{StaticResource BrTextSecondary}"/>
+            <TextBlock Name="LogPathText" TextWrapping="Wrap" FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
             <Button Name="OpenLogButton" Content="Open the log folder" HorizontalAlignment="Left"
-                    Click="OnOpenLogFolder"
+ Click="OnOpenLogFolder"
                     ToolTip.Tip="Everything the app did this session and last, written as it happens. Attach it to a bug report — it is what makes an install or swap that went wrong diagnosable."/>
             <StackPanel Orientation="Horizontal" Spacing="10">
               <Button Content="Check for updates" Click="OnCheckAppUpdate"
                       ToolTip.Tip="Asks GitHub whether a newer release of this app exists."/>
               <Button Name="UpdateNowButton" Classes="BtnPrimary" Content="Update now" IsEnabled="False"
-                      Click="OnUpdateNow"
+ Click="OnUpdateNow"
                       ToolTip.Tip="Downloads and applies the update, then restarts the app automatically — no terminal (works in Steam Gaming Mode). Your settings, imports, profiles and backups are kept. Enabled after a check finds a newer version."/>
-              <TextBlock Name="AppUpdateResultText" VerticalAlignment="Center" FontSize="12"
-                         Foreground="{StaticResource BrTextSecondary}"/>
+              <TextBlock Name="AppUpdateResultText" VerticalAlignment="Center"
+ Foreground="{StaticResource BrTextSecondary}"/>
             </StackPanel>
           </StackPanel>
         </Border>
 
-        <TextBlock Text="OptiScaler" FontSize="15" FontWeight="Bold"
-                   Foreground="{StaticResource BrTextPrimary}"/>
-        <TextBlock Text="Only used when installing OptiScaler into a game. Ignored otherwise." FontSize="11.5" TextWrapping="Wrap" Margin="0,-10,0,0"
-                   Foreground="{StaticResource BrTextSecondary}"/>
+        <TextBlock Text="OptiScaler" FontSize="{StaticResource SizeHeading}" FontWeight="Bold"
+ Foreground="{StaticResource BrTextPrimary}"/>
+        <TextBlock Text="Only used when installing OptiScaler into a game. Ignored otherwise." FontSize="{StaticResource SizeCaption}" TextWrapping="Wrap" Margin="0,-10,0,0"
+ Foreground="{StaticResource BrTextSecondary}"/>
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+ BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="8">
             <TextBlock Text="OptiScaler overlay / menu key" FontWeight="SemiBold"
-                       Foreground="{StaticResource BrTextPrimary}"/>
-            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                       Text="Key that opens OptiScaler's in-game overlay. Default is Insert, but not all keyboards have it. Once set, this is forced on every OptiScaler.ini the Manager writes (including the default one)."/>
+ Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource BrTextSecondary}"
+ Text="Key that opens OptiScaler's in-game overlay. Default is Insert, but not all keyboards have it. Once set, this is forced on every OptiScaler.ini the Manager writes (including the default one)."/>
             <StackPanel Orientation="Horizontal" Spacing="10">
               <TextBlock Text="Menu key:" VerticalAlignment="Center" Foreground="{StaticResource BrTextSecondary}"/>
               <ComboBox Name="MenuKeyCombo" MinWidth="220"
@@ -93,27 +93,27 @@
           </StackPanel>
         </Border>
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+ BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="8">
             <TextBlock Text="Add-ons" FontWeight="SemiBold"
-                       Foreground="{StaticResource BrTextPrimary}"/>
-            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                       Text="fakenvapi (Reflex → Anti-Lag 2 / LatencyFlex) is downloaded automatically when you select it at install time. Nukem's DLSSG-to-FSR3 frame-gen mod cannot be auto-downloaded — import its dlssg_to_fsr3_amd_is_better.dll (or the mod archive) here once, then select it per install."/>
+ Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource BrTextSecondary}"
+ Text="fakenvapi (Reflex → Anti-Lag 2 / LatencyFlex) is downloaded automatically when you select it at install time. Nukem's DLSSG-to-FSR3 frame-gen mod cannot be auto-downloaded — import its dlssg_to_fsr3_amd_is_better.dll (or the mod archive) here once, then select it per install."/>
             <StackPanel Orientation="Horizontal" Spacing="10">
               <Button Content="Import Nukem FG DLL…" Click="OnImportNukemFg"
                       ToolTip.Tip="Pick dlssg_to_fsr3_amd_is_better.dll or the downloaded mod archive (.zip/.7z). Stored in the cache for future installs."/>
-              <TextBlock Name="NukemStatusText" VerticalAlignment="Center" FontSize="12"
-                         Foreground="{StaticResource BrTextSecondary}"/>
+              <TextBlock Name="NukemStatusText" VerticalAlignment="Center"
+ Foreground="{StaticResource BrTextSecondary}"/>
             </StackPanel>
           </StackPanel>
         </Border>
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+ BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="8">
             <TextBlock Text="OptiScaler.ini profiles" FontWeight="SemiBold"
-                       Foreground="{StaticResource BrTextPrimary}"/>
-            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                       Text="Collect OptiScaler.ini files and tag each with a name, then pick one when installing OptiScaler. Leave the name blank to use the file name."/>
+ Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource BrTextSecondary}"
+ Text="Collect OptiScaler.ini files and tag each with a name, then pick one when installing OptiScaler. Leave the name blank to use the file name."/>
             <StackPanel Orientation="Horizontal" Spacing="10">
               <TextBox Name="ProfileNameBox" Width="240" PlaceholderText="Profile name (optional)"/>
               <Button Content="Import .ini…" Click="OnImportIni"
@@ -123,12 +123,12 @@
           </StackPanel>
         </Border>
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+ BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="8">
             <TextBlock Text="Custom DLLs (bring your own)" FontWeight="SemiBold"
-                       Foreground="{StaticResource BrTextPrimary}"/>
-            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource BrTextSecondary}"
-                       Text="Import one or more DLLs you already possess (e.g. amdxcffx64.dll, a custom amd_fidelityfx_upscaler_dx12.dll build). At install time they are overlaid on the OptiScaler install: names OptiScaler ships are swapped in place, new names are added alongside. Only 64-bit DLLs are accepted; nothing is ever downloaded for you."/>
+ Foreground="{StaticResource BrTextPrimary}"/>
+            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource BrTextSecondary}"
+ Text="Import one or more DLLs you already possess (e.g. amdxcffx64.dll, a custom amd_fidelityfx_upscaler_dx12.dll build). At install time they are overlaid on the OptiScaler install: names OptiScaler ships are swapped in place, new names are added alongside. Only 64-bit DLLs are accepted; nothing is ever downloaded for you."/>
             <StackPanel Orientation="Horizontal" Spacing="10">
               <Button Content="Import DLL(s)…" Click="OnImportDlls"
                       ToolTip.Tip="Pick one or more local .dll files (multi-select). Each is validated as a 64-bit PE."/>
@@ -141,44 +141,44 @@
           </StackPanel>
         </Border>
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgSurface}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+ BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="6">
             <TextBlock Text="Imported so far" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
-            <TextBlock Name="InventoryText" TextWrapping="Wrap" FontSize="12"
-                       Foreground="{StaticResource BrTextSecondary}"/>
+            <TextBlock Name="InventoryText" TextWrapping="Wrap"
+ Foreground="{StaticResource BrTextSecondary}"/>
           </StackPanel>
         </Border>
 
         <!-- ── DLL swapper ──────────────────────────────────────────────────── -->
-        <TextBlock Text="DLL swapper" FontSize="15" FontWeight="Bold" Margin="0,10,0,0"
-                   Foreground="{StaticResource BrTextPrimary}"/>
-        <TextBlock Text="Only used when swapping a game's own DLSS or XeSS library for a newer build. FSR is handled by OptiScaler, not by swapping." FontSize="11.5" TextWrapping="Wrap" Margin="0,-10,0,0"
-                   Foreground="{StaticResource BrTextSecondary}"/>
+        <TextBlock Text="DLL swapper" FontSize="{StaticResource SizeHeading}" FontWeight="Bold" Margin="0,10,0,0"
+ Foreground="{StaticResource BrTextPrimary}"/>
+        <TextBlock Text="Only used when swapping a game's own DLSS or XeSS library for a newer build. FSR is handled by OptiScaler, not by swapping." FontSize="{StaticResource SizeCaption}" TextWrapping="Wrap" Margin="0,-10,0,0"
+ Foreground="{StaticResource BrTextSecondary}"/>
 
         <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
-                BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+ BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="6">
             <TextBlock Text="Download sources" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
-            <TextBlock TextWrapping="Wrap" FontSize="11.5" Foreground="{StaticResource BrTextSecondary}"
-                       Text="Builds in your own games, and in releases this app has already downloaded, are always offered — they need no network. These two sources reach further, and both are off the vendor's own path, so they can be switched off."/>
+            <TextBlock TextWrapping="Wrap" FontSize="{StaticResource SizeCaption}" Foreground="{StaticResource BrTextSecondary}"
+ Text="Builds in your own games, and in releases this app has already downloaded, are always offered — they need no network. These two sources reach further, and both are off the vendor's own path, so they can be switched off."/>
             <CheckBox Name="ChkVendorDownloads" Content="Download from the vendor's own releases"
-                      IsCheckedChanged="OnSwapSourceChanged"
+ IsCheckedChanged="OnSwapSourceChanged"
                       ToolTip.Tip="Nvidia's and Intel's public repositories. The original publisher, but only recent tags — they do not keep old builds available."/>
             <CheckBox Name="ChkRepositoryDownloads" Content="Download from the DLSS Swapper archive"
-                      IsCheckedChanged="OnSwapSourceChanged"
+ IsCheckedChanged="OnSwapSourceChanged"
                       ToolTip.Tip="A third-party mirror of shipped builds, hosted by the DLSS Swapper project. The only source for old DLSS releases and for the FidelityFX runtimes, which AMD does not publish on their own. Downloads are checked against the hashes its index publishes."/>
-            <TextBlock Name="RepositoryNoteText" TextWrapping="Wrap" FontSize="11" Margin="0,2,0,0"
-                       Foreground="{StaticResource BrTextSecondary}"/>
+            <TextBlock Name="RepositoryNoteText" TextWrapping="Wrap" FontSize="{StaticResource SizeCaption}" Margin="0,2,0,0"
+ Foreground="{StaticResource BrTextSecondary}"/>
           </StackPanel>
         </Border>
 
         <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,4,0,0">
           <Button Name="SupportButton" Content="Support the project  &#x2197;"
-                  Click="OnOpenSupportPage"
+ Click="OnOpenSupportPage"
                   ToolTip.Tip="Optional, and nothing here is gated behind it. Opens the project's donation page in your browser."/>
-          <TextBlock Name="SupportResultText" VerticalAlignment="Center" FontSize="11.5"
-                     TextWrapping="Wrap" IsVisible="False"
-                     Foreground="{StaticResource BrTextSecondary}"/>
+          <TextBlock Name="SupportResultText" VerticalAlignment="Center" FontSize="{StaticResource SizeCaption}"
+ TextWrapping="Wrap" IsVisible="False"
+ Foreground="{StaticResource BrTextSecondary}"/>
         </StackPanel>
 
       </StackPanel>

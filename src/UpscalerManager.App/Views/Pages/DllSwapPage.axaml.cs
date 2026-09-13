@@ -89,10 +89,10 @@ public partial class DllSwapPage : UserControl, IHostedPage
         if (panel is null) return;
         panel.Children.Clear();
 
-        panel.Children.Add(Label("In the game now", 13, FontWeight.SemiBold, "BrTextPrimary"));
+        panel.Children.Add(Label("In the game now", 14, FontWeight.SemiBold, "BrTextPrimary"));
 
         var version = _slot.Version is { Length: > 0 } ? _slot.VersionText : "no version in the file";
-        panel.Children.Add(Label($"{_slot.FileName}  {version}", 12, FontWeight.Normal, "BrTextPrimary"));
+        panel.Children.Add(Label($"{_slot.FileName}  {version}", 12.5, FontWeight.Normal, "BrTextPrimary"));
 
         // Every place it sits, not just the first. A game carrying two copies is the
         // case where swapping one and stopping looks like it did nothing at all, so the
@@ -102,7 +102,7 @@ public partial class DllSwapPage : UserControl, IHostedPage
                 _slot.CopyCount > 1 && copy.Version is { Length: > 0 }
                     ? $"{copy.Directory}   ({copy.VersionText})"
                     : copy.Directory,
-                10.5, FontWeight.Normal, "BrTextDisabled"));
+                11, FontWeight.Normal, "BrTextDisabled"));
 
         if (_slot.CopyCount > 1)
             panel.Children.Add(Label(
@@ -111,13 +111,13 @@ public partial class DllSwapPage : UserControl, IHostedPage
                       + "which it loads. Swapping replaces all of them, so it stops mattering."
                     : $"{_slot.CopyCount} copies of this DLL. The game decides which it loads, so a "
                       + "swap replaces all of them.",
-                11.5, FontWeight.SemiBold, "BrAccent"));
+                11, FontWeight.Normal, "BrWarning"));
 
         if (_slot.Swapped is not { } swapped)
         {
             panel.Children.Add(Label(
                 "This is the game's own build. Swapping keeps a copy of it, so you can always go back.",
-                11.5, FontWeight.Normal, "BrTextSecondary"));
+                11, FontWeight.Normal, "BrTextSecondary"));
             return;
         }
 
@@ -127,9 +127,9 @@ public partial class DllSwapPage : UserControl, IHostedPage
 
         panel.Children.Add(Label(
             $"Swapped by this app, {swapped.SourceLabel}. Reverting puts back {original}.",
-            11.5, FontWeight.Normal, "BrTextSecondary"));
+            11, FontWeight.Normal, "BrTextSecondary"));
 
-        var revert = new Button { Content = "Revert to the game's own build", FontSize = 12, };
+        var revert = new Button { Content = "Revert to the game's own build", FontSize = 12.5, };
         ToolTip.SetTip(revert,
             "Restores the file this app backed up before swapping. Refused if the DLL has " +
             "changed since — a game patch replacing it is the usual reason, and putting the " +
@@ -156,7 +156,7 @@ public partial class DllSwapPage : UserControl, IHostedPage
         {
             panel.Children.Add(Label(
                 "Nothing held yet. Add one from a game below, or import a file you already have.",
-                11.5, FontWeight.Normal, "BrTextSecondary"));
+                11, FontWeight.Normal, "BrTextSecondary"));
             return;
         }
 
@@ -190,7 +190,7 @@ public partial class DllSwapPage : UserControl, IHostedPage
             panel.Children.Add(Label(
                 "No other build of this DLL was found in your games, or in the OptiScaler "
                 + "releases you have downloaded.",
-                11.5, FontWeight.Normal, "BrTextSecondary"));
+                11, FontWeight.Normal, "BrTextSecondary"));
             return;
         }
 
@@ -230,7 +230,7 @@ public partial class DllSwapPage : UserControl, IHostedPage
 
         panel.Children.Clear();
         panel.Children.Add(Label("Reading the archive's index…",
-            11.5, FontWeight.Normal, "BrTextSecondary"));
+            11, FontWeight.Normal, "BrTextSecondary"));
 
         IReadOnlyList<RepositoryBuild> builds;
         try
@@ -241,7 +241,7 @@ public partial class DllSwapPage : UserControl, IHostedPage
         {
             panel.Children.Clear();
             panel.Children.Add(Label($"Could not read the archive's index: {ex.Message}",
-                11.5, FontWeight.Normal, "BrTextSecondary"));
+                11, FontWeight.Normal, "BrTextSecondary"));
             return;
         }
 
@@ -265,7 +265,7 @@ public partial class DllSwapPage : UserControl, IHostedPage
                 builds.Count == 0
                     ? "The archive's index could not be read, or it holds nothing for this file."
                     : "You already hold every build the archive has for this file.",
-                11.5, FontWeight.Normal, "BrTextSecondary"));
+                11, FontWeight.Normal, "BrTextSecondary"));
             return;
         }
 
@@ -350,7 +350,7 @@ public partial class DllSwapPage : UserControl, IHostedPage
             $"Downloaded straight from {source.Vendor}, never from a mirror this project runs. "
             + source.Licence);
         panel.Children.Add(Label($"Asking {source.Vendor} what is available…",
-            11.5, FontWeight.Normal, "BrTextSecondary"));
+            11, FontWeight.Normal, "BrTextSecondary"));
 
         IReadOnlyList<VendorBuild> builds;
         try
@@ -361,7 +361,7 @@ public partial class DllSwapPage : UserControl, IHostedPage
         {
             panel.Children.Clear();
             panel.Children.Add(Label($"Could not reach {source.Vendor}: {ex.Message}",
-                11.5, FontWeight.Normal, "BrTextSecondary"));
+                11, FontWeight.Normal, "BrTextSecondary"));
             return;
         }
 
@@ -376,7 +376,7 @@ public partial class DllSwapPage : UserControl, IHostedPage
                 builds.Count == 0
                     ? $"{source.Vendor} published nothing that could be read, or the network is unavailable."
                     : "You already hold every build the vendor publishes.",
-                11.5, FontWeight.Normal, "BrTextSecondary"));
+                11, FontWeight.Normal, "BrTextSecondary"));
             return;
         }
 
@@ -399,7 +399,7 @@ public partial class DllSwapPage : UserControl, IHostedPage
 
         var text = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center };
         text.Children.Add(Label(version, 12.5, FontWeight.SemiBold, "BrTextPrimary"));
-        text.Children.Add(Label(source, 10.5, FontWeight.Normal, "BrTextSecondary"));
+        text.Children.Add(Label(source, 11, FontWeight.Normal, "BrTextSecondary"));
         grid.Children.Add(text);
 
         Control right;
@@ -407,12 +407,12 @@ public partial class DllSwapPage : UserControl, IHostedPage
         {
             // Installing the build that is already there would be a no-op that still
             // rewrote the game's file, so say so instead of offering it.
-            right = Label("installed", 11.5, FontWeight.SemiBold, "BrSuccess");
+            right = Label("installed", 11, FontWeight.SemiBold, "BrSuccess");
             ((TextBlock)right).VerticalAlignment = VerticalAlignment.Center;
         }
         else
         {
-            var button = new Button { Content = action, FontSize = 11.5, IsEnabled = _slot.Verdict.Allowed };
+            var button = new Button { Content = action, FontSize = 11, IsEnabled = _slot.Verdict.Allowed };
             if (!_slot.Verdict.Allowed) ToolTip.SetTip(button, _slot.Verdict.Reason);
             button.Click += (_, _) => onAction();
             right = button;

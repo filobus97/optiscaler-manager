@@ -117,7 +117,7 @@ public partial class StoragePage : UserControl, IHostedPage
         body.Children.Add(new TextBlock
         {
             Text = blurb,
-            FontSize = 12,
+            FontSize = 12.5,
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brush("BrTextSecondary"),
         });
@@ -198,7 +198,7 @@ public partial class StoragePage : UserControl, IHostedPage
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Avalonia.Thickness(10, 0, 10, 0),
             Foreground = Brush("BrTextSecondary"),
-            FontSize = 12,
+            FontSize = 12.5,
         };
         Grid.SetColumn(size, 1);
         grid.Children.Add(size);

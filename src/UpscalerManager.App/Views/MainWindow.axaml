@@ -3,12 +3,12 @@
         xmlns:vm="using:UpscalerManager.App.ViewModels"
         x:Class="UpscalerManager.App.Views.MainWindow"
         x:DataType="vm:MainViewModel"
-        Width="880" Height="640" MinWidth="720" MinHeight="480"
-        WindowStartupLocation="CenterScreen"
-        Background="{StaticResource BrBgBase}"
+ Width="880" Height="640" MinWidth="720" MinHeight="480"
+ WindowStartupLocation="CenterScreen"
+ Background="{StaticResource BrBgBase}"
         XYFocus.NavigationModes="Keyboard,Gamepad"
-        Icon="/Assets/icon-256.png"
-        Title="Upscaler Manager">
+ Icon="/Assets/icon-256.png"
+ Title="Upscaler Manager">
 
   <Window.Styles>
     <!-- A card is a Button, so its chrome has to be replaced wholesale. -->
@@ -16,9 +16,11 @@
       <Setter Property="Background" Value="{StaticResource BrBgSurface}"/>
       <Setter Property="BorderBrush" Value="{StaticResource BrBorderSubtle}"/>
       <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CornerRadius" Value="{StaticResource RadiusMedium}"/>
+      <Setter Property="CornerRadius" Value="{StaticResource RadiusCard}"/>
       <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-      <Setter Property="VerticalContentAlignment" Value="Top"/>
+      <!-- why: Top would size the card's content to itself and centre it, so the
+           bottom-anchored chip row would float with the title's line count. -->
+      <Setter Property="VerticalContentAlignment" Value="Stretch"/>
       <Setter Property="Transitions">
         <Transitions>
           <BrushTransition Property="Background" Duration="0:0:0.15"/>
@@ -51,69 +53,70 @@
       <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12">
         <Image Source="/Assets/icon-64.png" Width="38" Height="38" VerticalAlignment="Center"/>
         <StackPanel Orientation="Vertical" Spacing="2" VerticalAlignment="Center">
-          <TextBlock Text="Upscaler Manager" FontSize="22" FontWeight="Bold"
-                     Foreground="{StaticResource BrTextPrimary}"/>
+          <TextBlock Text="Upscaler Manager" FontSize="{StaticResource SizeTitle}" FontWeight="Bold"
+ Foreground="{StaticResource BrTextPrimary}"/>
           <TextBlock Text="Manage the upscalers in your games."
-                     FontSize="13" TextTrimming="CharacterEllipsis"
-                     Foreground="{StaticResource BrTextSecondary}"/>
+ TextTrimming="CharacterEllipsis"
+ Foreground="{StaticResource BrTextSecondary}"/>
         </StackPanel>
       </StackPanel>
       <Button Grid.Column="1" Name="RescanButton" Content="Rescan"
-              Click="OnRescanClick" Margin="0,0,8,0"
-              IsEnabled="{Binding IsIdle}"
+ Click="OnRescanClick" Margin="0,0,8,0"
+ IsEnabled="{Binding IsIdle}"
               ToolTip.Tip="Re-scan your libraries (Steam, Epic, GOG, Xbox, EA, Battle.net, Ubisoft) for installed games."/>
       <Button Grid.Column="2" Name="SettingsButton" Content="Settings"
-              Click="OnSettingsClick" IsEnabled="{Binding IsIdle}"
+ Click="OnSettingsClick" IsEnabled="{Binding IsIdle}"
               ToolTip.Tip="Import your own DLLs and .ini profiles, manage add-ons, set the overlay key, and check for app updates."/>
     </Grid>
 
     <!-- GPU banner -->
-    <Border Grid.Row="1" Margin="0,16,0,0" Padding="14,10"
-            CornerRadius="{StaticResource RadiusMedium}"
-            Background="{StaticResource BrBgCard}"
-            BorderThickness="1" BorderBrush="{StaticResource BrBorderSubtle}">
-      <StackPanel Orientation="Horizontal" Spacing="10">
-        <Border Width="10" Height="10" CornerRadius="5" VerticalAlignment="Center"
-                Background="{Binding GpuBrush}"/>
+    <Border Grid.Row="1" Margin="0,16,0,0" Padding="12,10"
+ CornerRadius="{StaticResource RadiusCard}"
+ Background="{StaticResource BrBgCard}"
+ BorderThickness="1" BorderBrush="{StaticResource BrBorderSubtle}"
+            ToolTip.Tip="The GPU this app installs for. Install path guards apply whether or not it was detected.">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Border Width="8" Height="8" CornerRadius="4" VerticalAlignment="Center"
+ Background="{Binding GpuBrush}"/>
         <TextBlock Text="{Binding GpuText}" VerticalAlignment="Center"
-                   Foreground="{StaticResource BrTextPrimary}" FontWeight="SemiBold"/>
+ Foreground="{StaticResource BrTextPrimary}"/>
       </StackPanel>
     </Border>
 
     <!-- Update-available banner (hidden unless a newer release exists) -->
     <Border Grid.Row="2" Name="UpdateBanner" IsVisible="False" Margin="0,10,0,0" Padding="12,8"
-            CornerRadius="{StaticResource RadiusMedium}"
-            Background="#2A2440"
-            BorderThickness="1" BorderBrush="{StaticResource BrAccent}">
+ CornerRadius="{StaticResource RadiusCard}"
+ Background="{StaticResource BrBgElevated}"
+ BorderThickness="1" BorderBrush="{StaticResource BrAccent}">
       <Grid ColumnDefinitions="*,Auto,Auto,Auto">
         <TextBlock Name="UpdateBannerText" Grid.Column="0" VerticalAlignment="Center"
-                   Foreground="{StaticResource BrTextPrimary}" FontSize="12" TextWrapping="Wrap"/>
-        <Button Grid.Column="1" Name="UpdateNowButton" Classes="BtnPrimary" Content="Update now" FontSize="11" Margin="8,0,0,0"
-                Click="OnUpdateNowClick" IsEnabled="{Binding IsIdle}"
+ Foreground="{StaticResource BrTextPrimary}" TextWrapping="Wrap"/>
+        <Button Grid.Column="1" Name="UpdateNowButton" Classes="BtnPrimary" Content="Update now" FontSize="{StaticResource SizeCaption}" Margin="8,0,0,0"
+ Click="OnUpdateNowClick" IsEnabled="{Binding IsIdle}"
                 ToolTip.Tip="Downloads and applies the update, then restarts the app automatically — no terminal (works in Steam Gaming Mode). Your settings, imports, profiles and backups are kept. Disabled while an install or revert is running."/>
-        <Button Grid.Column="2" Content="Open releases page" FontSize="11" Margin="8,0"
-                Click="OnOpenReleasesClick"
+        <Button Grid.Column="2" Content="Open releases page" FontSize="{StaticResource SizeCaption}" Margin="8,0"
+ Click="OnOpenReleasesClick"
                 ToolTip.Tip="Opens this app's GitHub releases page in your browser to read what changed."/>
-        <Button Grid.Column="3" Content="✕" FontSize="11" Padding="8,4"
-                Click="OnDismissUpdateBanner" ToolTip.Tip="Hide until next launch."/>
+        <Button Grid.Column="3" Content="✕" FontSize="{StaticResource SizeCaption}" Padding="8,4"
+ Click="OnDismissUpdateBanner" ToolTip.Tip="Hide until next launch."/>
       </Grid>
     </Border>
 
     <!-- Bring-your-own summary -->
     <Border Grid.Row="3" Margin="0,10,0,0" Padding="12,8"
-            CornerRadius="{StaticResource RadiusMedium}"
-            Background="{StaticResource BrBgSurface}"
-            BorderThickness="1" BorderBrush="{StaticResource BrBorderSubtle}"
+ CornerRadius="{StaticResource RadiusCard}"
+ Background="{StaticResource BrBgSurface}"
+ BorderThickness="1" BorderBrush="{StaticResource BrBorderSubtle}"
             ToolTip.Tip="Custom FSR components and OptiScaler.ini profiles you have imported. Select them per-install on the Install OptiScaler screen.">
       <TextBlock Text="{Binding ImportSummary}" Foreground="{StaticResource BrTextSecondary}"
-                 FontSize="12" TextWrapping="Wrap"/>
+ TextWrapping="Wrap"/>
     </Border>
 
     <!-- Game cards -->
     <Border Grid.Row="4" Margin="0,12,0,0"
-            CornerRadius="{StaticResource RadiusMedium}"
-            Background="{StaticResource BrBgCard}"
-            BorderThickness="1" BorderBrush="{StaticResource BrBorderSubtle}">
+ CornerRadius="{StaticResource RadiusCard}"
+ Background="{StaticResource BrBgCard}"
+ BorderThickness="1" BorderBrush="{StaticResource BrBorderSubtle}">
       <Grid>
         <!-- Each card is a single Button rather than a row of controls, which is what
              makes controller navigation free: XYFocus moves between cards spatially and
@@ -128,74 +131,78 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:GameRowViewModel">
-                <Button Classes="GameCard" Width="176" Height="366" Margin="0,0,10,10" Padding="7"
-                        Click="OnDetailsClick"
+                <Button Classes="GameCard" Width="188" Height="396" Margin="0,0,12,12" Padding="14"
+ Click="OnDetailsClick"
                         ToolTip.Tip="{Binding CardTip}">
-                  <StackPanel Spacing="7" ClipToBounds="True">
-                    <!-- Cover art, with the placeholder behind it so a game without
-                         art still has a card of the same shape. -->
-                    <!-- 2:3, the shape Steam publishes library art in. -->
-                    <Border Height="228" ClipToBounds="True"
-                            CornerRadius="{StaticResource RadiusMedium}"
-                            Background="{StaticResource BrBgElevated}"
-                            BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
+                  <!-- The middle row takes the slack, so a name that wraps to two lines
+                       cannot push the chips down: every card carries them at the same
+                       height. -->
+                  <Grid RowDefinitions="Auto,*,Auto" ClipToBounds="True">
+                    <!-- Steam publishes library art at 2:3; the box is a little shorter
+                         so a whole card fits the grid at the default window size, and
+                         UniformToFill crops the difference. The placeholder sits behind
+                         the image so a game without art keeps the shape. -->
+                    <Border Grid.Row="0" Height="224" ClipToBounds="True"
+ CornerRadius="{StaticResource RadiusArt}"
+ Background="{StaticResource BrBgElevated}"
+ BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
                       <Grid>
                         <TextBlock Text="&#x1F3AE;" FontSize="38" Opacity="0.45"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   Foreground="{StaticResource BrTextSecondary}"/>
+ HorizontalAlignment="Center" VerticalAlignment="Center"
+ Foreground="{StaticResource BrTextSecondary}"/>
                         <Image Source="{Binding CoverImage}" Stretch="UniformToFill"
-                               IsVisible="{Binding HasCoverImage}"/>
+ IsVisible="{Binding HasCoverImage}"/>
                       </Grid>
                     </Border>
 
-                    <StackPanel Spacing="1">
-                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12.5"
-                                 MaxLines="2" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
-                                 Foreground="{StaticResource BrTextPrimary}"/>
-                      <TextBlock Text="{Binding PlatformName}" FontSize="10.5"
-                                 TextTrimming="CharacterEllipsis"
-                                 Foreground="{StaticResource BrTextSecondary}"/>
-                      <TextBlock Text="{Binding StatusText}" FontSize="11"
-                                 TextTrimming="CharacterEllipsis"
-                                 Foreground="{Binding StatusBrush}"/>
+                    <StackPanel Grid.Row="1" Margin="0,8,0,0" VerticalAlignment="Top" Spacing="1">
+                      <TextBlock Text="{Binding Name}" FontSize="{StaticResource SizeHeading}"
+ FontWeight="SemiBold"
+ MaxLines="2" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+ Foreground="{StaticResource BrTextPrimary}"/>
+                      <TextBlock Text="{Binding PlatformName}" FontSize="{StaticResource SizeCaption}"
+ TextTrimming="CharacterEllipsis"
+ Foreground="{StaticResource BrTextSecondary}"/>
+                      <TextBlock Text="{Binding StatusText}" FontSize="{StaticResource SizeCaption}"
+ TextTrimming="CharacterEllipsis"
+ Foreground="{Binding StatusBrush}"/>
                     </StackPanel>
 
-                    <!-- What the game already has, with versions: "FSR" alone says
-                         nothing, "FSR 4.1.1" answers the question. -->
-                    <!-- Chips wrap, so two or three sit on a line when they fit. Each
-                         is tinted by vendor: Nvidia green, AMD red, Intel blue. -->
-                    <ItemsControl Name="TechChipArea" ItemsSource="{Binding TechBadges}"
-                                  Height="54" ClipToBounds="True"
-                                  IsVisible="{Binding HasTechBadges}">
-                      <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
-                      </ItemsControl.ItemsPanel>
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:TechBadge">
-                          <Border Background="{StaticResource BrBgElevated}"
-                                  BorderBrush="{Binding Accent}"
-                                  BorderThickness="1"
-                                  CornerRadius="{StaticResource RadiusSmall}"
-                                  Padding="4,1" Margin="0,0,3,3">
-                            <TextBlock Text="{Binding Label}" FontSize="9.5"
-                                       Foreground="{Binding Accent}"/>
-                          </Border>
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                    <Panel Grid.Row="2" Margin="0,8,0,0">
+                      <!-- What the game already has, with versions: "FSR" alone says
+                           nothing, "FSR 4.1.1" answers the question. Chips wrap onto
+                           three reserved rows, each tinted by vendor. -->
+                      <ItemsControl Name="TechChipArea" ItemsSource="{Binding TechBadges}"
+ Height="64" ClipToBounds="True"
+ IsVisible="{Binding HasTechBadges}">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:TechBadge">
+                            <Border Background="{StaticResource BrBgElevated}"
+ CornerRadius="{StaticResource RadiusChip}"
+ Padding="6,2" Margin="0,0,4,4">
+                              <TextBlock Text="{Binding Label}" FontSize="{StaticResource SizeCaption}"
+ Foreground="{Binding Accent}"/>
+                            </Border>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
 
-                    <!-- Neither route can help a game with nothing to hook, so say so
-                         rather than leaving the card looking half-scanned. -->
-                    <Border IsVisible="{Binding HasNoUpscaler}"
-                            Background="{StaticResource BrBgElevated}"
-                            BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1"
-                            CornerRadius="{StaticResource RadiusSmall}"
-                            Padding="4,1" HorizontalAlignment="Left"
-                            ToolTip.Tip="No DLSS, FSR or XeSS library was found next to this game. OptiScaler hooks an upscaler a game already has rather than adding one, and there is nothing to swap — so neither route applies. If you believe this is wrong, the game may keep its libraries somewhere the scan does not reach.">
-                      <TextBlock Text="No upscaler found" FontSize="9.5"
-                                 Foreground="{StaticResource BrTextSecondary}"/>
-                    </Border>
-                  </StackPanel>
+                      <!-- Neither route can help a game with nothing to hook, so say so
+                           rather than leaving the card looking half-scanned. -->
+                      <Border IsVisible="{Binding HasNoUpscaler}"
+ VerticalAlignment="Bottom" HorizontalAlignment="Left"
+ Background="{StaticResource BrBgElevated}"
+ CornerRadius="{StaticResource RadiusChip}"
+ Padding="6,2"
+                              ToolTip.Tip="No DLSS, FSR or XeSS library was found next to this game. OptiScaler hooks an upscaler a game already has rather than adding one, and there is nothing to swap — so neither route applies. If you believe this is wrong, the game may keep its libraries somewhere the scan does not reach.">
+                        <TextBlock Text="No upscaler found" FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
+                      </Border>
+                    </Panel>
+                  </Grid>
                 </Button>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
@@ -203,21 +210,21 @@
         </ScrollViewer>
 
         <TextBlock IsVisible="{Binding HasNoGames}" HorizontalAlignment="Center" VerticalAlignment="Center"
-                   Foreground="{StaticResource BrTextSecondary}" TextAlignment="Center"
-                   Text="No games detected yet.&#x0a;Click Rescan, or import your own DLLs from Settings."/>
+ Foreground="{StaticResource BrTextSecondary}" TextAlignment="Center"
+ Text="No games detected yet.&#x0a;Click Rescan, or import your own DLLs from Settings."/>
       </Grid>
     </Border>
 
     <!-- Status bar -->
     <Border Grid.Row="5" Margin="0,12,0,0" Padding="12,8"
-            CornerRadius="{StaticResource RadiusMedium}"
-            Background="{StaticResource BrBgSurface}">
+ CornerRadius="{StaticResource RadiusCard}"
+ Background="{StaticResource BrBgSurface}">
       <StackPanel Orientation="Horizontal" Spacing="10">
         <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
-                   Foreground="{StaticResource BrTextSecondary}" FontSize="12"/>
+ Foreground="{StaticResource BrTextSecondary}" />
         <TextBlock Name="HiddenNoticeText" Text="{Binding HiddenNotice}" IsVisible="{Binding HasHiddenGames}"
-                   VerticalAlignment="Center" FontSize="12"
-                   Foreground="{StaticResource BrTextSecondary}"
+ VerticalAlignment="Center"
+ Foreground="{StaticResource BrTextSecondary}"
                    ToolTip.Tip="Turn off &quot;Hide games with no upscaler&quot; in Settings to show them."/>
       </StackPanel>
     </Border>
@@ -227,11 +234,11 @@
   <Grid Name="PageView" IsVisible="False" RowDefinitions="Auto,*" Margin="20">
     <Grid Grid.Row="0" ColumnDefinitions="Auto,*" Margin="0,0,0,12">
       <Button Grid.Column="0" Name="BackButton" Content="&#x2190;  Back" Click="OnBackClick"
-              Margin="0,0,12,0"
+ Margin="0,0,12,0"
               ToolTip.Tip="Return to the game list (Esc, or B on a controller)."/>
       <TextBlock Grid.Column="1" Name="PageTitleText" VerticalAlignment="Center"
-                 FontSize="18" FontWeight="Bold" TextTrimming="CharacterEllipsis"
-                 Foreground="{StaticResource BrTextPrimary}"/>
+ FontSize="{StaticResource SizeTitle}" FontWeight="Bold" TextTrimming="CharacterEllipsis"
+ Foreground="{StaticResource BrTextPrimary}"/>
     </Grid>
     <ContentControl Grid.Row="1" Name="PageContent"/>
   </Grid>

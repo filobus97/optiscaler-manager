@@ -6,23 +6,35 @@
 
     <Application.Resources>
         <ResourceDictionary>
-            <!-- Palette reused from OptiScaler Client Next for visual consistency. -->
-            <Color x:Key="BgDeepColor">#0E0E1A</Color>
-            <Color x:Key="BgBaseColor">#13131F</Color>
-            <Color x:Key="BgSurfaceColor">#1C1C2E</Color>
-            <Color x:Key="BgCardColor">#1E1E30</Color>
-            <Color x:Key="BgElevatedColor">#252540</Color>
-            <Color x:Key="BorderSubtleColor">#2A2A42</Color>
-            <Color x:Key="BorderDefaultColor">#363660</Color>
+            <!-- Palette from DESIGN.md. Token names predate it; the values are the
+                 design system's. Window canvas -> card surface-1 -> nested surface-3,
+                 with controls lifted to surface-2. -->
+            <Color x:Key="BgDeepColor">#0B0B12</Color>
+            <Color x:Key="BgBaseColor">#0B0B12</Color>
+            <Color x:Key="BgSurfaceColor">#1E1E2C</Color>
+            <Color x:Key="BgCardColor">#13131C</Color>
+            <Color x:Key="BgElevatedColor">#181824</Color>
+            <Color x:Key="BorderSubtleColor">#22222F</Color>
+            <Color x:Key="BorderDefaultColor">#2E2E3F</Color>
             <Color x:Key="AccentPrimaryColor">#8B73F8</Color>
             <Color x:Key="AccentPrimaryHoverColor">#9D88FF</Color>
             <Color x:Key="AccentPrimaryPressedColor">#7560E0</Color>
-            <Color x:Key="TextPrimaryColor">#E4E4EF</Color>
-            <Color x:Key="TextSecondaryColor">#8A8AAA</Color>
-            <Color x:Key="TextDisabledColor">#4A4A65</Color>
+            <Color x:Key="TextPrimaryColor">#E8E8F2</Color>
+            <Color x:Key="TextSecondaryColor">#9A9AB8</Color>
+            <Color x:Key="TextDisabledColor">#5A5A78</Color>
             <Color x:Key="StatusSuccessColor">#5CB87E</Color>
             <Color x:Key="StatusErrorColor">#E06060</Color>
             <Color x:Key="StatusWarningColor">#D4A04A</Color>
+
+            <!-- Fluent derives CheckBox, RadioButton, ComboBox and Slider from its own
+                 accent, which is Windows blue until it is overridden here. -->
+            <Color x:Key="SystemAccentColor">#8B73F8</Color>
+            <Color x:Key="SystemAccentColorLight1">#9D88FF</Color>
+            <Color x:Key="SystemAccentColorLight2">#AFA0FF</Color>
+            <Color x:Key="SystemAccentColorLight3">#C2B7FF</Color>
+            <Color x:Key="SystemAccentColorDark1">#7560E0</Color>
+            <Color x:Key="SystemAccentColorDark2">#5F4DC0</Color>
+            <Color x:Key="SystemAccentColorDark3">#4A3B9E</Color>
 
             <!-- One colour per vendor, used wherever a technology is named: Nvidia
                  green, AMD red, Intel blue. Muted rather than brand-saturated, so a
@@ -52,11 +64,19 @@
             <SolidColorBrush x:Key="BrError"   Color="{StaticResource StatusErrorColor}"/>
             <SolidColorBrush x:Key="BrWarning" Color="{StaticResource StatusWarningColor}"/>
 
-            <FontFamily x:Key="FontPrimary">Segoe UI Variable, Segoe UI, Inter, sans-serif</FontFamily>
+            <FontFamily x:Key="FontPrimary">Inter, Segoe UI Variable, Segoe UI, sans-serif</FontFamily>
 
-            <CornerRadius x:Key="RadiusSmall">4</CornerRadius>
-            <CornerRadius x:Key="RadiusMedium">8</CornerRadius>
-            <CornerRadius x:Key="RadiusLarge">12</CornerRadius>
+            <!-- Four text sizes and no more, per DESIGN.md. Twelve were in use before,
+                 from 9.5 to 22, which is why nothing read as a hierarchy. -->
+            <x:Double x:Key="SizeTitle">18</x:Double>
+            <x:Double x:Key="SizeHeading">14</x:Double>
+            <x:Double x:Key="SizeBody">12.5</x:Double>
+            <x:Double x:Key="SizeCaption">11</x:Double>
+
+            <CornerRadius x:Key="RadiusChip">4</CornerRadius>
+            <CornerRadius x:Key="RadiusControl">6</CornerRadius>
+            <CornerRadius x:Key="RadiusCard">8</CornerRadius>
+            <CornerRadius x:Key="RadiusArt">12</CornerRadius>
         </ResourceDictionary>
     </Application.Resources>
 
@@ -64,15 +84,24 @@
         <FluentTheme />
 
         <Style Selector="Button">
+            <!-- Avalonia draws focus as a separate adorner visual outside the control,
+                 which is why restyling BorderBrush alone never changed it. -->
+            <Setter Property="FocusAdorner">
+                <FocusAdornerTemplate>
+                    <Border BorderBrush="{StaticResource BrAccent}" BorderThickness="1"
+                            CornerRadius="6" Margin="-2"/>
+                </FocusAdornerTemplate>
+            </Setter>
             <Setter Property="FontFamily"    Value="{StaticResource FontPrimary}"/>
+            <Setter Property="FontSize"      Value="{StaticResource SizeBody}"/>
             <Setter Property="FontWeight"    Value="SemiBold"/>
             <Setter Property="Foreground"    Value="{StaticResource BrTextPrimary}"/>
             <Setter Property="Background"    Value="{StaticResource BrBgElevated}"/>
             <Setter Property="BorderBrush"   Value="{StaticResource BrBorderDefault}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding"       Value="16,8"/>
+            <Setter Property="Padding"       Value="14,8"/>
             <Setter Property="Cursor"        Value="Hand"/>
-            <Setter Property="CornerRadius"  Value="{StaticResource RadiusMedium}"/>
+            <Setter Property="CornerRadius"  Value="{StaticResource RadiusControl}"/>
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
@@ -99,17 +128,31 @@
         </Style>
 
         <Style Selector="Button.BtnDanger">
-            <Setter Property="Background"  Value="#3D1F1F"/>
+            <Setter Property="Background"  Value="{StaticResource BrBgElevated}"/>
             <Setter Property="BorderBrush" Value="{StaticResource BrError}"/>
             <Setter Property="Foreground"  Value="{StaticResource BrError}"/>
+        </Style>
+
+        <Style Selector="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource FontPrimary}"/>
+            <Setter Property="FontSize"   Value="{StaticResource SizeBody}"/>
+            <Setter Property="Foreground" Value="{StaticResource BrTextPrimary}"/>
+        </Style>
+        <Style Selector="CheckBox, RadioButton, ComboBox">
+            <Setter Property="FontFamily" Value="{StaticResource FontPrimary}"/>
+            <Setter Property="FontSize"   Value="{StaticResource SizeBody}"/>
+        </Style>
+        <Style Selector="ComboBox">
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusControl}"/>
         </Style>
 
         <Style Selector="TextBox">
             <Setter Property="FontFamily"      Value="{StaticResource FontPrimary}"/>
             <Setter Property="Foreground"      Value="{StaticResource BrTextPrimary}"/>
-            <Setter Property="Background"      Value="{StaticResource BrBgSurface}"/>
+            <Setter Property="Background"      Value="{StaticResource BrBgElevated}"/>
             <Setter Property="BorderBrush"     Value="{StaticResource BrBorderSubtle}"/>
-            <Setter Property="CornerRadius"    Value="{StaticResource RadiusMedium}"/>
+            <Setter Property="CornerRadius"    Value="{StaticResource RadiusControl}"/>
+            <Setter Property="FontSize"        Value="{StaticResource SizeBody}"/>
             <Setter Property="Padding"         Value="10,6"/>
         </Style>
 
@@ -118,18 +161,15 @@
              these make it obvious where it is. -->
         <Style Selector="Button:focus-visible">
             <Setter Property="BorderBrush" Value="{StaticResource BrAccent}"/>
-            <Setter Property="BorderThickness" Value="2"/>
         </Style>
         <Style Selector="Button.BtnPrimary:focus-visible">
             <Setter Property="BorderBrush" Value="White"/>
-            <Setter Property="BorderThickness" Value="2"/>
         </Style>
         <Style Selector="RadioButton:focus-visible, CheckBox:focus-visible">
-            <Setter Property="Background" Value="#2E2A4A"/>
+            <Setter Property="Background" Value="{StaticResource BrBgElevated}"/>
         </Style>
         <Style Selector="ComboBox:focus-visible, TextBox:focus">
             <Setter Property="BorderBrush" Value="{StaticResource BrAccent}"/>
-            <Setter Property="BorderThickness" Value="2"/>
         </Style>
         <!-- Tabs. Two buttons rather than a TabControl: a TabItem takes arrow keys
              for its own selection, which fights the window's XYFocus navigation and
@@ -152,7 +192,7 @@
             <Setter Property="CornerRadius"   Value="0"/>
             <Setter Property="Foreground"     Value="{StaticResource BrTextSecondary}"/>
             <Setter Property="Padding"        Value="14,7"/>
-            <Setter Property="FontSize"       Value="13.5"/>
+            <Setter Property="FontSize"       Value="{StaticResource SizeBody}"/>
         </Style>
         <Style Selector="Button.Tab:pointerover /template/ ContentPresenter">
             <Setter Property="Background"  Value="{StaticResource BrBgSurface}"/>
@@ -167,7 +207,7 @@
             <Setter Property="Foreground"      Value="{StaticResource BrTextPrimary}"/>
         </Style>
         <Style Selector="Button.Tab:focus-visible /template/ ContentPresenter">
-            <Setter Property="Background"  Value="#2E2A4A"/>
+            <Setter Property="Background"  Value="{StaticResource BrBgElevated}"/>
             <Setter Property="BorderBrush" Value="{StaticResource BrBorderDefault}"/>
         </Style>
         <Style Selector="Button.Tab.selected">

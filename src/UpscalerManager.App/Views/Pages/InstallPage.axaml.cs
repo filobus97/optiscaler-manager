@@ -191,7 +191,7 @@ public partial class InstallPage : UserControl, IHostedPage
             Content = label,
             IsEnabled = false,
             FontSize = 11,
-            Foreground = new SolidColorBrush(Color.Parse("#8A8AAA")),
+            Foreground = Brush("BrTextSecondary"),
         };
 
         combo.ItemsSource = new[] { Selectable("Latest stable (recommended)", null) };
@@ -375,30 +375,33 @@ public partial class InstallPage : UserControl, IHostedPage
 
         foreach (var f in preview.Files) files.Children.Add(Mono(f));
         if (preview.IniKeys.Count == 0)
-            ini.Children.Add(Mono("(no ini changes)", FontWeight.Normal, "#8A8AAA"));
+            ini.Children.Add(Mono("(no ini changes)", FontWeight.Normal, "BrTextSecondary"));
         foreach (var k in preview.IniKeys) ini.Children.Add(Mono(k.ToString()));
 
         // Make clear the Manager only overrides these keys; the rest comes from the ini.
         var profile = CurrentProfile();
         var iniName = (profile is null || profile.IsBuiltIn) ? "OptiScaler's default .ini" : $"your \"{profile.Name}\" profile";
-        ini.Children.Add(Mono($"…everything else comes from {iniName} (left untouched).", FontWeight.Normal, "#8A8AAA"));
+        ini.Children.Add(Mono($"…everything else comes from {iniName} (left untouched).", FontWeight.Normal, "BrTextSecondary"));
 
         var conflictBox = this.FindControl<Border>("ConflictBox")!;
         var conflictList = this.FindControl<StackPanel>("ConflictList")!;
         conflictList.Children.Clear();
         conflictBox.IsVisible = preview.Conflicts.Count > 0;
         foreach (var c in preview.Conflicts)
-            conflictList.Children.Add(Mono("⚠ " + c, FontWeight.Normal, "#E06060"));
+            conflictList.Children.Add(Mono("⚠ " + c, FontWeight.Normal, "BrError"));
     }
 
-    private static TextBlock Mono(string text, FontWeight weight = FontWeight.Normal, string color = "#E4E4EF")
+    private static IBrush Brush(string key) =>
+        Avalonia.Application.Current?.FindResource(key) as IBrush ?? Brushes.Gray;
+
+    private static TextBlock Mono(string text, FontWeight weight = FontWeight.Normal, string brushKey = "BrTextPrimary")
         => new()
         {
             Text = text,
             FontFamily = new FontFamily("Cascadia Code, Consolas, monospace"),
-            FontSize = 12,
+            FontSize = 12.5,
             FontWeight = weight,
-            Foreground = new SolidColorBrush(Color.Parse(color)),
+            Foreground = Brush(brushKey),
             TextWrapping = TextWrapping.Wrap,
         };
 

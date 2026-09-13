@@ -171,7 +171,7 @@ public partial class GameDetailsPage : UserControl, IHostedPage
             Text = slot.Version is { Length: > 0 }
                 ? $"{slot.Definition.Label}  {slot.VersionText}"
                 : slot.Definition.Label,
-            FontSize = 13,
+            FontSize = 14,
             FontWeight = FontWeight.SemiBold,
             Foreground = Brush("BrTextPrimary"),
             VerticalAlignment = VerticalAlignment.Center,
@@ -188,7 +188,7 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         {
             // What stands in the way, when something does — otherwise what the file is.
             Text = slot.Verdict.Allowed ? slot.Definition.Note : slot.Verdict.Reason,
-            FontSize = 11.5,
+            FontSize = 11,
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brush(slot.Verdict.Allowed ? "BrTextSecondary" : "BrWarning"),
         });
@@ -199,7 +199,7 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         var button = new Button
         {
             Content = slot.IsOurs ? "Change or revert" : "Choose a build",
-            FontSize = 11.5,
+            FontSize = 11,
             VerticalAlignment = VerticalAlignment.Center,
         };
         ToolTip.SetTip(button, slot.Verdict.Allowed
@@ -254,7 +254,7 @@ public partial class GameDetailsPage : UserControl, IHostedPage
             list.Children.Add(new TextBlock
             {
                 Text = UpscalerCatalog.RoleHeading(group.Key),
-                FontSize = 12,
+                FontSize = 12.5,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = Brush("BrTextPrimary"),
                 Margin = new Avalonia.Thickness(0, 4, 0, 0),
@@ -291,7 +291,7 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         heading.Children.Add(new TextBlock
         {
             Text = c.Version is null ? c.Technology : $"{c.Technology}  {c.VersionText}",
-            FontSize = 13,
+            FontSize = 14,
             FontWeight = FontWeight.SemiBold,
             Foreground = Brush("BrTextPrimary"),
             VerticalAlignment = VerticalAlignment.Center,
@@ -309,14 +309,14 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         panel.Children.Add(new TextBlock
         {
             Text = c.Explanation,
-            FontSize = 11.5,
+            FontSize = 11,
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brush("BrTextSecondary"),
         });
         panel.Children.Add(new TextBlock
         {
             Text = $"{c.Vendor}  •  {c.RelativePath}",
-            FontSize = 10.5,
+            FontSize = 11,
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brush("BrTextDisabled"),
         });
@@ -364,7 +364,7 @@ public partial class GameDetailsPage : UserControl, IHostedPage
             config.Children.Add(new TextBlock
             {
                 Text = "No OptiScaler.ini found, so its settings could not be read.",
-                FontSize = 12,
+                FontSize = 12.5,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = Brush("BrTextSecondary"),
             });
@@ -374,7 +374,7 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         config.Children.Add(new TextBlock
         {
             Text = "What it is set to do",
-            FontSize = 12,
+            FontSize = 12.5,
             FontWeight = FontWeight.SemiBold,
             Foreground = Brush("BrTextPrimary"),
             Margin = new Avalonia.Thickness(0, 6, 0, 0),
@@ -387,14 +387,14 @@ public partial class GameDetailsPage : UserControl, IHostedPage
             var label = new TextBlock
             {
                 Text = fact.Label,
-                FontSize = 12,
+                FontSize = 12.5,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = Brush("BrTextSecondary"),
             };
             var value = new TextBlock
             {
                 Text = fact.Value,
-                FontSize = 12,
+                FontSize = 12.5,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = Brush("BrTextPrimary"),
             };
@@ -419,7 +419,7 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         CornerRadius = new Avalonia.CornerRadius(4),
         Padding = new Avalonia.Thickness(6, 1),
         VerticalAlignment = VerticalAlignment.Center,
-        Child = new TextBlock { Text = text, FontSize = 10.5, Foreground = Brush("BrTextSecondary") },
+        Child = new TextBlock { Text = text, FontSize = 11, Foreground = Brush("BrTextSecondary") },
     };
 
     private IBrush? Brush(string key) =>
