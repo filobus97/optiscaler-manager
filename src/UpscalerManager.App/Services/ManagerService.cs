@@ -94,6 +94,46 @@ public sealed class ManagerService
     public IReadOnlyList<HarvestableDll> OptiScalerBuilds(string fileName) =>
         _library.FromOptiScalerReleases(fileName);
 
+    /// <summary>A build of a swappable DLL that could go into a game, and where it is.</summary>
+    public readonly record struct AvailableBuild(string Version, string Source);
+
+    /// <summary>
+    /// The newest build of one DLL that can be installed without the network: what the
+    /// library holds, what the user's other games carry, and what the OptiScaler
+    /// releases already downloaded contain.
+    /// </summary>
+    public AvailableBuild? BestLocalBuild(string fileName, Game exclude)
+    {
+        var found = LibraryBuilds(fileName)
+            .Select(b => new AvailableBuild(b.Version, "in your library"))
+            .Concat(HarvestableBuilds(fileName, exclude)
+                .Select(h => new AvailableBuild(h.Version, $"in {h.GameName}")))
+            .Concat(OptiScalerBuilds(fileName)
+                .Select(h => new AvailableBuild(h.Version, $"in {h.GameName}")))
+            .OrderBy(b => b.Version, VersionOrder.Descending)
+            .ToList();
+
+        return found.Count > 0 ? found[0] : null;
+    }
+
+    /// <summary>
+    /// The newest build of one DLL the archive index lists. The index is cached for a
+    /// day, so a page can ask for every row it shows; null when archive downloads are
+    /// off, the file is not covered, or the index cannot be read.
+    /// </summary>
+    public async Task<AvailableBuild?> BestArchiveBuildAsync(
+        string fileName, CancellationToken cancel = default)
+    {
+        var builds = await RepositoryBuildsAsync(fileName, cancel).ConfigureAwait(false);
+        // why: development builds are in the index and can carry the highest version.
+        // Offering one as "the update" would push a debug DLL at someone who only
+        // pressed Update; the version list still lists them as a deliberate choice.
+        var newest = builds.FirstOrDefault(b => !b.IsDevFile);
+        return newest is not null
+            ? new AvailableBuild(newest.Version, $"in the {DllRepository.SourceName} archive")
+            : null;
+    }
+
     /// <summary>Copies a build out of a game, or out of an OptiScaler release, into the library.</summary>
     public LibraryDll HarvestBuild(HarvestableDll source) => _library.Harvest(source);
 

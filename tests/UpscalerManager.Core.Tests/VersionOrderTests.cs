@@ -157,4 +157,32 @@ public class VersionOrderTests
             new[] { "4.1.1", "4.0.1", "3.1.10", "3.1.4" },
             VersionOrder.Newest(new[] { "3.1.4", "3.1.10", "4.1.1", "4.0.1" }));
     }
+
+    [Fact]
+    public void ABuildIsOnlyNewerWhenItReallyIsALaterBuild()
+    {
+        // The game-page row asks this question about every library it shows, so an
+        // equal build must not read as an update.
+        Assert.True(VersionOrder.IsNewer("310.9.1.0", "310.1.0.0"));
+        Assert.False(VersionOrder.IsNewer("310.1.0.0", "310.9.1.0"));
+        Assert.False(VersionOrder.IsNewer("310.9.1.0", "310.9.1.0"));
+
+        // The numbering change: 310.x came after 3.7.x.
+        Assert.True(VersionOrder.IsNewer("310.2.1.0", "3.7.20.0"));
+
+        // A text sort puts 3.1.10 below 3.1.4.
+        Assert.True(VersionOrder.IsNewer("3.1.10", "3.1.4"));
+
+        // Community revision letters, and pre-releases, rank as they sort.
+        Assert.True(VersionOrder.IsNewer("4.1.1b", "4.1.1"));
+        Assert.False(VersionOrder.IsNewer("4.1.1", "4.1.1b"));
+        Assert.True(VersionOrder.IsNewer("0.7.0", "0.7.0-pre66"));
+        Assert.True(VersionOrder.IsNewer("0.7.0-pre66", "0.7.0-pre14"));
+
+        // An unreadable version is not an excuse to claim an update either way round,
+        // but anything real beats nothing.
+        Assert.True(VersionOrder.IsNewer("310.1.0.0", null));
+        Assert.False(VersionOrder.IsNewer(null, "310.1.0.0"));
+        Assert.False(VersionOrder.IsNewer(null, null));
+    }
 }

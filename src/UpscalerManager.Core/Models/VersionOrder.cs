@@ -97,6 +97,25 @@ public static class VersionOrder
         return suffix.All(char.IsLetter) ? suffix.ToLowerInvariant() : string.Empty;
     }
 
+    /// <summary>
+    /// True when the first version is a later build than the second, by the same rules
+    /// <see cref="Descending"/> sorts by. Equal builds are not newer, which is what a
+    /// row asking "is there an update?" needs to know.
+    /// </summary>
+    public static bool IsNewer(string? candidate, string? current)
+    {
+        var (a, b) = (BaseVersion(candidate), BaseVersion(current));
+        if (a != b) return a > b;
+
+        if (IsPreRelease(candidate) != IsPreRelease(current)) return !IsPreRelease(candidate);
+
+        var byOrdinal = PreReleaseOrdinal(candidate).CompareTo(PreReleaseOrdinal(current));
+        if (byOrdinal != 0) return byOrdinal > 0;
+
+        return string.Compare(
+            RevisionSuffix(candidate), RevisionSuffix(current), StringComparison.Ordinal) > 0;
+    }
+
     private static string Trimmed(string? version) => (version ?? string.Empty).Trim().TrimStart('v', 'V');
 
     /// <summary>Newest first.</summary>

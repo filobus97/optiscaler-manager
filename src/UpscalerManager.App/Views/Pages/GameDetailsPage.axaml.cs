@@ -1,6 +1,8 @@
 // Upscaler Manager - GPL-3.0-or-later. See repository LICENSE.
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -16,11 +18,11 @@ using UpscalerManager.Core.Services;
 namespace UpscalerManager.App.Views.Pages;
 
 /// <summary>
-/// What a single game has, and what OptiScaler is set to do with it.
+/// One game: install or manage OptiScaler, and update the upscaler libraries it ships.
 ///
-/// Written for someone deciding whether to install, not for debugging: versions and
-/// plain-language settings, no hashes or absolute paths. The game list only has room
-/// for a summary, so this is where "which FSR, exactly?" gets answered.
+/// One page rather than two tabs. OptiScaler can help any game and a swap only upgrades
+/// a library the game already has, so they are not alternatives of equal standing and
+/// presenting them as tabs charged the user a decision they should not have to make.
 /// </summary>
 public partial class GameDetailsPage : UserControl, IHostedPage
 {
@@ -30,8 +32,11 @@ public partial class GameDetailsPage : UserControl, IHostedPage
     private readonly ManagerService _manager = null!;
     private readonly GameRowViewModel _row = null!;
 
-    /// <summary>Filled by <see cref="RenderComponents"/>, read by the rows it builds.</summary>
-    private System.Collections.Generic.HashSet<string> _swappedFiles = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Files this app swapped, so the Details list can say so too.</summary>
+    private HashSet<string> _swappedFiles = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Cancels the archive lookup when the page re-renders or closes.</summary>
+    private CancellationTokenSource? _archiveLookup;
 
     public DetailsOutcome Outcome { get; private set; } = DetailsOutcome.None;
 
@@ -47,179 +52,225 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         _row = row;
         Title = row.Game.Name;
 
-        // Open on the route this game is already using. A game with swapped DLLs and
-        // no OptiScaler would otherwise land on an empty OptiScaler tab and look as
-        // though nothing had been done to it.
-        _swapTab = !row.Game.IsOptiscalerInstalled && HasSwaps();
-
         Render();
+        DetachedFromVisualTree += (_, _) => CancelArchiveLookup();
     }
 
     public void FocusFirst() =>
-        this.FindControl<Button>("OptiScalerTab")?.Focus(NavigationMethod.Directional);
+        this.FindControl<Button>("InstallButton")?.Focus(NavigationMethod.Directional);
 
-    // ── Tabs ────────────────────────────────────────────────────────────────────
-
-    private bool HasSwaps()
-    {
-        try { return _manager.SwapSlots(_row.Game).Any(s => s.IsOurs); }
-        catch { return false; }
-    }
-
-
-    /// <summary>Which route the page is showing. Not persisted: it follows the game.</summary>
-    private bool _swapTab;
-
-    private void OnSelectOptiScalerTab(object? sender, RoutedEventArgs e) => SelectTab(swap: false);
-
-    private void OnSelectSwapTab(object? sender, RoutedEventArgs e) => SelectTab(swap: true);
-
-    private void SelectTab(bool swap)
-    {
-        _swapTab = swap;
-        ApplyTab();
-    }
-
-    private void ApplyTab()
-    {
-        Show("OptiScalerPanel", !_swapTab);
-        Show("SwapPanel", _swapTab);
-
-        Mark("OptiScalerTab", !_swapTab);
-        Mark("SwapTab", _swapTab);
-
-        // Install and Remove sit inside the OptiScaler panel, so hiding the panel
-        // hides them. Remove still depends on there being something to remove.
-        Show("RevertButton", _row.Game.IsOptiscalerInstalled);
-    }
-
-    private void Show(string name, bool visible)
-    {
-        if (this.FindControl<Control>(name) is { } control) control.IsVisible = visible;
-    }
-
-    private void Mark(string name, bool selected)
-    {
-        if (this.FindControl<Button>(name) is not { } tab) return;
-        if (selected) tab.Classes.Add("selected");
-        else tab.Classes.Remove("selected");
-    }
+    /// <summary>
+    /// Opens a page from inside this one. Supplied by the main window, which owns the
+    /// page stack, so Back from the version list returns here rather than to the games.
+    /// </summary>
+    public Func<IHostedPage, Task<bool>>? ShowPage { get; set; }
 
     private void Render()
     {
         var game = _row.Game;
 
-        var subtitle = this.FindControl<TextBlock>("SubtitleText");
-        if (subtitle is not null)
+        if (this.FindControl<TextBlock>("SubtitleText") is { } subtitle)
             subtitle.Text = $"{game.Platform}  •  {game.InstallPath}";
 
-        RenderComponents();
-        RenderSwaps();
+        _swappedFiles = SwappedFileNames();
         RenderOptiScaler();
-        ApplyTab();
+        RenderLibraries();
+        RenderComponents();
+        RenderConfig();
     }
 
-    /// <summary>
-    /// Opens a page from inside this one. Supplied by the main window, which owns the
-    /// page stack, so Back from the picker returns here rather than to the game list.
-    /// </summary>
-    public Func<IHostedPage, Task<bool>>? ShowPage { get; set; }
+    // ── OptiScaler ──────────────────────────────────────────────────────────────
 
-    // ── Swapping ────────────────────────────────────────────────────────────────
+    private void RenderOptiScaler()
+    {
+        var game = _row.Game;
+        var installed = game.IsOptiscalerInstalled;
 
-    private void RenderSwaps()
+        if (this.FindControl<TextBlock>("OptiScalerStateText") is { } state)
+            state.Text = installed
+                ? $"Installed — {game.OptiscalerVersion ?? "unknown version"}"
+                : "Not installed";
+
+        if (this.FindControl<Button>("InstallButton") is { } install)
+            install.Content = installed ? "Reinstall" : "Install OptiScaler";
+
+        if (this.FindControl<Button>("RevertButton") is { } revert)
+            revert.IsVisible = installed;
+    }
+
+    // ── Upscaler libraries ──────────────────────────────────────────────────────
+
+    /// <summary>The parts of one library row the archive lookup fills in later.</summary>
+    private sealed record RowParts(SwapSlot Slot, TextBlock Newest, TextBlock Note, Button Action);
+
+    private readonly List<RowParts> _rows = new();
+
+    private void RenderLibraries()
     {
         var list = this.FindControl<StackPanel>("SwapList");
         var empty = this.FindControl<TextBlock>("NoSwapsText");
         if (list is null) return;
 
+        CancelArchiveLookup();
         list.Children.Clear();
+        _rows.Clear();
 
         var slots = _manager.SwapSlots(_row.Game);
 
         if (empty is not null)
         {
             empty.IsVisible = slots.Count == 0;
-
-            // A game whose only upscaler is FSR would otherwise get a bare "nothing to
-            // replace" and no idea why, when the answer is on the other tab.
-            var hasFidelityFx = _row.Game.DetectedComponents.Any(
-                c => c.FileName.StartsWith("amd_fidelityfx", StringComparison.OrdinalIgnoreCase)
-                     || c.FileName.Equals("amdxcffx64.dll", StringComparison.OrdinalIgnoreCase));
-
-            empty.Text = slots.Count == 0 && hasFidelityFx
-                ? "Swapping covers DLSS and XeSS, and this game's upscaler is AMD's FSR. Those "
-                  + "files are not swapped: AMD reorganised them between SDK generations, and FSR 4 "
-                  + "lives in a module most games do not ship at all — so there is usually nothing "
-                  + "to replace. OptiScaler is the route here. It brings its own upscaler and drives "
-                  + "it from the FSR option the game already has: see the OptiScaler tab."
-                : "None of the swappable libraries is present in this game, so there is nothing to "
-                  + "replace. Swapping upgrades a library a game already ships; it cannot add one.";
+            empty.Text = "No swappable library is present. A swap upgrades a library the "
+                         + "game already ships; OptiScaler is the route that can add one.";
         }
 
         foreach (var slot in slots)
-            list.Children.Add(SwapRow(slot));
+            list.Children.Add(LibraryRow(slot));
+
+        StartArchiveLookup();
     }
 
-    private Control SwapRow(SwapSlot slot)
+    private Control LibraryRow(SwapSlot slot)
     {
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
 
-        var heading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        heading.Children.Add(new TextBlock
+        var best = _manager.BestLocalBuild(slot.FileName, _row.Game);
+        var newer = best is { } b && VersionOrder.IsNewer(b.Version, slot.Version);
+
+        var line = new StackPanel
         {
-            Text = slot.Version is { Length: > 0 }
-                ? $"{slot.Definition.Label}  {slot.VersionText}"
-                : slot.Definition.Label,
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        line.Children.Add(new TextBlock
+        {
+            Text = slot.Definition.Technology,
             FontSize = 14,
             FontWeight = FontWeight.SemiBold,
-            Foreground = Brush("BrTextPrimary"),
             VerticalAlignment = VerticalAlignment.Center,
         });
-        if (slot.IsOurs) heading.Children.Add(SourceTag("swapped by this app"));
-        // A game with the same DLL in several places is worth flagging on the row, not
-        // only inside the picker: it is the difference between a swap that works and
-        // one that appears to do nothing.
-        if (slot.CopyCount > 1) heading.Children.Add(SourceTag($"{slot.CopyCount} copies"));
-
-        var text = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
-        text.Children.Add(heading);
-        text.Children.Add(new TextBlock
+        line.Children.Add(new TextBlock
         {
-            // What stands in the way, when something does — otherwise what the file is.
-            Text = slot.Verdict.Allowed ? slot.Definition.Note : slot.Verdict.Reason,
+            Text = slot.VersionText,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+
+        var newest = new TextBlock
+        {
+            Text = newer ? $"→  {best!.Value.Version}" : string.Empty,
+            IsVisible = newer,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = Brush("BrTextPrimary"),
+        };
+        line.Children.Add(newest);
+
+        if (slot.IsOurs) line.Children.Add(Chip("swapped by this app"));
+        // A game with the same DLL in several places is worth flagging here, not only
+        // inside the version list: it is the difference between a swap that works and
+        // one that appears to do nothing.
+        if (slot.CopyCount > 1) line.Children.Add(Chip($"{slot.CopyCount} copies"));
+
+        var note = new TextBlock
+        {
+            Text = NoteFor(slot, newer ? best : null),
             FontSize = 11,
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brush(slot.Verdict.Allowed ? "BrTextSecondary" : "BrWarning"),
-        });
+        };
+
+        var text = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+        text.Children.Add(line);
+        text.Children.Add(note);
         grid.Children.Add(text);
 
         // Always enabled, even when a swap is refused: the page behind it explains why,
         // and a dead button with no explanation is worse than one that tells you.
-        var button = new Button
+        var action = new Button
         {
-            Content = slot.IsOurs ? "Change or revert" : "Choose a build",
-            FontSize = 11,
+            Content = ActionFor(slot, newer),
             VerticalAlignment = VerticalAlignment.Center,
         };
-        ToolTip.SetTip(button, slot.Verdict.Allowed
-            ? $"Pick which build of {slot.FileName} this game should use, from your library or from your other games."
+        ToolTip.SetTip(action, slot.Verdict.Allowed
+            ? $"Every build of {slot.FileName} this app can reach, newest first."
             : slot.Verdict.Reason);
-        button.Click += async (_, _) => await OpenSwapPage(slot);
+        action.Click += async (_, _) => await OpenVersionList(slot);
 
-        Grid.SetColumn(button, 1);
-        grid.Children.Add(button);
+        Grid.SetColumn(action, 1);
+        grid.Children.Add(action);
 
-        return new Border
-        {
-            Padding = new Avalonia.Thickness(10, 8),
-            CornerRadius = new Avalonia.CornerRadius(6),
-            Background = Brush("BrBgSurface"),
-            Child = grid,
-        };
+        _rows.Add(new RowParts(slot, newest, note, action));
+
+        return new Border { Classes = { "Row" }, Child = grid };
     }
 
-    private async Task OpenSwapPage(SwapSlot slot)
+    private static string ActionFor(SwapSlot slot, bool newer) =>
+        newer ? "Update" : slot.IsOurs ? "Change or revert" : "Choose a build";
+
+    /// <summary>
+    /// The caption under a row: what stands in the way when something does, otherwise
+    /// where the newer build would come from, otherwise what the file is.
+    /// </summary>
+    private static string NoteFor(SwapSlot slot, ManagerService.AvailableBuild? newer) =>
+        !slot.Verdict.Allowed ? slot.Verdict.Reason
+        : newer is { } b ? b.Source
+        : slot.Definition.Note;
+
+    /// <summary>
+    /// Asks the archive whether it holds something newer than each row shows.
+    ///
+    /// why: the rows render from what is on disk first and are corrected afterwards.
+    /// The index is cached for a day, but the first call of the day is a network fetch,
+    /// and the page must not wait on it to draw.
+    /// </summary>
+    private void StartArchiveLookup()
+    {
+        if (_rows.Count == 0) return;
+
+        var cancel = new CancellationTokenSource();
+        _archiveLookup = cancel;
+        var rows = _rows.ToList();
+
+        _ = Task.Run(async () =>
+        {
+            foreach (var row in rows)
+            {
+                if (cancel.IsCancellationRequested) return;
+                if (!ManagerService.TakesRepositoryBuilds(row.Slot.FileName)) continue;
+
+                ManagerService.AvailableBuild? build;
+                try { build = await _manager.BestArchiveBuildAsync(row.Slot.FileName, cancel.Token); }
+                catch { continue; }
+
+                if (build is not { } found) continue;
+                if (!VersionOrder.IsNewer(found.Version, row.Slot.Version)) continue;
+
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    if (cancel.IsCancellationRequested) return;
+                    // Only when it beats what the row already offers, so a local build
+                    // is not replaced by an equal one from the network.
+                    var shown = row.Newest.IsVisible
+                        ? row.Newest.Text?.TrimStart('→', ' ')
+                        : row.Slot.Version;
+                    if (!VersionOrder.IsNewer(found.Version, shown)) return;
+
+                    row.Newest.Text = $"→  {found.Version}";
+                    row.Newest.IsVisible = true;
+                    if (row.Slot.Verdict.Allowed) row.Note.Text = found.Source;
+                    row.Action.Content = ActionFor(row.Slot, newer: true);
+                });
+            }
+        }, cancel.Token);
+    }
+
+    private void CancelArchiveLookup()
+    {
+        _archiveLookup?.Cancel();
+        _archiveLookup = null;
+    }
+
+    private async Task OpenVersionList(SwapSlot slot)
     {
         if (ShowPage is null) return;
 
@@ -227,12 +278,12 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         if (!changed) return;
 
         // A swap rewrites a file in place, which the analyzer's folder-timestamp cache
-        // cannot see, so the whole page is re-read rather than just the swap rows.
+        // cannot see, so the whole page is re-read rather than just the rows.
         _row.RefreshFromGame();
         Render();
     }
 
-    // ── What the game has ───────────────────────────────────────────────────────
+    // ── Details: what the game has, and what OptiScaler does with it ────────────
 
     private void RenderComponents()
     {
@@ -241,7 +292,6 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         if (list is null) return;
 
         list.Children.Clear();
-        _swappedFiles = SwappedFileNames();
         var components = _row.Game.DetectedComponents;
         if (empty is not null) empty.IsVisible = components.Count == 0;
         if (components.Count == 0) return;
@@ -256,7 +306,6 @@ public partial class GameDetailsPage : UserControl, IHostedPage
                 Text = UpscalerCatalog.RoleHeading(group.Key),
                 FontSize = 12.5,
                 FontWeight = FontWeight.SemiBold,
-                Foreground = Brush("BrTextPrimary"),
                 Margin = new Avalonia.Thickness(0, 4, 0, 0),
             });
 
@@ -266,11 +315,11 @@ public partial class GameDetailsPage : UserControl, IHostedPage
     }
 
     /// <summary>
-    /// Files this app swapped, so the list above can say so too. Attribution otherwise
-    /// comes from the install manifest, which knows nothing about swaps — leaving the
-    /// same file tagged in one section of this page and untagged in the other.
+    /// Files this app swapped. Attribution otherwise comes from the install manifest,
+    /// which knows nothing about swaps — leaving the same file tagged in one part of
+    /// this page and untagged in the other.
     /// </summary>
-    private System.Collections.Generic.HashSet<string> SwappedFileNames()
+    private HashSet<string> SwappedFileNames()
     {
         try
         {
@@ -281,38 +330,28 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         }
         catch
         {
-            return new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         }
     }
 
     private Control ComponentRow(DetectedComponent c)
     {
-        var heading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        heading.Children.Add(new TextBlock
+        var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        line.Children.Add(new TextBlock
         {
             Text = c.Version is null ? c.Technology : $"{c.Technology}  {c.VersionText}",
-            FontSize = 14,
-            FontWeight = FontWeight.SemiBold,
-            Foreground = Brush("BrTextPrimary"),
             VerticalAlignment = VerticalAlignment.Center,
         });
         // Only tagged when the manifest proves this app put the file here. Anything else
         // gets no tag: the app cannot tell a file the game shipped from one a mod or the
         // player dropped in, and "came with the game" was asserting exactly that.
         if (c.Source == ComponentSource.Manager)
-            heading.Children.Add(SourceTag("added by this app"));
+            line.Children.Add(Chip("added by this app"));
         else if (_swappedFiles.Contains(c.FileName))
-            heading.Children.Add(SourceTag("swapped by this app"));
+            line.Children.Add(Chip("swapped by this app"));
 
         var panel = new StackPanel { Spacing = 2 };
-        panel.Children.Add(heading);
-        panel.Children.Add(new TextBlock
-        {
-            Text = c.Explanation,
-            FontSize = 11,
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = Brush("BrTextSecondary"),
-        });
+        panel.Children.Add(line);
         panel.Children.Add(new TextBlock
         {
             Text = $"{c.Vendor}  •  {c.RelativePath}",
@@ -321,64 +360,40 @@ public partial class GameDetailsPage : UserControl, IHostedPage
             Foreground = Brush("BrTextDisabled"),
         });
 
-        return new Border
-        {
-            Padding = new Avalonia.Thickness(10, 8),
-            CornerRadius = new Avalonia.CornerRadius(6),
-            Background = Brush("BrBgSurface"),
-            Child = panel,
-        };
+        var row = new Border { Classes = { "Row" }, Child = panel };
+        // What the file is, for anyone who wants it, without a paragraph on the page.
+        ToolTip.SetTip(row, c.Explanation);
+        return row;
     }
 
-    // ── OptiScaler ──────────────────────────────────────────────────────────────
-
-    private void RenderOptiScaler()
+    private void RenderConfig()
     {
-        var game = _row.Game;
-        var summary = this.FindControl<TextBlock>("OptiScalerSummaryText");
         var config = this.FindControl<StackPanel>("ConfigList");
-        var revert = this.FindControl<Button>("RevertButton");
-        var install = this.FindControl<Button>("InstallButton");
-
-        var installed = game.IsOptiscalerInstalled;
-        if (install is not null) install.Content = installed ? "Reinstall OptiScaler" : "Install OptiScaler";
-        // Whether Remove is shown is ApplyTab's call; setting it here too would let
-        // the two disagree.
-        _ = revert;
-
-        if (summary is not null)
-        {
-            summary.Text = installed
-                ? $"Installed — version {game.OptiscalerVersion ?? "unknown"}."
-                : "Not installed. Installing it lets this game's existing DLSS or FSR option drive a different upscaler — the route for games a straight DLL swap cannot help.";
-        }
-
         if (config is null) return;
-        config.Children.Clear();
-        if (!installed) return;
 
-        var dir = _manager.GetInstalledDirectory(game) ?? game.InstallPath;
+        config.Children.Clear();
+        if (!_row.Game.IsOptiscalerInstalled) return;
+
+        var dir = _manager.GetInstalledDirectory(_row.Game) ?? _row.Game.InstallPath;
         var facts = OptiScalerConfigReader.Read(dir);
+
+        config.Children.Add(new TextBlock
+        {
+            Text = "What OptiScaler is set to do",
+            FontSize = 11,
+            Foreground = Brush("BrTextSecondary"),
+        });
+
         if (facts.Count == 0)
         {
             config.Children.Add(new TextBlock
             {
                 Text = "No OptiScaler.ini found, so its settings could not be read.",
-                FontSize = 12.5,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = Brush("BrTextSecondary"),
             });
             return;
         }
-
-        config.Children.Add(new TextBlock
-        {
-            Text = "What it is set to do",
-            FontSize = 12.5,
-            FontWeight = FontWeight.SemiBold,
-            Foreground = Brush("BrTextPrimary"),
-            Margin = new Avalonia.Thickness(0, 6, 0, 0),
-        });
 
         foreach (var fact in facts)
         {
@@ -387,17 +402,10 @@ public partial class GameDetailsPage : UserControl, IHostedPage
             var label = new TextBlock
             {
                 Text = fact.Label,
-                FontSize = 12.5,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = Brush("BrTextSecondary"),
             };
-            var value = new TextBlock
-            {
-                Text = fact.Value,
-                FontSize = 12.5,
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = Brush("BrTextPrimary"),
-            };
+            var value = new TextBlock { Text = fact.Value, TextWrapping = TextWrapping.Wrap };
             // The ini key is there for anyone who wants to verify, without shouting.
             ToolTip.SetTip(value, fact.Source);
 
@@ -411,13 +419,11 @@ public partial class GameDetailsPage : UserControl, IHostedPage
 
     // ── Bits and pieces ─────────────────────────────────────────────────────────
 
-    private Control SourceTag(string text) => new Border
+    private Control Chip(string text) => new Border
     {
         Background = Brush("BrBgElevated"),
-        BorderBrush = Brush("BrBorderSubtle"),
-        BorderThickness = new Avalonia.Thickness(1),
         CornerRadius = new Avalonia.CornerRadius(4),
-        Padding = new Avalonia.Thickness(6, 1),
+        Padding = new Avalonia.Thickness(6, 2),
         VerticalAlignment = VerticalAlignment.Center,
         Child = new TextBlock { Text = text, FontSize = 11, Foreground = Brush("BrTextSecondary") },
     };

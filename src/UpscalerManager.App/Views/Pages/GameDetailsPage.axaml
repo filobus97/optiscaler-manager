@@ -2,92 +2,75 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="UpscalerManager.App.Views.Pages.GameDetailsPage">
 
-  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
+  <Grid RowDefinitions="Auto,*,Auto">
 
     <!-- Where the game lives -->
     <TextBlock Grid.Row="0" Name="SubtitleText" TextWrapping="Wrap"
+ FontSize="{StaticResource SizeCaption}"
  Foreground="{StaticResource BrTextSecondary}"/>
 
-    <!-- What the game has. Above the tabs, because it describes the game itself
-         rather than either of the two things you can do to it. -->
-    <Border Grid.Row="1" Margin="0,14,0,0"
- Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
- BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
-      <StackPanel Spacing="10">
-        <TextBlock Text="Upscaling technology in this game" FontWeight="SemiBold"
- Foreground="{StaticResource BrTextPrimary}"/>
-        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource BrTextSecondary}"
- Text="Everything found next to the game, with the version actually on disk. A game can carry several at once."/>
-        <!-- Capped, with its own scroll. A game can carry eight of these, and an
-             uncapped list pushed the tabs below the fold entirely — the one thing
-             that must stay on screen is the choice between the two routes. -->
-        <ScrollViewer MaxHeight="230" VerticalScrollBarVisibility="Auto">
-          <StackPanel Name="ComponentsList" Spacing="12" Margin="0,0,6,0"/>
-        </ScrollViewer>
-        <TextBlock Name="NoComponentsText" IsVisible="False" TextWrapping="Wrap"
+    <ScrollViewer Grid.Row="1" Name="PageScroller" Margin="0,16,0,0">
+      <StackPanel Spacing="12">
+
+        <!-- OptiScaler first, and the only primary action on the page: it is the route
+             that can help any game, where a swap only upgrades a library the game
+             already ships. -->
+        <Border Classes="Card">
+          <Grid ColumnDefinitions="*,Auto,Auto">
+            <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+              <TextBlock Text="OptiScaler" FontSize="{StaticResource SizeHeading}"
+ FontWeight="SemiBold"/>
+              <TextBlock Name="OptiScalerStateText" FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
+            </StackPanel>
+            <Button Grid.Column="1" Name="InstallButton" Classes="BtnPrimary"
+ Content="Install OptiScaler" Click="OnInstallClick"
+ VerticalAlignment="Center"
+                    ToolTip.Tip="Choose the version, the upscaler to run and the add-ons, and see exactly what will change before anything is written."/>
+            <Button Grid.Column="2" Name="RevertButton" Classes="BtnDanger" Content="Remove"
+ Margin="8,0,0,0" Click="OnRevertClick" VerticalAlignment="Center"
+                    ToolTip.Tip="Put back the files that were here before and remove everything the install added."/>
+          </Grid>
+        </Border>
+
+        <!-- One row per swappable library the game actually has, with what is in it
+             now and the newest build this app can reach. -->
+        <Border Classes="Card">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Upscaler libraries" FontSize="{StaticResource SizeHeading}"
+ FontWeight="SemiBold"/>
+            <StackPanel Name="SwapList" Spacing="6"/>
+            <TextBlock Name="NoSwapsText" IsVisible="False" TextWrapping="Wrap"
+ FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
+          </StackPanel>
+        </Border>
+
+        <!-- Everything found next to the game, and what OptiScaler is set to do with
+             it. Collapsed: it answers "why is it doing that?", which is not the
+             question most visits are here to ask. -->
+        <Expander Name="DetailsExpander">
+          <Expander.Header>
+            <TextBlock Text="Details" FontSize="{StaticResource SizeHeading}" FontWeight="SemiBold"/>
+          </Expander.Header>
+          <StackPanel Spacing="12" Margin="0,0,0,4">
+            <StackPanel Spacing="6">
+              <TextBlock Text="Found in this game" FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
+              <StackPanel Name="ComponentsList" Spacing="6"/>
+              <TextBlock Name="NoComponentsText" IsVisible="False" TextWrapping="Wrap"
+ FontSize="{StaticResource SizeCaption}"
  Foreground="{StaticResource BrTextSecondary}"
  Text="No upscaling technology found. Installing OptiScaler adds it."/>
-      </StackPanel>
-    </Border>
-
-    <!-- The two routes. They are alternatives, not a list: picking one here swaps
-         both the options below and the actions pinned at the bottom, so neither
-         route is presented as the default with the other tacked on. -->
-    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="6" Margin="0,16,0,0">
-      <Button Name="OptiScalerTab" Classes="Tab" Content="OptiScaler" Click="OnSelectOptiScalerTab"
-              ToolTip.Tip="Install OptiScaler into this game, so its existing DLSS or FSR option can drive a different upscaler."/>
-      <Button Name="SwapTab" Classes="Tab" Content="DLL swapper" Click="OnSelectSwapTab"
-              ToolTip.Tip="Replace one of the game's own upscaler libraries with a different build of the same file. No OptiScaler involved."/>
-    </StackPanel>
-
-    <ScrollViewer Grid.Row="3" Name="TabScroller" Margin="0,10,0,0">
-      <StackPanel Spacing="16">
-
-        <!-- OptiScaler tab -->
-        <StackPanel Name="OptiScalerPanel" Spacing="16">
-          <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
- BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
-            <StackPanel Spacing="10">
-              <TextBlock Name="OptiScalerSummaryText" TextWrapping="Wrap"
- Foreground="{StaticResource BrTextSecondary}"/>
-              <!-- This tab's actions live in it, exactly as the swapper's live in
-                   its rows. A pinned bar belonging to one tab made that route look
-                   like the page's real purpose and the other like an extra.
-                   Above the config table, so picking the tab shows an action
-                   immediately rather than after a scroll. -->
-              <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,2,0,4">
-                <Button Name="InstallButton" Classes="BtnPrimary" Content="Install OptiScaler"
- Click="OnInstallClick"
-                        ToolTip.Tip="Choose the version, which files to install and the add-ons, and see exactly what will change before anything is written."/>
-                <Button Name="RevertButton" Classes="BtnDanger" Content="Remove OptiScaler"
- Click="OnRevertClick"
-                        ToolTip.Tip="Restore the files that were here before and remove everything the install added."/>
-              </StackPanel>
-              <StackPanel Name="ConfigList" Spacing="8"/>
             </StackPanel>
-          </Border>
-        </StackPanel>
-
-        <!-- DLL swapper tab -->
-        <StackPanel Name="SwapPanel" Spacing="16" IsVisible="False">
-          <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
- BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
-            <StackPanel Spacing="10">
-              <TextBlock TextWrapping="Wrap" Foreground="{StaticResource BrTextSecondary}"
- Text="This game loads whichever build of these files is sitting next to it, so replacing one with a newer build upgrades the game — nothing hooked, nothing injected, nothing to configure. The original is kept and can be put back at any time."/>
-              <StackPanel Name="SwapList" Spacing="8"/>
-              <TextBlock Name="NoSwapsText" IsVisible="False" TextWrapping="Wrap"
- Foreground="{StaticResource BrTextSecondary}"
- Text="None of the swappable libraries is present in this game, so there is nothing to replace. Swapping upgrades a library a game already ships; it cannot add one."/>
-            </StackPanel>
-          </Border>
-        </StackPanel>
+            <StackPanel Name="ConfigList" Spacing="6"/>
+          </StackPanel>
+        </Expander>
 
       </StackPanel>
     </ScrollViewer>
 
-    <!-- Only what applies to the game itself. Each tab carries its own actions. -->
-    <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="10" Margin="0,16,0,0">
+    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" Margin="0,16,0,0">
       <Button Name="RescanButton" Content="Re-scan this game" Click="OnRescanClick"
               ToolTip.Tip="Read the game folder again — use this after changing files by hand."/>
       <Button Content="Back to games" Click="OnCloseClick" IsCancel="True"
