@@ -26,9 +26,12 @@ namespace UpscalerManager.Core.Components;
 /// OptiScaler's own DllNames.h is the second reference, and the more complete one for
 /// AMD: it loads six FidelityFX libraries by name (runtime, loader, upscaler, frame
 /// generation, denoiser and radiance cache on DX12, plus the Vulkan runtime). Those are
-/// all here, which is where this list goes past DLSS Swapper rather than catching up —
-/// as are the two names the FSR 4 community builds ship under, the only route the swap
-/// path has to FSR 4 at all.
+/// all here, which is where this list goes past DLSS Swapper rather than catching up.
+/// The gap is not cosmetic: AMD's FidelityFX SDK 2.0.0 split the runtime into a loader
+/// plus one module per effect, and DLSS Swapper's manifest covers only
+/// amd_fidelityfx_dx12.dll and amd_fidelityfx_vk.dll — which in SDK 2 are the loader,
+/// the one file holding no effect code at all. The upscaler module beside it is what
+/// decides a game's FSR version, and that is the file this app can swap.
 ///
 /// Names are matched <em>case-insensitively</em>, which is the other deliberate
 /// difference. DLSS Swapper's detection compares exact case — with the comment "the case
@@ -65,17 +68,20 @@ public static class SwappableDlls
             "The ray-tracing denoiser. Swapping it changes how denoised reflections and lighting look."),
 
         // ── AMD ──────────────────────────────────────────────────────────────────
-        // Note these are the FidelityFX *runtime* libraries, not the upscaler model
-        // file OptiScaler bundles. A game linking the FidelityFX runtime loads its
-        // upscaler through these.
+        // AMD restructured this whole family in FidelityFX SDK 2.0.0: what had been one
+        // amd_fidelityfx_dx12.dll became a loader plus one module per effect, and the
+        // loader was made compatible with the old filename. So the first two entries are
+        // ambiguous by name alone, and the upscaler module is where FSR 4 actually lives.
+        // See FidelityFxLayout for how the generations are told apart, and why mixing
+        // them is refused.
         new SwappableDll("amd_fidelityfx_dx12.dll", "FidelityFX runtime (DX12)", "FSR (DX12)",
-            "The library that loads AMD's upscaler on DX12. Swapping it is how a game gets a newer FSR without OptiScaler — when the game uses the FidelityFX runtime rather than linking FSR directly."),
+            "This filename means one of two things. In FidelityFX SDK 1 it is a single library with every effect inside it, and its FSR version is shown here. From SDK 2 onwards AMD split the effects into separate modules behind a loader, and made that loader compatible with this name — so in a newer game this file holds no effect code at all, and the FSR version comes from amd_fidelityfx_upscaler_dx12.dll instead. Builds of the two are not interchangeable, and only matching ones are offered."),
         new SwappableDll("amd_fidelityfx_vk.dll", "FidelityFX runtime (Vulkan)", "FSR (Vulkan)",
-            "The Vulkan build of the same library."),
+            "The Vulkan build of the same library, and the same two-generation story."),
         new SwappableDll("amd_fidelityfx_loader_dx12.dll", "FidelityFX loader (DX12)", "FidelityFX loader",
-            "Picks which FidelityFX version to load. A game ships either this or the runtime above — OptiScaler tries the loader first — so whichever one is present is the one to swap."),
+            "The FidelityFX SDK 2 loader. It carries the SDK version and no effect code, so swapping it does not change your FSR version — the upscaler module does that. Worth updating alongside the modules, since it is what loads them."),
         new SwappableDll("amd_fidelityfx_framegeneration_dx12.dll", "FSR Frame Generation", "FSR Frame Generation",
-            "AMD's frame generation. Swapping it changes how generated frames look, and like Nvidia's it is the most likely of the set to misbehave against a game built for an older build."),
+            "The FidelityFX SDK 2 frame generation module; its version is the FSR frame generation version. Swapping it changes how generated frames look, and like Nvidia's it is the most likely of the set to misbehave against a game built for an older build."),
         new SwappableDll("amd_fidelityfx_denoiser_dx12.dll", "FidelityFX denoiser (DX12)", "FidelityFX denoiser",
             "AMD's ray-tracing denoiser, loaded through the FidelityFX runtime."),
         new SwappableDll("amd_fidelityfx_radiancecache_dx12.dll", "FidelityFX radiance cache (DX12)", "FidelityFX radiance cache",
@@ -87,7 +93,7 @@ public static class SwappableDlls
         // FidelityFX runtime the game ships or an OptiScaler install. Swapping it in a
         // game that has neither achieves nothing, which the row says outright.
         new SwappableDll("amd_fidelityfx_upscaler_dx12.dll", "FSR (FidelityFX upscaler)", "FSR upscaler",
-            "The file FSR 4 lives in. A newer build here is how a game that already loads AMD's FidelityFX runtime gets a newer FSR — including the community INT8 builds, which are the route to FSR 4 without a driver that provides it. It needs the FidelityFX runtime or OptiScaler present to be loaded at all."),
+            "The FidelityFX SDK 2 upscaling module, and the file FSR 4 lives in — AMD's own SDK 2.3.0 build of it is FSR 4.1.1. This is the one to swap to change the FSR version a game runs, and its version is the FSR version with no translation needed. It carries the older FSR 3 and FSR 2 providers too, and needs the loader or OptiScaler present to be loaded at all."),
         new SwappableDll("amdxcffx64.dll", "AMD FSR 4 runtime (or a community INT8 build)", "FSR 4 runtime",
             "The slot AMD's FSR 4 library occupies, and the name newer community INT8 builds ship under. Same caveat: something has to load it — the driver, the FidelityFX runtime, or OptiScaler."),
 

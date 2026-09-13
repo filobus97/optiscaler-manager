@@ -152,14 +152,19 @@ public partial class DllSwapPage : UserControl, IHostedPage
         if (panel is null) return;
         panel.Children.Clear();
 
-        var builds = _manager.LibraryBuilds(_slot.FileName);
+        var held = _manager.LibraryBuilds(_slot.FileName);
+        var builds = held.Where(b => CouldReplaceCurrent(b.Version)).ToList();
+        var withheld = held.Count - builds.Count;
+
         if (builds.Count == 0)
         {
-            panel.Children.Add(Label(
+            panel.Children.Add(GenerationNote(withheld) ?? Label(
                 "Nothing held yet. Add one from a game below, or import a file you already have.",
                 11.5, FontWeight.Normal, "BrTextSecondary"));
             return;
         }
+
+        if (GenerationNote(withheld) is { } libraryNote) panel.Children.Add(libraryNote);
 
         foreach (var build in builds)
             panel.Children.Add(BuildRow(
@@ -187,16 +192,21 @@ public partial class DllSwapPage : UserControl, IHostedPage
             .OrderBy(h => h.Version, UpscalerManager.Core.Models.VersionOrder.Descending)
             .ToList();
 
-        if (found.Count == 0)
+        var usable = found.Where(h => CouldReplaceCurrent(h.Version)).ToList();
+        var skipped = found.Count - usable.Count;
+
+        if (usable.Count == 0)
         {
-            panel.Children.Add(Label(
+            panel.Children.Add(GenerationNote(skipped) ?? Label(
                 "No other build of this DLL was found in your games, or in the OptiScaler "
                 + "releases and community builds you have downloaded.",
                 11.5, FontWeight.Normal, "BrTextSecondary"));
             return;
         }
 
-        foreach (var candidate in found)
+        if (GenerationNote(skipped) is { } harvestNote) panel.Children.Add(harvestNote);
+
+        foreach (var candidate in usable)
             panel.Children.Add(BuildRow(
                 candidate.Version,
                 $"in {candidate.GameName}",
@@ -328,8 +338,11 @@ public partial class DllSwapPage : UserControl, IHostedPage
 
         // Development builds last: they exist in the archive but are not what a player
         // wants unless they went looking.
-        var offered = builds
-            .Where(b => !b.InLibrary)
+        var candidates = builds.Where(b => !b.InLibrary).ToList();
+        var compatible = candidates.Where(b => CouldReplaceCurrent(b.Version)).ToList();
+        var wrongGeneration = candidates.Count - compatible.Count;
+
+        var offered = compatible
             .OrderBy(b => b.IsDevFile)
             .ThenBy(b => b.Version, VersionOrder.Descending)
             .Take(10)
@@ -337,13 +350,15 @@ public partial class DllSwapPage : UserControl, IHostedPage
 
         if (offered.Count == 0)
         {
-            panel.Children.Add(Label(
+            panel.Children.Add(GenerationNote(wrongGeneration) ?? Label(
                 builds.Count == 0
                     ? "The archive's index could not be read, or it holds nothing for this file."
                     : "You already hold every build the archive has for this file.",
                 11.5, FontWeight.Normal, "BrTextSecondary"));
             return;
         }
+
+        if (GenerationNote(wrongGeneration) is { } archiveNote) panel.Children.Add(archiveNote);
 
         foreach (var build in offered)
             panel.Children.Add(BuildRow(
@@ -458,9 +473,11 @@ public partial class DllSwapPage : UserControl, IHostedPage
 
         foreach (var build in offered)
             panel.Children.Add(BuildRow(
-                build.Version,
-                $"from {build.Vendor}",
-                isCurrent: IsInstalled(build.Version),
+                build.Label,
+                build.IsSdkRelease
+                    ? $"from {build.Vendor} — the module as shipped in that SDK release"
+                    : $"from {build.Vendor}",
+                isCurrent: !build.IsSdkRelease && IsInstalled(build.Version),
                 action: "Download and use",
                 onAction: () => DownloadAndSwap(build)));
     }
@@ -504,6 +521,49 @@ public partial class DllSwapPage : UserControl, IHostedPage
             Background = Brush("BrBgSurface"),
             Child = grid,
         };
+    }
+
+    /// <summary>
+    /// Whether a build of this version could stand in for what is in the game.
+    ///
+    /// Judged from the version alone, which is enough to hide the rows that plainly
+    /// cannot work: an SDK 1 FidelityFX monolith is 1.x, an SDK 2 loader 2.x, an effect
+    /// module 4.x. Offering a 1.0.1 monolith to a game running a 2.3.0 loader is not an
+    /// upgrade, it is a game that stops upscaling — and the archive holds nine of them
+    /// under exactly that filename.
+    ///
+    /// Deliberately not the last line of defence. This reads no files, so a mislabelled
+    /// build can still slip through; <see cref="DllSwapService.Swap"/> reads the
+    /// candidate's own provider table and refuses there.
+    /// </summary>
+    private bool CouldReplaceCurrent(string? version)
+    {
+        var current = _slot.FidelityFxRole;
+        if (current == FidelityFxRole.NotFidelityFx) return true;
+
+        var candidate = FidelityFxLayout.Identify(_slot.FileName, version, null);
+        return FidelityFxLayout.Interchangeable(current, candidate);
+    }
+
+    /// <summary>
+    /// Said once per section when rows were withheld, so a user does not conclude the
+    /// source is empty when it is actually full of the wrong generation.
+    /// </summary>
+    private Control? GenerationNote(int withheld)
+    {
+        if (withheld == 0) return null;
+
+        var current = _slot.FidelityFxRole;
+        var what = current == FidelityFxRole.Loader
+            ? "are older SDK 1 libraries, and this game runs an SDK 2 loader"
+            : "are for a different generation of AMD's FidelityFX runtime";
+
+        return Label(
+            $"{withheld} build(s) here {what}, so they are not offered. "
+            + (current == FidelityFxRole.Loader
+                ? "The FSR version in this game comes from amd_fidelityfx_upscaler_dx12.dll — swap that instead."
+                : string.Empty),
+            11.5, FontWeight.Normal, "BrTextSecondary");
     }
 
     private bool IsInstalled(string version) =>

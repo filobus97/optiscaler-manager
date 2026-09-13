@@ -19,8 +19,19 @@ namespace UpscalerManager.Core.Services;
 /// True when a build of this version is already held, so the row can say so rather than
 /// offering a 60 MB download of something already on disk.
 /// </param>
+/// <param name="IsSdkRelease">
+/// True when <paramref name="Version"/> names an SDK release rather than this file's own
+/// version — AMD's SDK 2.3.0 ships an upscaler stamped 4.1.1. The row then says which
+/// SDK the module comes from, and cannot claim the build is already held, because the
+/// tag and the file's version are different numbers.
+/// </param>
 public sealed record VendorBuild(
-    string FileName, string Tag, string Version, string Vendor, string Licence, bool InLibrary);
+    string FileName, string Tag, string Version, string Vendor, string Licence, bool InLibrary,
+    bool IsSdkRelease = false)
+{
+    /// <summary>How the row titles this build.</summary>
+    public string Label => IsSdkRelease ? $"FidelityFX SDK {Version}" : Version;
+}
 
 /// <summary>
 /// Downloads swappable DLLs from the vendor that publishes them.
@@ -65,10 +76,19 @@ public sealed class VendorDllService
         }
 
         return tags
-            .Select(tag => VendorDllSource.VersionFromTag(tag))
-            .Zip(tags, (version, tag) => new VendorBuild(
-                source.FileName, tag, version, source.Vendor, source.Licence,
-                _library.Has(source.FileName, version)))
+            .Where(tag => VendorDllSource.TagCanSupply(source, tag))
+            .Select(tag => new VendorBuild(
+                source.FileName,
+                tag,
+                VendorDllSource.VersionFromTag(tag),
+                source.Vendor,
+                source.Licence,
+                // A tag that names an SDK release says nothing about the module's own
+                // version, so it cannot answer "do I already have this".
+                source.TagIsSdkVersion
+                    ? false
+                    : _library.Has(source.FileName, VendorDllSource.VersionFromTag(tag)),
+                source.TagIsSdkVersion))
             .OrderBy(b => b.Version, VersionOrder.Descending)
             .ToList();
     }

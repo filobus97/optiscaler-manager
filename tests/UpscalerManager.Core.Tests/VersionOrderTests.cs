@@ -81,4 +81,80 @@ public class VersionOrderTests
     [Fact]
     public void DuplicatesAreDropped()
         => Assert.Equal(new[] { "1.0.0" }, VersionOrder.Newest(new List<string> { "1.0.0", "1.0.0" }));
+    // ── Community revision letters ──────────────────────────────────────────
+
+    [Fact]
+    public void ALetteredRevisionIsNewerThanTheBareVersion()
+    {
+        // The community FSR builds tag revisions with a bare trailing letter, so 4.0.2d
+        // is the fourth build of 4.0.2 — not a pre-release of it. This used to invert:
+        // the ordinal regex matched the version's own last digit for "4.0.2" and nothing
+        // for "4.0.2d", so the newest build sorted below the oldest and "latest first"
+        // offered the wrong one.
+        Assert.Equal(
+            new[] { "4.1.1b", "4.1.1", "4.0.2d", "4.0.2" },
+            VersionOrder.Newest(new[] { "4.0.2", "4.1.1", "4.0.2d", "4.1.1b" }));
+    }
+
+    [Fact]
+    public void RevisionLettersOrderAlphabetically()
+    {
+        Assert.Equal(
+            new[] { "4.0.2d", "4.0.2c", "4.0.2b", "4.0.2" },
+            VersionOrder.Newest(new[] { "4.0.2b", "4.0.2", "4.0.2d", "4.0.2c" }));
+    }
+
+    [Fact]
+    public void APreReleaseStillRanksBelowItsRelease()
+    {
+        // The new rule must not disturb the old one: a "-" or "+" suffix is a
+        // pre-release and ranks below, a bare letter is a revision and ranks above.
+        Assert.Equal(
+            new[] { "0.6.7d", "0.6.7", "0.6.7-pre14", "0.6.7-pre9" },
+            VersionOrder.Newest(new[] { "0.6.7-pre9", "0.6.7", "0.6.7-pre14", "0.6.7d" }));
+    }
+
+    [Fact]
+    public void TheRevisionSuffixIsOnlyLettersAttachedToAVersion()
+    {
+        Assert.Equal("d", VersionOrder.RevisionSuffix("4.0.2d"));
+        Assert.Equal("b", VersionOrder.RevisionSuffix("v4.1.1B"));      // case-insensitive
+        Assert.Equal("", VersionOrder.RevisionSuffix("4.0.2"));
+        Assert.Equal("", VersionOrder.RevisionSuffix("0.6.7-pre14"));   // a pre-release
+        Assert.Equal("", VersionOrder.RevisionSuffix("1.0.1.38338"));   // a file version
+        Assert.Equal("", VersionOrder.RevisionSuffix("4.0.2_final"));   // not only letters
+        Assert.Equal("", VersionOrder.RevisionSuffix("nightly"));       // no version at all
+        Assert.Equal("", VersionOrder.RevisionSuffix(null));
+    }
+
+    [Fact]
+    public void TheOrdinalOnlyAppliesToPreReleases()
+    {
+        // On a plain version the regex would match the version's own last number, which
+        // is what made the comparison wrong.
+        Assert.Equal(0, VersionOrder.PreReleaseOrdinal("4.0.2"));
+        Assert.Equal(0, VersionOrder.PreReleaseOrdinal("1.0.1.38338"));
+        Assert.Equal(14, VersionOrder.PreReleaseOrdinal("0.6.7-pre14"));
+    }
+
+    // ── The version shapes the swap route actually meets ────────────────────
+
+    [Fact]
+    public void TheRealVersionShapesAllSortNewestFirst()
+    {
+        // Each of these is a real list the app shows, and each has a trap in it.
+
+        // The DLSS archive spans a numbering change: 310.x came after 3.7.x.
+        Assert.Equal("310.9.1.0", VersionOrder.Newest(
+            new[] { "2.5.1.0", "310.9.1.0", "3.7.20.0", "310.2.1.0", "1.0.0.0" })[0]);
+
+        // FidelityFX runtime builds differ only in the fourth part.
+        Assert.Equal("1.0.2.38022", VersionOrder.Newest(
+            new[] { "1.0.0.36208", "1.0.1.38338", "1.0.2.38022", "1.0.1.41314" })[0]);
+
+        // FSR versions, where a text sort puts 3.1.10 below 3.1.4.
+        Assert.Equal(
+            new[] { "4.1.1", "4.0.1", "3.1.10", "3.1.4" },
+            VersionOrder.Newest(new[] { "3.1.4", "3.1.10", "4.1.1", "4.0.1" }));
+    }
 }

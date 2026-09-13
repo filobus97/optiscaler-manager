@@ -112,7 +112,7 @@ Building from source is in [Building & running](#building--running).
   | Community releases you have downloaded | none | The same cache the OptiScaler route uses, so a version fetched once serves both. |
   | FSR 4 community builds | download | From [`Agustinm28/OptiScaler-Extras`](https://github.com/Agustinm28/OptiScaler-Extras) — a third party, not AMD. The only route to FSR 4, in its own section because presenting it beside the vendor downloads would imply it is equally official. |
   | The DLSS Swapper archive | download | ~229 archived builds of nine vendor files. A third-party mirror, hash-checked. |
-  | The vendor | download | Straight from Nvidia's and Intel's own repositories. |
+  | The vendor | download | Straight from Nvidia's, Intel's and AMD's own repositories. |
 
   Plus importing a file by hand, at any time.
 
@@ -120,14 +120,21 @@ Building from source is in [Building & running](#building--running).
   **Settings → DLL swapper**. Turn both off and swapping still works, with builds
   already on your disk.
 
-  **On the two mirrors.** The vendor route fetches from the company that made the
-  file: Nvidia publishes `nvngx_dlss`, `nvngx_dlssd` and `nvngx_dlssg` at
+  **On the vendors.** The vendor route fetches from the company that made the file:
+  Nvidia publishes `nvngx_dlss`, `nvngx_dlssd` and `nvngx_dlssg` at
   [`NVIDIA/DLSS`](https://github.com/NVIDIA/DLSS), Intel publishes `libxess`,
   `libxess_dx11`, `libxess_fg` and `libxell` at
-  [`intel/xess`](https://github.com/intel/xess). But vendors keep only recent tags,
-  and **AMD publishes the FidelityFX runtimes nowhere at all** — which is exactly the
-  gap the [DLSS Swapper](https://github.com/beeradmoore/dlss-swapper) project's
-  archive fills. Its value is not code but history: every DLSS release back to
+  [`intel/xess`](https://github.com/intel/xess), and **AMD publishes its FidelityFX SDK
+  2 modules** — the upscaler included, so FSR 4 among them — as signed binaries under
+  `Kits/FidelityFX/signedbin/` in
+  [`FidelityFX-SDK`](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK), MIT
+  licensed. An earlier version of this file claimed AMD published none of these loose,
+  which was wrong, and it mattered: it made FSR 4 look like something only a
+  third-party community build could supply.
+
+  What no vendor publishes is the *past*. They keep only recent tags, and AMD no longer
+  ships the SDK 1 monolith at all — which is the gap the
+  [DLSS Swapper](https://github.com/beeradmoore/dlss-swapper) project's archive fills. Its value is not code but history: every DLSS release back to
   1.0.0.0 in 2018, nine builds of `amd_fidelityfx_dx12.dll`, the XeSS family —
   scraped out of shipped games and vendor SDK zips over years, indexed by a manifest
   on GitHub Pages and hosted by one volunteer. No amount of local scanning
@@ -160,18 +167,52 @@ Building from source is in [Building & running](#building--running).
   This one is taken straight from DLSS Swapper, whose `UpdateDllAsync` has always
   looped over every copy.
 
-  **The version shown is the version you can look up.** For every file except two, the
-  version resource is the number a player recognises. AMD's FidelityFX runtimes are
-  the exception: they are stamped with an SDK build number, so the library providing
-  **FSR 3.1.2** reports itself as `1.0.1.38338` — a number that appears in no AMD
-  documentation and reads like a downgrade next to a game's FSR 3 library. DLSS
-  Swapper resolves it by loading the DLL and calling `ffxQuery`, which is not possible
-  here: these are Windows PEs and this is a Linux-first app. Instead the FSR version is
-  read statically out of the binary's provider version table, and rows show
-  `FSR 3.1.2  (1.0.1.38338)` — both halves, because the build number is what the app
-  reads off the file and is the only thing separating two builds of the same FSR
-  version. Checked against all sixteen FidelityFX builds the archive holds: sixteen
-  exact matches.
+  **AMD split the FidelityFX runtime, and that changes what these files mean.** Before
+  FidelityFX SDK 2.0.0, `amd_fidelityfx_dx12.dll` was one library with every effect
+  inside it. From 2.0.0 AMD split the effects into separate modules behind a loader —
+  and made that loader *deliberately compatible with the old filename*, so a game
+  migrating can keep shipping `amd_fidelityfx_dx12.dll`. In AMD's words:
+
+  > Starting with AMD FidelityFX™ SDK 2.0.0 the effects, previously combined in
+  > amd_fidelityfx_dx12.dll, are split into multiple DLLs based on effect type. […] A
+  > small loader DLL, not containing any effect code. […] It is interface- and
+  > behavior-compatible with amd_fidelityfx_dx12.dll.
+
+  So one filename now means two incompatible things, and SDK 1 effects are deprecated
+  to SDK 1. Read out of AMD's own signed binaries at SDK tag `v2.3.0`, whose release
+  notes say it contains FSR Upscaling 4.1.1:
+
+  | file | file version | effects inside |
+  | --- | --- | --- |
+  | `amd_fidelityfx_loader_dx12.dll` | **2.3.0** — the SDK version | *none* (26 KB) |
+  | `amd_fidelityfx_upscaler_dx12.dll` | **4.1.1** | FSR 4.1.1, 3.1.5, 2.3.4 |
+  | `amd_fidelityfx_framegeneration_dx12.dll` | **4.0.1** | FSR FG 4.0.1, 3.1.7, 3.1.6 |
+  | `amd_fidelityfx_denoiser_dx12.dll` | 1.2.0 | — |
+  | `amd_fidelityfx_radiancecache_dx12.dll` | 0.9.0 | — |
+
+  Three consequences the app now acts on:
+
+  - **The loader's version is not an FSR version.** A game showing
+    `amd_fidelityfx_dx12.dll 2.3.0.2740` is running an SDK 2 loader, and its FSR version
+    comes from the upscaler module beside it. Left bare, 2.3.0 reads as though it were
+    two generations behind the 4.1.1 sitting in the same folder. Rows say
+    `FidelityFX SDK 2.3.0 (loader only)` instead, and point at the upscaler.
+  - **Cross-generation swaps are refused.** The DLSS Swapper archive holds nine builds
+    of `amd_fidelityfx_dx12.dll` and every one is SDK 1. Installing one into a game
+    running an SDK 2 loader would leave deprecated SDK 1 code unable to drive the game's
+    separate modules — a game that stops upscaling, offered from a row that called it an
+    upgrade. Those rows are now hidden, with a line saying why, and the swap itself
+    re-checks the candidate's own bytes before writing.
+  - **For an SDK 2 module the file version already *is* the effect version**, so nothing
+    needs translating — rows read `FSR Upscaling 4.1.1`.
+
+  For the SDK 1 monolith the file version is still an SDK build number: the library
+  providing **FSR 3.1.2** reports itself as `1.0.1.38338`. DLSS Swapper resolves that by
+  loading the DLL and calling `ffxQuery`, which is not possible here — these are Windows
+  PEs and this is a Linux-first app. The FSR version is read statically out of the
+  binary's provider version table instead, and rows show `FSR 3.1.2  (1.0.1.38338)`.
+  Checked against all sixteen SDK 1 FidelityFX builds the archive holds: sixteen exact
+  matches.
 
   Swaps go through the same backup-and-manifest layer as everything else: the
   original is copied out before anything is written, and the game's page can put it
@@ -306,6 +347,13 @@ own switch:
   vendor builds, for the nine files it covers. A mirror rather than the publisher, so
   it is labelled as one on every row, hash-checked on download, and switchable off in
   **Settings → DLL swapper**.
+
+There is also an
+[`Optiscaler-Extras-FP8`](https://github.com/Optiscaler-Client/Optiscaler-Extras-FP8)
+mirror, which republishes AMD's official FP8 upscaler unmodified from the FidelityFX-SDK
+releases as a smaller archive. This app does not use it: the same binary is fetched from
+AMD's own repository instead, on the same principle as Nvidia and Intel — the publisher
+over a mirror, wherever the publisher will serve it.
 
 Neither is mirrored here: both are fetched from their own hosts, and this project
 hosts no binaries whatsoever. See

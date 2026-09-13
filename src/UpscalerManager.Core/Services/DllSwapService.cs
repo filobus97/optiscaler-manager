@@ -24,10 +24,15 @@ public sealed record SwapVerdict(bool Allowed, string Reason)
 /// The FSR version, for the FidelityFX runtimes whose file version is an SDK build
 /// number. Null for every other file.
 /// </param>
-public sealed record SwapCopy(string Directory, string? Version, string? FsrVersion = null)
+public sealed record SwapCopy(
+    string Directory, string? Version, string? FsrVersion = null, string FileName = "")
 {
     /// <summary>The version as it should be shown to a player.</summary>
-    public string VersionText => Components.FidelityFxVersion.Describe(FsrVersion, Version);
+    public string VersionText => Components.FidelityFxLayout.Describe(FileName, Version, FsrVersion);
+
+    /// <summary>Which part of AMD's FidelityFX runtime this copy is, if any.</summary>
+    public Components.FidelityFxRole Role =>
+        Components.FidelityFxLayout.Identify(FileName, Version, FsrVersion);
 }
 
 /// <summary>One swappable DLL as it currently stands in a game.</summary>
@@ -55,6 +60,13 @@ public sealed record SwapSlot(
 
     /// <summary>The first copy's version, written the way a player should read it.</summary>
     public string VersionText => Copies.Count > 0 ? Copies[0].VersionText : "unknown version";
+
+    /// <summary>
+    /// Which part of AMD's FidelityFX runtime sits here, if any. A build of a different
+    /// part cannot stand in for it, however new its version looks.
+    /// </summary>
+    public Components.FidelityFxRole FidelityFxRole =>
+        Copies.Count > 0 ? Copies[0].Role : Components.FidelityFxRole.NotFidelityFx;
 
     /// <summary>How many places this DLL sits in.</summary>
     public int CopyCount => Copies.Count;
@@ -225,7 +237,7 @@ public sealed class DllSwapService
             // The same directory can appear twice if the scan reached it by two routes.
             if (copies.Any(c => c.Directory.Equals(dir, StringComparison.OrdinalIgnoreCase))) continue;
 
-            copies.Add(new SwapCopy(dir, component.Version, component.FsrVersion));
+            copies.Add(new SwapCopy(dir, component.Version, component.FsrVersion, definition.FileName));
         }
 
         var slots = new List<SwapSlot>();
@@ -327,6 +339,20 @@ public sealed class DllSwapService
             throw new InvalidOperationException(
                 $"{slot.FileName} is no longer in {game.Name}. Re-scan the game and try again.");
 
+        // An SDK 1 FidelityFX monolith and an SDK 2 loader share a filename and are not
+        // interchangeable. Checked against the build's own bytes rather than its
+        // version, because a version alone cannot tell a 2.3.0 loader from anything
+        // else, and installing the wrong generation leaves a game with no upscaler at
+        // all — offered from a row that called it an upgrade.
+        var slotRole = slot.FidelityFxRole;
+        if (slotRole != Components.FidelityFxRole.NotFidelityFx)
+        {
+            var buildRole = RoleOfBuild(build);
+            if (!Components.FidelityFxLayout.Interchangeable(slotRole, buildRole))
+                throw new InvalidOperationException(
+                    Components.FidelityFxLayout.ExplainMismatch(slot.FileName, slotRole, buildRole));
+        }
+
         // A game that is running has its DLLs mapped, and writing over one either fails
         // or is ignored until the game restarts — either way the player is told they
         // swapped something that did not change. Cheaper to refuse and say why.
@@ -427,6 +453,23 @@ public sealed class DllSwapService
         Log.Write($"[Swap] {game.Name}: {slot.FileName} -> {build.Version} ({build.SourceLabel}) " +
                   $"in {existing.Copies.Count} place(s).");
         return existing;
+    }
+
+    /// <summary>
+    /// What a library build actually is, for the generation check.
+    ///
+    /// Reads the provider table off the build itself, since that is the only thing that
+    /// separates an SDK 1 monolith from an SDK 2 loader carrying the same filename. Only
+    /// for the two ambiguous names — every other module is settled by its name, and
+    /// reading a 28 MB upscaler to confirm what it is called would be waste.
+    /// </summary>
+    internal static Components.FidelityFxRole RoleOfBuild(LibraryDll build)
+    {
+        var effect = Components.FidelityFxVersion.Translates(build.FileName)
+            ? Components.FidelityFxVersion.FromBinary(build.Path)
+            : null;
+
+        return Components.FidelityFxLayout.Identify(build.FileName, build.Version, effect);
     }
 
     /// <summary>

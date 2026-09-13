@@ -60,10 +60,15 @@ public class DetectedComponent
     public string? FsrVersion { get; set; }
 
     /// <summary>
-    /// The version as it should be shown: the FSR version where there is one, with the
-    /// build number kept alongside it.
+    /// The version as it should be shown, labelled by what the file actually is — an
+    /// SDK 2 loader's 2.3.0 is an SDK version, not an FSR version, and the two sit side
+    /// by side in the same game. See <see cref="Components.FidelityFxLayout"/>.
     /// </summary>
-    public string VersionText => Components.FidelityFxVersion.Describe(FsrVersion, Version);
+    public string VersionText => Components.FidelityFxLayout.Describe(FileName, Version, FsrVersion);
+
+    /// <summary>Which part of AMD's FidelityFX runtime this is, if any.</summary>
+    public Components.FidelityFxRole FidelityFxRole =>
+        Components.FidelityFxLayout.Identify(FileName, Version, FsrVersion);
 
     /// <summary>Where it sits, relative to the game folder.</summary>
     public string RelativePath { get; set; } = string.Empty;
