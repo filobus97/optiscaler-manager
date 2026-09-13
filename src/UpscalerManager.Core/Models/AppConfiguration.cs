@@ -120,12 +120,6 @@ namespace UpscalerManager.Core.Models
         public bool GamepadNavigation { get; set; } = true;
 
         /// <summary>
-        /// Offer the vendors' own releases as a swap download source. On by default:
-        /// it is the original publisher, and nothing is fetched without a press.
-        /// </summary>
-        public bool SwapVendorDownloads { get; set; } = true;
-
-        /// <summary>
         /// Offer the DLSS Swapper project's archive as a swap download source.
         ///
         /// On by default, because for several files it is the only source that exists —

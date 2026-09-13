@@ -149,14 +149,14 @@ namespace UpscalerManager.Core.Tests
         }
 
         [Fact]
-        public void EveryTranslatedFileIsOneWeStillDescribe()
+        public void EveryTranslatedFileIsOneWeBothDescribeAndSwap()
         {
-            // Translation is for the game page's benefit, not the swapper's — these
-            // files are detected and labelled but no longer swapped.
+            // The translation is what makes these swappable: a row reading "1.0.1.41314"
+            // says nothing, and "FSR 3.1.4" is the same build named usefully.
             foreach (var name in new[] { "amd_fidelityfx_dx12.dll", "amd_fidelityfx_vk.dll" })
             {
                 Assert.NotNull(UpscalerCatalog.For(name));
-                Assert.False(SwappableDlls.IsSwappable(name));
+                Assert.True(SwappableDlls.IsSwappable(name));
             }
         }
 

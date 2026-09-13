@@ -39,10 +39,11 @@ public enum FidelityFxRole
 /// Which generation of AMD's FidelityFX runtime a file belongs to, and what it holds.
 ///
 /// <para><b>The thing that makes this necessary.</b> AMD restructured the runtime in
-/// FidelityFX SDK 2.0.0. This app no longer <em>swaps</em> these files — see
-/// <see cref="SwappableDlls"/> — but it still has to identify and label them, because
-/// "which FSR version is this game running" is the same question whether OptiScaler or
-/// the game itself put the files there. Before SDK 2.0.0, <c>amd_fidelityfx_dx12.dll</c> was a monolith
+/// FidelityFX SDK 2.0.0. This is what lets the app both label these files and swap them
+/// safely: "which FSR version is this game running" is the same question whether
+/// OptiScaler or the game itself put the files there, and it is also the question that
+/// decides whether a build can replace another.
+/// Before SDK 2.0.0, <c>amd_fidelityfx_dx12.dll</c> was a monolith
 /// containing every effect — upscaling included. From 2.0.0 the effects were split into
 /// separate modules behind a loader, and AMD's documentation is explicit:</para>
 ///
@@ -142,6 +143,53 @@ public static class FidelityFxLayout
         var head = dot > 0 ? version[..dot] : version;
         return int.TryParse(head, out var major) ? major : null;
     }
+
+    /// <summary>True when this filename belongs to AMD's FidelityFX runtime.</summary>
+    public static bool IsFidelityFx(string? fileName) =>
+        fileName is not null && (ByName.ContainsKey(fileName) || LegacyNames.Contains(fileName));
+
+    /// <summary>
+    /// True when a build of one role can stand in for a file of the other.
+    ///
+    /// Only same-for-same. SDK 1 effects are deprecated to SDK 1, so dropping a
+    /// monolith over a loader leaves SDK 1 code trying to drive SDK 2 modules, and the
+    /// reverse leaves a game calling into a loader with no modules beside it. Files
+    /// outside the FidelityFX runtime are nobody's business here, so they pass.
+    /// </summary>
+    public static bool Interchangeable(FidelityFxRole current, FidelityFxRole candidate) =>
+        current == FidelityFxRole.NotFidelityFx
+        || candidate == FidelityFxRole.NotFidelityFx
+        || current == candidate;
+
+    /// <summary>
+    /// Why a build cannot replace what is in the game, in one sentence — or null when
+    /// it can.
+    /// </summary>
+    public static string? ExplainMismatch(FidelityFxRole current, FidelityFxRole candidate) =>
+        Interchangeable(current, candidate)
+            ? null
+            : $"{Noun(candidate)}, and this game uses {Noun(current)} — AMD split the runtime "
+              + "in SDK 2.0.0 and the two generations cannot stand in for each other.";
+
+    /// <summary>Which SDK generation a role belongs to, for a row that only has room to tag it.</summary>
+    public static string Generation(FidelityFxRole role) => role switch
+    {
+        FidelityFxRole.Monolith => "SDK 1",
+        FidelityFxRole.NotFidelityFx => string.Empty,
+        _ => "SDK 2",
+    };
+
+    /// <summary>What a file of this role is, for a sentence that has to name both.</summary>
+    public static string Noun(FidelityFxRole role) => role switch
+    {
+        FidelityFxRole.Monolith => "an SDK 1 runtime with the effects inside it",
+        FidelityFxRole.Loader => "an SDK 2 loader",
+        FidelityFxRole.Upscaler => "an SDK 2 upscaler module",
+        FidelityFxRole.FrameGeneration => "an SDK 2 frame generation module",
+        FidelityFxRole.Denoiser => "an SDK 2 denoiser module",
+        FidelityFxRole.RadianceCache => "an SDK 2 radiance cache module",
+        _ => "not a FidelityFX runtime",
+    };
 
     /// <summary>
     /// How a FidelityFX file's version should be written for a player.

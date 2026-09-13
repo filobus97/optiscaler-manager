@@ -27,12 +27,11 @@ namespace UpscalerManager.Core.Components;
 /// the whole source can be switched off in Settings.</para>
 ///
 /// <para>The manifest covers nine files, and only nine. There is no FSR 4 in it — no
-/// <c>amd_fidelityfx_upscaler_dx12.dll</c> and no <c>amdxcffx64.dll</c> — so this
-/// source sits alongside the community-build and OptiScaler-release routes rather
-/// than replacing them. Its <c>fsr_31_dx12</c> and <c>fsr_31_vk</c> sections are the
-/// FidelityFX <em>runtime</em> libraries, which is precisely the gap the harvest-only
-/// library left: those are not published loose by AMD, so before this the only
-/// versions available were whatever the user's other games happened to ship.</para>
+/// <c>amd_fidelityfx_upscaler_dx12.dll</c> and no <c>amdxcffx64.dll</c> — so it does
+/// not replace the OptiScaler route. Its <c>fsr_31_dx12</c> and <c>fsr_31_vk</c>
+/// sections are the FidelityFX runtime libraries, all SDK 1 builds, which AMD does not
+/// publish loose: without them the only FSR 3.1.x versions available are whatever the
+/// user's other games happen to ship.</para>
 /// </summary>
 public static class DllRepository
 {
@@ -53,10 +52,7 @@ public static class DllRepository
     /// <param name="Vendor">Who wrote the library, not who hosts it.</param>
     public sealed record RepositoryFile(string ManifestKey, string FileName, string Vendor);
 
-    /// <summary>
-    /// The files taken from the manifest, keyed by its own naming. Its two FSR sections
-    /// are omitted, so this is seven of its nine.
-    /// </summary>
+    /// <summary>All nine files the manifest carries, keyed by its own naming.</summary>
     public static readonly IReadOnlyList<RepositoryFile> All = new[]
     {
         new RepositoryFile("dlss", "nvngx_dlss.dll", "Nvidia"),
@@ -66,6 +62,8 @@ public static class DllRepository
         new RepositoryFile("xess_dx11", "libxess_dx11.dll", "Intel"),
         new RepositoryFile("xess_fg", "libxess_fg.dll", "Intel"),
         new RepositoryFile("xell", "libxell.dll", "Intel"),
+        new RepositoryFile("fsr_31_dx12", "amd_fidelityfx_dx12.dll", "AMD"),
+        new RepositoryFile("fsr_31_vk", "amd_fidelityfx_vk.dll", "AMD"),
     };
 
     private static readonly Dictionary<string, RepositoryFile> ByName =

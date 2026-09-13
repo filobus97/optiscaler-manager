@@ -173,15 +173,20 @@ namespace UpscalerManager.Core.Tests
         // ── No longer swapped, still revertible ─────────────────────────────
 
         [Fact]
-        public void NoFidelityFxFileIsOfferedForSwappingAnyMore()
+        public void TheTwoRuntimesAreSwappableAndTheSdk2ModulesAreNot()
         {
-            // The decision this release implements. Swapping is DLSS and XeSS; AMD's
-            // files changed shape between SDK generations, and FSR 4 is not in any file
-            // most games ship, so OptiScaler is the route for FSR.
+            // The two legacy names are ordinary swaps within one SDK generation, guarded
+            // across the two. The SDK 2 modules are not: FSR 4 lives in the upscaler
+            // module, which most games do not ship at all, and OptiScaler installs and
+            // manages it instead.
+            foreach (var name in new[] { "amd_fidelityfx_dx12.dll", "amd_fidelityfx_vk.dll" })
+            {
+                Assert.True(SwappableDlls.IsSwappable(name), $"{name} is not offered for swapping");
+                Assert.False(SwappableDlls.IsRetired(name));
+            }
+
             foreach (var name in new[]
             {
-                "amd_fidelityfx_dx12.dll",
-                "amd_fidelityfx_vk.dll",
                 "amd_fidelityfx_loader_dx12.dll",
                 "amd_fidelityfx_upscaler_dx12.dll",
                 "amd_fidelityfx_framegeneration_dx12.dll",
@@ -200,15 +205,58 @@ namespace UpscalerManager.Core.Tests
         }
 
         [Fact]
-        public void WhatIsLeftIsExactlyDlssAndXeSS()
+        public void WhatIsOfferedIsDlssXeSSAndTheTwoFidelityFxRuntimes()
         {
             Assert.Equal(
                 new[]
                 {
+                    "amd_fidelityfx_dx12.dll", "amd_fidelityfx_vk.dll",
                     "libxell.dll", "libxess.dll", "libxess_dx11.dll", "libxess_fg.dll",
                     "nvngx_dlss.dll", "nvngx_dlssd.dll", "nvngx_dlssg.dll",
                 },
                 SwappableDlls.All.Select(d => d.FileName).OrderBy(n => n, System.StringComparer.Ordinal));
+        }
+
+        [Fact]
+        public void AGenerationCanOnlyBeReplacedByItself()
+        {
+            // The guard. One filename covers both generations, so this is the rule that
+            // stops an SDK 1 runtime landing on a game running SDK 2 and leaving it with
+            // no upscaler at all.
+            Assert.True(FidelityFxLayout.Interchangeable(FidelityFxRole.Monolith, FidelityFxRole.Monolith));
+            Assert.True(FidelityFxLayout.Interchangeable(FidelityFxRole.Loader, FidelityFxRole.Loader));
+            Assert.False(FidelityFxLayout.Interchangeable(FidelityFxRole.Monolith, FidelityFxRole.Loader));
+            Assert.False(FidelityFxLayout.Interchangeable(FidelityFxRole.Loader, FidelityFxRole.Monolith));
+            Assert.False(FidelityFxLayout.Interchangeable(FidelityFxRole.Monolith, FidelityFxRole.Upscaler));
+
+            // Everything else is nobody's business here, so it passes.
+            Assert.True(FidelityFxLayout.Interchangeable(
+                FidelityFxRole.NotFidelityFx, FidelityFxRole.NotFidelityFx));
+            Assert.True(FidelityFxLayout.Interchangeable(
+                FidelityFxRole.NotFidelityFx, FidelityFxRole.Monolith));
+        }
+
+        [Fact]
+        public void AMismatchIsExplainedInOneSentenceNamingBothSides()
+        {
+            Assert.Null(FidelityFxLayout.ExplainMismatch(FidelityFxRole.Monolith, FidelityFxRole.Monolith));
+
+            var why = FidelityFxLayout.ExplainMismatch(FidelityFxRole.Loader, FidelityFxRole.Monolith);
+            Assert.NotNull(why);
+            Assert.Contains("SDK 1", why);
+            Assert.Contains("SDK 2 loader", why);
+            Assert.Contains("2.0.0", why);
+        }
+
+        [Fact]
+        public void OnlyTheRuntimeNamesCountAsFidelityFx()
+        {
+            Assert.True(FidelityFxLayout.IsFidelityFx("amd_fidelityfx_dx12.dll"));
+            Assert.True(FidelityFxLayout.IsFidelityFx("AMD_FidelityFX_VK.dll"));
+            Assert.True(FidelityFxLayout.IsFidelityFx("amd_fidelityfx_upscaler_dx12.dll"));
+            Assert.False(FidelityFxLayout.IsFidelityFx("nvngx_dlss.dll"));
+            Assert.False(FidelityFxLayout.IsFidelityFx("amdxcffx64.dll"));
+            Assert.False(FidelityFxLayout.IsFidelityFx(null));
         }
 
         [Fact]
@@ -229,29 +277,25 @@ namespace UpscalerManager.Core.Tests
         }
 
         [Fact]
-        public void NoDownloadSourceOffersAFileWeNoLongerSwap()
+        public void NoDownloadSourceOffersAFileWeDoNotSwap()
         {
-            // A source pointing at a retired file would fetch something, import it, and
-            // then have nowhere to install it.
-            foreach (var source in VendorDllSource.All)
-                Assert.True(SwappableDlls.IsSwappable(source.FileName),
-                    $"{source.FileName} is a vendor download but is no longer swappable");
-
+            // A source pointing at a file with no row would fetch something, import it,
+            // and then have nowhere to install it.
             foreach (var file in DllRepository.All)
                 Assert.True(SwappableDlls.IsSwappable(file.FileName),
-                    $"{file.FileName} is an archive download but is no longer swappable");
+                    $"{file.FileName} is an archive download but is not swappable");
         }
 
         [Fact]
-        public void NeitherTheArchiveNorAnyVendorCoversFidelityFxNow()
+        public void TheArchiveReachesTheFidelityFxRuntimesAndNotFsr4()
         {
-            foreach (var name in new[] { "amd_fidelityfx_dx12.dll", "amd_fidelityfx_vk.dll",
-                                         "amd_fidelityfx_upscaler_dx12.dll", "amdxcffx64.dll" })
-            {
-                Assert.False(DllRepository.Covers(name));
-                Assert.Null(VendorDllSource.For(name));
-            }
+            // The two runtimes are the reason the archive matters for AMD: SDK 1 builds
+            // AMD does not publish loose. FSR 4 is not in the archive at all, which is
+            // why it stays OptiScaler's route.
+            Assert.True(DllRepository.Covers("amd_fidelityfx_dx12.dll"));
+            Assert.True(DllRepository.Covers("amd_fidelityfx_vk.dll"));
+            Assert.False(DllRepository.Covers("amd_fidelityfx_upscaler_dx12.dll"));
+            Assert.False(DllRepository.Covers("amdxcffx64.dll"));
         }
-
     }
 }

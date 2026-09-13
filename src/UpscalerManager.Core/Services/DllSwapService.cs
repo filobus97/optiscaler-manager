@@ -261,6 +261,56 @@ public sealed class DllSwapService
     }
 
     /// <summary>
+    /// Why this build cannot replace what the game has, when the two are FidelityFX
+    /// files of different SDK generations — null when there is nothing in the way.
+    ///
+    /// Both sides are read from the binaries rather than trusted from a name: the
+    /// loader is documented as compatible with the old filename, so the name proves
+    /// nothing. See <see cref="FidelityFxLayout"/>.
+    /// </summary>
+    public static string? CrossGenerationReason(SwapSlot slot, string candidatePath) =>
+        CrossGenerationReason(slot, RoleOf(slot.FileName, candidatePath));
+
+    /// <summary>The same guard for a build whose role is already known.</summary>
+    public static string? CrossGenerationReason(SwapSlot slot, FidelityFxRole candidate)
+    {
+        var current = CurrentRole(slot);
+        if (current == FidelityFxRole.NotFidelityFx) return null;
+
+        return FidelityFxLayout.ExplainMismatch(current, candidate) is { } why
+            ? $"This build is {why}"
+            : null;
+    }
+
+    /// <summary>What the file now in the game is, by generation.</summary>
+    public static FidelityFxRole CurrentRole(SwapSlot slot) =>
+        FidelityFxLayout.Identify(
+            slot.FileName, slot.Version, slot.Copies.Count > 0 ? slot.Copies[0].FsrVersion : null);
+
+    /// <summary>
+    /// How a build's version should read. For everything but FidelityFX the file version
+    /// is the answer; for a FidelityFX runtime it is an SDK build number, and the FSR
+    /// version has to come out of the binary.
+    /// </summary>
+    public static string DescribeBuild(string fileName, string version, string path)
+    {
+        if (!FidelityFxLayout.IsFidelityFx(fileName)) return version;
+
+        var effect = File.Exists(path) ? FidelityFxVersion.FromBinary(path) : null;
+        return FidelityFxLayout.Describe(fileName, version, effect);
+    }
+
+    /// <summary>What a candidate file on disk is, read out of the file itself.</summary>
+    public static FidelityFxRole RoleOf(string fileName, string path)
+    {
+        if (!File.Exists(path)) return FidelityFxRole.NotFidelityFx;
+
+        var fileVersion = DllLibraryService.VersionOf(PeFileInspector.Inspect(path));
+        var effectVersion = FidelityFxVersion.FromBinary(path);
+        return FidelityFxLayout.Identify(fileName, fileVersion, effectVersion);
+    }
+
+    /// <summary>
     /// Whether a swap of this file can be offered.
     ///
     /// The one hard refusal is a file OptiScaler is already responsible for. Both
@@ -275,10 +325,8 @@ public sealed class DllSwapService
         // there, so reverting stays available and installing anything new does not.
         if (SwappableDlls.IsRetired(fileName))
             return SwapVerdict.No(
-                $"This app no longer swaps {fileName} — AMD's FidelityFX files changed shape often "
-                + "enough that a swap here was as likely to break a game as improve it, and OptiScaler "
-                + "does the job properly by bringing its own upscaler. Reverting to your game's own "
-                + "build still works.");
+                $"This app does not swap {fileName}: OptiScaler installs and manages it instead. "
+                + "Reverting to your game's own build still works.");
 
         // Already ours: reverting is always allowed, so this is not a refusal.
         if (swapped is not null) return SwapVerdict.Ok;
@@ -349,6 +397,12 @@ public sealed class DllSwapService
         if (slot.Copies.Count == 0)
             throw new InvalidOperationException(
                 $"{slot.FileName} is no longer in {game.Name}. Re-scan the game and try again.");
+
+        // The generation guard. One filename covers both FidelityFX SDK generations, so
+        // this is the last place a cross-generation build can be stopped — the UI
+        // filters, but a swap must not depend on the UI having filtered.
+        if (CrossGenerationReason(slot, build.Path) is { } mismatch)
+            throw new InvalidOperationException(mismatch);
 
         // A game that is running has its DLLs mapped, and writing over one either fails
         // or is ignored until the game restarts — either way the player is told they

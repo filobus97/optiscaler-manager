@@ -216,13 +216,13 @@ namespace UpscalerManager.Core.Tests
         }
 
         [Fact]
-        public void TheArchiveCoversSevenFilesWithDistinctKeys()
+        public void TheArchiveCoversAllNineFilesWithDistinctKeys()
         {
-            // Seven of the manifest's nine: its two FSR sections are ignored, because
-            // this app no longer swaps AMD's FidelityFX files.
-            Assert.Equal(7, DllRepository.All.Count);
-            Assert.Equal(7, DllRepository.All.Select(f => f.ManifestKey).Distinct().Count());
-            Assert.Equal(7, DllRepository.All.Select(f => f.FileName).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+            // All nine sections the manifest carries, the two FidelityFX runtimes
+            // included — those are SDK 1 builds AMD publishes nowhere else.
+            Assert.Equal(9, DllRepository.All.Count);
+            Assert.Equal(9, DllRepository.All.Select(f => f.ManifestKey).Distinct().Count());
+            Assert.Equal(9, DllRepository.All.Select(f => f.FileName).Distinct(StringComparer.OrdinalIgnoreCase).Count());
         }
 
         [Fact]

@@ -31,7 +31,6 @@ public sealed class ManagerService
     public ManagerService(IManualComponentProvider manualProvider)
     {
         _components = new ComponentManagementService(manualProvider);
-        _vendor = new VendorDllService(_library);
         _repository = new DllRepositoryService(_library);
     }
 
@@ -61,7 +60,6 @@ public sealed class ManagerService
     // ── DLL swapping ────────────────────────────────────────────────────────
     private readonly DllSwapService _swaps = new();
     private readonly DllLibraryService _library = new();
-    private readonly VendorDllService _vendor;
     private readonly DllRepositoryService _repository;
 
     /// <summary>
@@ -95,7 +93,8 @@ public sealed class ManagerService
         _library.FromOptiScalerReleases(fileName);
 
     /// <summary>A build of a swappable DLL that could go into a game, and where it is.</summary>
-    public readonly record struct AvailableBuild(string Version, string Source);
+    /// <param name="Display">How the version reads, which for FSR is not the same thing.</param>
+    public readonly record struct AvailableBuild(string Version, string Source, string Display);
 
     /// <summary>
     /// The newest build of one DLL that can be installed without the network: what the
@@ -105,11 +104,11 @@ public sealed class ManagerService
     public AvailableBuild? BestLocalBuild(string fileName, Game exclude)
     {
         var found = LibraryBuilds(fileName)
-            .Select(b => new AvailableBuild(b.Version, "in your library"))
-            .Concat(HarvestableBuilds(fileName, exclude)
-                .Select(h => new AvailableBuild(h.Version, $"in {h.GameName}")))
-            .Concat(OptiScalerBuilds(fileName)
-                .Select(h => new AvailableBuild(h.Version, $"in {h.GameName}")))
+            .Select(b => new AvailableBuild(
+                b.Version, "in your library", DllSwapService.DescribeBuild(fileName, b.Version, b.Path)))
+            .Concat(HarvestableBuilds(fileName, exclude).Concat(OptiScalerBuilds(fileName))
+                .Select(h => new AvailableBuild(
+                    h.Version, $"in {h.GameName}", DllSwapService.DescribeBuild(fileName, h.Version, h.Path))))
             .OrderBy(b => b.Version, VersionOrder.Descending)
             .ToList();
 
@@ -130,17 +129,19 @@ public sealed class ManagerService
         // pressed Update; the version list still lists them as a deliberate choice.
         var newest = builds.FirstOrDefault(b => !b.IsDevFile);
         return newest is not null
-            ? new AvailableBuild(newest.Version, $"in the {DllRepository.SourceName} archive")
+            ? new AvailableBuild(
+                newest.Version,
+                $"in the {DllRepository.SourceName} archive",
+                DllRepositoryService.DescribeBuild(newest))
             : null;
     }
 
     /// <summary>Copies a build out of a game, or out of an OptiScaler release, into the library.</summary>
     public LibraryDll HarvestBuild(HarvestableDll source) => _library.Harvest(source);
 
-    // NOTE: the community FSR 4 builds used to be a swap source here. They are not
-    // any more: this app no longer swaps AMD's FidelityFX files at all, for the reasons
-    // in SwappableDlls. The Extras download itself stays — the OptiScaler install route
-    // uses it to inject an INT8 upscaler, which is a different thing and works.
+    // NOTE: the community FSR 4 builds are not a swap source. They ship
+    // amd_fidelityfx_upscaler_dx12.dll, which OptiScaler installs and manages — so the
+    // Extras download belongs to the install route, not to swapping.
 
     // ── The DLSS Swapper archive ────────────────────────────────────────────
 
@@ -164,17 +165,6 @@ public sealed class ManagerService
     public Task<LibraryDll> DownloadRepositoryBuildAsync(
         RepositoryBuild build, IProgress<double>? progress = null, CancellationToken cancel = default) =>
         _repository.DownloadAsync(build, progress, cancel);
-
-    /// <summary>What the vendor publishes for this DLL, newest first. Never automatic.</summary>
-    public Task<IReadOnlyList<VendorBuild>> VendorBuildsAsync(string fileName, CancellationToken cancel = default) =>
-        SwapVendorDownloadsEnabled
-            ? _vendor.AvailableAsync(fileName, cancel)
-            : Task.FromResult<IReadOnlyList<VendorBuild>>(Array.Empty<VendorBuild>());
-
-    /// <summary>Downloads one vendor build into the library.</summary>
-    public Task<LibraryDll> DownloadVendorBuildAsync(
-        VendorBuild build, IProgress<double>? progress = null, CancellationToken cancel = default) =>
-        _vendor.DownloadAsync(build, progress, cancel);
 
     /// <summary>Which FSR versions an install will be able to choose from, and why.</summary>
     /// <param name="Versions">Newest first. Empty when nothing could be read.</param>
@@ -244,6 +234,25 @@ public sealed class ManagerService
 
     /// <summary>Takes a file the user chose into the library.</summary>
     public LibraryDll ImportSwappableDll(string path) => _library.Import(path);
+
+    /// <summary>What one picked file turned into: the builds it added, or why it did not.</summary>
+    public sealed record ImportResult(string Source, IReadOnlyList<LibraryDll> Added, string? Error);
+
+    /// <summary>
+    /// Imports every file the user picked — DLLs and zips — reporting each separately
+    /// so one bad file does not lose the rest.
+    /// </summary>
+    public IReadOnlyList<ImportResult> ImportSwappable(IEnumerable<string> paths)
+    {
+        var results = new List<ImportResult>();
+        foreach (var path in paths)
+        {
+            var name = Path.GetFileName(path);
+            try { results.Add(new ImportResult(name, _library.ImportAny(path), null)); }
+            catch (Exception ex) { results.Add(new ImportResult(name, Array.Empty<LibraryDll>(), ex.Message)); }
+        }
+        return results;
+    }
 
     /// <summary>Replaces the game's DLL with a held build, backing the original up.</summary>
     public void SwapDll(Game game, SwapSlot slot, LibraryDll build)
@@ -340,15 +349,6 @@ public sealed class ManagerService
     {
         get => _components.Config.GamepadNavigation;
         set { _components.Config.GamepadNavigation = value; _components.SaveConfiguration(); }
-    }
-
-    /// <summary>
-    /// Whether the vendors' own releases are offered as a swap download source.
-    /// </summary>
-    public bool SwapVendorDownloadsEnabled
-    {
-        get => _components.Config.SwapVendorDownloads;
-        set { _components.Config.SwapVendorDownloads = value; _components.SaveConfiguration(); }
     }
 
     /// <summary>

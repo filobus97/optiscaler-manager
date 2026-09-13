@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using UpscalerManager.Core.Components;
 using UpscalerManager.Core.Logging;
@@ -271,6 +272,48 @@ public sealed class DllLibraryService
     /// fail inside the game, where the cause is far less obvious.
     /// </summary>
     public LibraryDll Import(string path) => Add(path, DllOrigin.Imported, "imported", expectedName: null);
+
+    /// <summary>
+    /// Imports a file the user picked, whether it is a DLL or a zip holding some.
+    ///
+    /// why: every download in this space ships as a zip — the DLSS Swapper archive's
+    /// own builds included — so refusing them made the user unpack a file this app
+    /// could open itself.
+    /// </summary>
+    public IReadOnlyList<LibraryDll> ImportAny(string path)
+    {
+        if (!Path.GetExtension(path).Equals(".zip", StringComparison.OrdinalIgnoreCase))
+            return new[] { Import(path) };
+
+        using var archive = ZipFile.OpenRead(path);
+        var swappable = archive.Entries
+            .Where(e => SwappableDlls.IsSwappable(Path.GetFileName(e.FullName)))
+            .GroupBy(e => Path.GetFileName(e.FullName), StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .ToList();
+
+        if (swappable.Count == 0)
+            throw new InvalidOperationException(
+                $"'{Path.GetFileName(path)}' holds none of the DLLs this app swaps.");
+
+        var staging = Path.Combine(Path.GetTempPath(), "upscaler-manager-import-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(staging);
+        try
+        {
+            var added = new List<LibraryDll>();
+            foreach (var entry in swappable)
+            {
+                var extracted = Path.Combine(staging, Path.GetFileName(entry.FullName));
+                entry.ExtractToFile(extracted, overwrite: true);
+                added.Add(Import(extracted));
+            }
+            return added;
+        }
+        finally
+        {
+            try { Directory.Delete(staging, recursive: true); } catch { }
+        }
+    }
 
     private LibraryDll Add(string sourcePath, DllOrigin origin, string sourceLabel, string? expectedName)
     {

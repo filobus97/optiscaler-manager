@@ -306,6 +306,19 @@ public sealed class DllRepositoryService
     }
 
     /// <summary>
+    /// How an archived build's version should read.
+    ///
+    /// why: the index's extra label is only information for the FidelityFX runtimes,
+    /// where it is the FSR version. Everywhere else it is a changelist number — and it
+    /// does not even separate the 23 DLSS versions the archive holds twice, which their
+    /// provenance does. So it is shown there and nowhere else.
+    /// </summary>
+    public static string DescribeBuild(RepositoryBuild build) =>
+        FidelityFxLayout.IsFidelityFx(build.FileName) && build.Label.Length > 0
+            ? FidelityFxVersion.Describe(build.Label, build.Version)
+            : build.Version;
+
+    /// <summary>
     /// Provenance for the library row. The archive is a mirror, so both halves are
     /// worth recording: who hosts it, and where they say the file originally came from.
     /// </summary>

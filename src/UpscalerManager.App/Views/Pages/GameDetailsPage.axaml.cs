@@ -101,7 +101,18 @@ public partial class GameDetailsPage : UserControl, IHostedPage
     // ── Upscaler libraries ──────────────────────────────────────────────────────
 
     /// <summary>The parts of one library row the archive lookup fills in later.</summary>
-    private sealed record RowParts(SwapSlot Slot, TextBlock Newest, TextBlock Note, Button Action);
+    /// <param name="Shown">
+    /// The version the row is already offering, so a build from the network only
+    /// replaces it when it really is newer. Null when the row offers nothing yet.
+    /// </param>
+    private sealed class RowParts(SwapSlot slot, TextBlock newest, TextBlock note, Button action)
+    {
+        public SwapSlot Slot { get; } = slot;
+        public TextBlock Newest { get; } = newest;
+        public TextBlock Note { get; } = note;
+        public Button Action { get; } = action;
+        public string? Shown { get; set; }
+    }
 
     private readonly List<RowParts> _rows = new();
 
@@ -158,7 +169,7 @@ public partial class GameDetailsPage : UserControl, IHostedPage
 
         var newest = new TextBlock
         {
-            Text = newer ? $"→  {best!.Value.Version}" : string.Empty,
+            Text = newer ? $"→  {best!.Value.Display}" : string.Empty,
             IsVisible = newer,
             VerticalAlignment = VerticalAlignment.Center,
             Foreground = Brush("BrTextPrimary"),
@@ -199,7 +210,7 @@ public partial class GameDetailsPage : UserControl, IHostedPage
         Grid.SetColumn(action, 1);
         grid.Children.Add(action);
 
-        _rows.Add(new RowParts(slot, newest, note, action));
+        _rows.Add(new RowParts(slot, newest, note, action) { Shown = newer ? best!.Value.Version : null });
 
         return new Border { Classes = { "Row" }, Child = grid };
     }
@@ -250,12 +261,10 @@ public partial class GameDetailsPage : UserControl, IHostedPage
                     if (cancel.IsCancellationRequested) return;
                     // Only when it beats what the row already offers, so a local build
                     // is not replaced by an equal one from the network.
-                    var shown = row.Newest.IsVisible
-                        ? row.Newest.Text?.TrimStart('→', ' ')
-                        : row.Slot.Version;
-                    if (!VersionOrder.IsNewer(found.Version, shown)) return;
+                    if (!VersionOrder.IsNewer(found.Version, row.Shown ?? row.Slot.Version)) return;
+                    row.Shown = found.Version;
 
-                    row.Newest.Text = $"→  {found.Version}";
+                    row.Newest.Text = $"→  {found.Display}";
                     row.Newest.IsVisible = true;
                     if (row.Slot.Verdict.Allowed) row.Note.Text = found.Source;
                     row.Action.Content = ActionFor(row.Slot, newer: true);

@@ -1,5 +1,6 @@
 // Upscaler Manager - GPL-3.0-or-later. See repository LICENSE.
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -16,7 +17,12 @@ using UpscalerManager.Core.Services;
 namespace UpscalerManager.App.Views.Pages;
 
 /// <summary>
-/// Picks which build of one swappable DLL a game should use.
+/// Every build of one swappable DLL this app can reach, newest first.
+///
+/// One list rather than a section per source. Where a build comes from is a caption on
+/// its row, because it changes what pressing the row costs — a file already on the disk
+/// is instant, an archived one is a download — but it is not how anybody chooses. They
+/// choose by version.
 ///
 /// A nested page rather than a dialog window, like every other screen here: extra
 /// top-level windows are unreliable under gamescope, which is how this is used on a
@@ -28,7 +34,10 @@ public partial class DllSwapPage : UserControl, IHostedPage
     private readonly Game _game = null!;
     private SwapSlot _slot = null!;
 
-    public string Title { get; private set; } = "Swap a DLL";
+    /// <summary>Archive builds, once the index has answered. Null until then.</summary>
+    private IReadOnlyList<RepositoryBuild>? _archive;
+
+    public string Title { get; private set; } = "Builds";
     public Action<bool>? RequestClose { get; set; }
 
     /// <summary>True when anything was actually changed, so the caller can re-render.</summary>
@@ -44,12 +53,12 @@ public partial class DllSwapPage : UserControl, IHostedPage
         _slot = slot;
         Title = slot.Definition.Label;
         Render();
+        LoadArchive();
     }
 
     public void FocusFirst()
     {
-        // The first thing worth pressing, which is whichever build is offered first —
-        // falling back to Import when the library and the user's games are both empty.
+        // Whichever build is offered first, falling back to Import when there are none.
         var first = this.GetVisualDescendants().OfType<Button>()
             .FirstOrDefault(b => b.IsEffectivelyVisible && b.IsEnabled && b.Name is null);
         (first ?? this.FindControl<Button>("ImportButton"))?.Focus(NavigationMethod.Directional);
@@ -59,247 +68,267 @@ public partial class DllSwapPage : UserControl, IHostedPage
         TopLevel.GetTopLevel(this)?.StorageProvider
         ?? throw new InvalidOperationException("No storage provider is available.");
 
+    // ── One build, from wherever ────────────────────────────────────────────
+
+    /// <param name="Version">The raw version, which orders the list and dedupes it.</param>
+    /// <param name="Display">How the version reads, which for FSR is not the same thing.</param>
+    /// <param name="Source">Where it is, as the row's caption.</param>
+    /// <param name="Action">The button's label, or null for a row with nothing to press.</param>
+    /// <param name="Refused">
+    /// The generation of a build the guard will not install here, or NotFidelityFx when
+    /// there is nothing in the way. The row tags it; the page explains it once.
+    /// </param>
+    private sealed record Candidate(
+        string Version,
+        string Display,
+        string Source,
+        string? Action,
+        Action? Run,
+        bool IsCurrent = false,
+        FidelityFxRole Refused = FidelityFxRole.NotFidelityFx);
+
     // ── Rendering ───────────────────────────────────────────────────────────
 
     private void Render()
     {
-        var definition = _slot.Definition;
+        var copies = _slot.CopyCount > 1 ? $"  •  {_slot.CopyCount} copies" : string.Empty;
+        Text("SubtitleText", $"{_slot.FileName}  •  in the game now: {_slot.VersionText}{copies}");
 
-        Text("HeadingText", $"{definition.Label}  —  {definition.FileName}");
-        Text("ExplanationText", definition.Note);
-
-        var warning = this.FindControl<Border>("WarningBox");
-        if (warning is not null)
+        if (this.FindControl<Border>("WarningBox") is { } warning)
         {
             warning.IsVisible = !_slot.Verdict.Allowed;
             Text("WarningText", _slot.Verdict.Reason);
         }
 
-        RenderCurrent();
-        RenderLibrary();
-        RenderHarvestable();
-        RenderRepository();
-        RenderVendor();
+        var list = this.FindControl<StackPanel>("BuildList");
+        if (list is null) return;
+
+        list.Children.Clear();
+        var candidates = Candidates();
+        foreach (var candidate in candidates)
+            list.Children.Add(Row(candidate));
+
+        Text("ListNoteText", Note(candidates.Count));
+        ShowGuardNote(candidates);
     }
 
-    /// <summary>What is in the game now, and the way back if this app put it there.</summary>
-    private void RenderCurrent()
+    /// <summary>
+    /// Every build worth listing, newest first and one row per version.
+    ///
+    /// Deduplicated by version with the cheapest source winning: the game's own file,
+    /// then the library, then another game, then the archive. Listing one version four
+    /// times because four places have it is noise.
+    /// </summary>
+    private List<Candidate> Candidates()
     {
-        var panel = this.FindControl<StackPanel>("CurrentPanel");
-        if (panel is null) return;
-        panel.Children.Clear();
+        var all = new List<Candidate>();
 
-        panel.Children.Add(Label("In the game now", 14, FontWeight.SemiBold, "BrTextPrimary"));
+        if (_slot.Version is { Length: > 0 }) all.Add(Current());
+        all.AddRange(_manager.LibraryBuilds(_slot.FileName).Select(Held));
+        all.AddRange(_manager.HarvestableBuilds(_slot.FileName, _game)
+            .Concat(_manager.OptiScalerBuilds(_slot.FileName))
+            .Where(h => !h.InLibrary)
+            .Select(Elsewhere));
+        if (_archive is { } archived) all.AddRange(archived.Where(b => !b.InLibrary).Select(Archived));
 
-        var version = _slot.Version is { Length: > 0 } ? _slot.VersionText : "no version in the file";
-        panel.Children.Add(Label($"{_slot.FileName}  {version}", 12.5, FontWeight.Normal, "BrTextPrimary"));
+        return all
+            .GroupBy(c => c.Version, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .OrderBy(c => c.Version, VersionOrder.Descending)
+            .ToList();
+    }
 
-        // Every place it sits, not just the first. A game carrying two copies is the
-        // case where swapping one and stopping looks like it did nothing at all, so the
-        // page says plainly that all of them are in scope.
-        foreach (var copy in _slot.Copies)
-            panel.Children.Add(Label(
-                _slot.CopyCount > 1 && copy.Version is { Length: > 0 }
-                    ? $"{copy.Directory}   ({copy.VersionText})"
-                    : copy.Directory,
-                11, FontWeight.Normal, "BrTextDisabled"));
+    private Candidate Current()
+    {
+        var swapped = _slot.Swapped;
+        var source = swapped is null
+            ? "in the game now, and the build it shipped with"
+            : $"in the game now, put there by this app — {swapped.SourceLabel}";
 
-        if (_slot.CopyCount > 1)
-            panel.Children.Add(Label(
-                _slot.VersionsDiffer
-                    ? $"{_slot.CopyCount} copies, and they are not the same build — the game decides "
-                      + "which it loads. Swapping replaces all of them, so it stops mattering."
-                    : $"{_slot.CopyCount} copies of this DLL. The game decides which it loads, so a "
-                      + "swap replaces all of them.",
-                11, FontWeight.Normal, "BrWarning"));
+        // Revert restores what was backed up, so it is only offered for our own swap.
+        return new Candidate(
+            _slot.Version!,
+            _slot.VersionText,
+            source,
+            swapped is null ? null : RevertLabel(swapped),
+            swapped is null ? null : () => Revert(swapped),
+            IsCurrent: true);
+    }
 
-        if (_slot.Swapped is not { } swapped)
-        {
-            panel.Children.Add(Label(
-                "This is the game's own build. Swapping keeps a copy of it, so you can always go back.",
-                11, FontWeight.Normal, "BrTextSecondary"));
-            return;
-        }
+    private static string RevertLabel(SwappedFile swapped) =>
+        swapped.ExistedBefore ? "Put the game's own build back" : "Remove it";
 
-        var original = swapped.ExistedBefore
-            ? $"the game's own {swapped.OriginalVersion ?? "build"}"
-            : "no file at all — reverting removes it";
+    private Candidate Held(LibraryDll build) => new(
+        build.Version,
+        DllSwapService.DescribeBuild(_slot.FileName, build.Version, build.Path),
+        build.SourceLabel,
+        "Use this build",
+        () => Swap(build),
+        Refused: RefusedRole(DllSwapService.RoleOf(_slot.FileName, build.Path)));
 
-        panel.Children.Add(Label(
-            $"Swapped by this app, {swapped.SourceLabel}. Reverting puts back {original}.",
-            11, FontWeight.Normal, "BrTextSecondary"));
+    private Candidate Elsewhere(HarvestableDll candidate) => new(
+        candidate.Version,
+        DllSwapService.DescribeBuild(_slot.FileName, candidate.Version, candidate.Path),
+        $"in {candidate.GameName}",
+        "Use this build",
+        () => HarvestAndSwap(candidate),
+        Refused: RefusedRole(DllSwapService.RoleOf(_slot.FileName, candidate.Path)));
 
-        var revert = new Button { Content = "Revert to the game's own build", FontSize = 12.5, };
-        ToolTip.SetTip(revert,
-            "Restores the file this app backed up before swapping. Refused if the DLL has " +
-            "changed since — a game patch replacing it is the usual reason, and putting the " +
-            "older original back would undo that.");
-        revert.Click += (_, _) => Revert(swapped, force: false);
+    private Candidate Archived(RepositoryBuild build) => new(
+        build.Version,
+        DllRepositoryService.DescribeBuild(build),
+        ArchiveSource(build),
+        "Download and use",
+        () => DownloadAndSwap(build),
+        // No file to read yet, so the generation is judged from the version the index
+        // publishes. Every FidelityFX build the archive holds is an SDK 1 runtime.
+        Refused: RefusedRole(FidelityFxLayout.Identify(build.FileName, build.Version, null)));
 
-        panel.Children.Add(new StackPanel
+    /// <summary>
+    /// The candidate's role when the guard refuses it, and NotFidelityFx when it does
+    /// not — so a row only has to ask "was I refused, and as what?".
+    /// </summary>
+    private FidelityFxRole RefusedRole(FidelityFxRole candidate) =>
+        FidelityFxLayout.Interchangeable(DllSwapService.CurrentRole(_slot), candidate)
+            ? FidelityFxRole.NotFidelityFx
+            : candidate;
+
+    private static string ArchiveSource(RepositoryBuild build)
+    {
+        var parts = new List<string> { $"in the {DllRepository.SourceName} archive" };
+        if (build.Provenance.Length > 0) parts.Add($"originally from {build.Provenance}");
+        if (build.IsDevFile) parts.Add("development build");
+        if (!build.SignatureValid) parts.Add("unsigned");
+        if (DllRepositoryService.DescribeSize(build.ZipFileSize) is { Length: > 0 } size) parts.Add(size);
+        return string.Join("  ·  ", parts);
+    }
+
+    private string Note(int shown)
+    {
+        if (_archive is null && ManagerService.TakesRepositoryBuilds(_slot.FileName)
+            && _manager.SwapRepositoryDownloadsEnabled)
+            return $"Reading the {DllRepository.SourceName} index…";
+
+        if (shown > 1) return string.Empty;
+
+        return _manager.SwapRepositoryDownloadsEnabled
+            ? "No other build was found in your games, in the releases this app has downloaded, "
+              + "or in the archive. Import one to add it."
+            : "Archive downloads are off in Settings, so only builds already on your disk are "
+              + "listed. Import one to add it.";
+    }
+
+    /// <summary>
+    /// The generation rule, said once for however many rows it refuses. Repeating it on
+    /// each row is how this page grew to nine copies of the same two lines.
+    /// </summary>
+    private void ShowGuardNote(List<Candidate> candidates)
+    {
+        if (this.FindControl<TextBlock>("GuardNoteText") is not { } note) return;
+
+        var refused = candidates
+            .Where(c => c.Refused != FidelityFxRole.NotFidelityFx)
+            .GroupBy(c => c.Refused)
+            .OrderByDescending(g => g.Count())
+            .FirstOrDefault();
+
+        note.IsVisible = refused is not null;
+        if (refused is null) return;
+
+        var count = refused.Count();
+        note.Text = $"{count} {(count == 1 ? "build is" : "builds are")} "
+                    + $"{FidelityFxLayout.Generation(refused.Key)} and cannot be installed here: this "
+                    + $"game uses {FidelityFxLayout.Noun(DllSwapService.CurrentRole(_slot))}, and AMD "
+                    + "split the runtime in SDK 2.0.0 so the two generations cannot stand in for "
+                    + "each other.";
+    }
+
+    private Control Row(Candidate candidate)
+    {
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+
+        var line = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
-            Margin = new Avalonia.Thickness(0, 4, 0, 0),
-            Children = { revert },
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        line.Children.Add(new TextBlock
+        {
+            Text = candidate.Display,
+            FontWeight = FontWeight.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
         });
-    }
+        if (candidate.IsCurrent) line.Children.Add(Chip("in the game"));
 
-    private void RenderLibrary()
-    {
-        var panel = this.FindControl<StackPanel>("LibraryPanel");
-        if (panel is null) return;
-        panel.Children.Clear();
-
-        var builds = _manager.LibraryBuilds(_slot.FileName);
-        if (builds.Count == 0)
+        var text = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+        text.Children.Add(line);
+        var refused = candidate.Refused != FidelityFxRole.NotFidelityFx;
+        text.Children.Add(new TextBlock
         {
-            panel.Children.Add(Label(
-                "Nothing held yet. Add one from a game below, or import a file you already have.",
-                11, FontWeight.Normal, "BrTextSecondary"));
-            return;
+            Text = refused
+                ? $"{candidate.Source}  ·  {FidelityFxLayout.Generation(candidate.Refused)} build"
+                : candidate.Source,
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = Brush(refused ? "BrWarning" : "BrTextSecondary"),
+        });
+        grid.Children.Add(text);
+
+        // A row with nothing to press is the game's own build, or one the guard refused.
+        // Either way the caption says why, so there is no disabled button to explain.
+        if (candidate.Action is { } label && candidate.Run is { } run && !refused
+            && (_slot.Verdict.Allowed || candidate.IsCurrent))
+        {
+            var button = new Button { Content = label, VerticalAlignment = VerticalAlignment.Center };
+            button.Click += (_, _) => run();
+            Grid.SetColumn(button, 1);
+            grid.Children.Add(button);
         }
 
-        foreach (var build in builds)
-            panel.Children.Add(BuildRow(
-                build.Version,
-                build.SourceLabel,
-                isCurrent: IsInstalled(build.Version),
-                action: "Use this build",
-                onAction: () => Swap(build)));
+        return new Border { Classes = { "Row" }, Child = grid };
     }
 
-    private void RenderHarvestable()
-    {
-        var panel = this.FindControl<StackPanel>("HarvestPanel");
-        if (panel is null) return;
-        panel.Children.Clear();
-
-        // The games and the downloaded OptiScaler releases are one list: from here they
-        // are the same thing — a build already on the disk that costs nothing to copy.
-        var found = _manager.HarvestableBuilds(_slot.FileName, _game)
-            .Concat(_manager.OptiScalerBuilds(_slot.FileName))
-            .Where(h => !h.InLibrary)
-            .GroupBy(h => h.Version, StringComparer.OrdinalIgnoreCase)
-            .Select(g => g.First())
-            .OrderBy(h => h.Version, UpscalerManager.Core.Models.VersionOrder.Descending)
-            .ToList();
-
-        if (found.Count == 0)
-        {
-            panel.Children.Add(Label(
-                "No other build of this DLL was found in your games, or in the OptiScaler "
-                + "releases you have downloaded.",
-                11, FontWeight.Normal, "BrTextSecondary"));
-            return;
-        }
-
-        foreach (var candidate in found)
-            panel.Children.Add(BuildRow(
-                candidate.Version,
-                $"in {candidate.GameName}",
-                isCurrent: false,
-                action: "Add and use",
-                onAction: () => HarvestAndSwap(candidate)));
-    }
+    // ── The archive ─────────────────────────────────────────────────────────
 
     /// <summary>
-    /// What the DLSS Swapper archive holds.
-    ///
-    /// This is the only source that reaches builds the user never owned — past DLSS
-    /// releases going back to 2018, and the FidelityFX runtimes, which AMD does not
-    /// publish loose. Listed on open because that is the question the page exists to
-    /// answer, but the index is cached for a day and nothing is fetched until a row is
-    /// pressed.
+    /// Asks the archive index what it holds. Listed on open because that is the question
+    /// the page exists to answer, but the index is cached for a day and nothing is
+    /// fetched until a row is pressed.
     /// </summary>
-    private async void RenderRepository()
+    private async void LoadArchive()
     {
-        var section = this.FindControl<StackPanel>("RepositorySection");
-        var panel = this.FindControl<StackPanel>("RepositoryPanel");
-        if (section is null || panel is null) return;
+        if (!ManagerService.TakesRepositoryBuilds(_slot.FileName)) return;
+        if (!_manager.SwapRepositoryDownloadsEnabled) return;
 
-        section.IsVisible = ManagerService.TakesRepositoryBuilds(_slot.FileName)
-            && _manager.SwapRepositoryDownloadsEnabled;
-        if (!section.IsVisible) return;
-
-        Text("RepositoryNoteText",
-            $"From the {DllRepository.SourceName} project's archive of shipped builds — a "
-            + "third-party mirror, not the vendor. Downloads come from their host on a press "
-            + "and are checked against the hashes their index publishes before anything is "
-            + "installed. Nothing is mirrored by this project.");
-
-        panel.Children.Clear();
-        panel.Children.Add(Label("Reading the archive's index…",
-            11, FontWeight.Normal, "BrTextSecondary"));
-
-        IReadOnlyList<RepositoryBuild> builds;
-        try
-        {
-            builds = await _manager.RepositoryBuildsAsync(_slot.FileName);
-        }
+        try { _archive = await _manager.RepositoryBuildsAsync(_slot.FileName); }
         catch (Exception ex)
         {
-            panel.Children.Clear();
-            panel.Children.Add(Label($"Could not read the archive's index: {ex.Message}",
-                11, FontWeight.Normal, "BrTextSecondary"));
-            return;
+            _archive = Array.Empty<RepositoryBuild>();
+            SetStatus($"Could not read the {DllRepository.SourceName} index: {ex.Message}");
         }
 
-        // The page can be re-rendered while this is in flight; bail if it has been.
-        if (!ReferenceEquals(panel, this.FindControl<StackPanel>("RepositoryPanel"))) return;
+        Render();
+    }
 
-        panel.Children.Clear();
+    // ── Actions ─────────────────────────────────────────────────────────────
 
-        // Development builds last: they exist in the archive but are not what a player
-        // wants unless they went looking.
-        var offered = builds
-            .Where(b => !b.InLibrary)
-            .OrderBy(b => b.IsDevFile)
-            .ThenBy(b => b.Version, VersionOrder.Descending)
-            .Take(10)
-            .ToList();
-
-        if (offered.Count == 0)
+    private void Swap(LibraryDll build) =>
+        Act($"Installing {build.FileName} {build.Version}…", () =>
         {
-            panel.Children.Add(Label(
-                builds.Count == 0
-                    ? "The archive's index could not be read, or it holds nothing for this file."
-                    : "You already hold every build the archive has for this file.",
-                11, FontWeight.Normal, "BrTextSecondary"));
-            return;
-        }
+            _manager.SwapDll(_game, _slot, build);
+            return $"{_slot.Definition.Label} is now {build.Version}.";
+        });
 
-        foreach (var build in offered)
-            panel.Children.Add(BuildRow(
-                DescribeRepositoryVersion(build),
-                DescribeRepositorySource(build),
-                isCurrent: IsInstalled(build.Version),
-                action: "Download and use",
-                onAction: () => DownloadRepositoryAndSwap(build)));
-    }
+    private void HarvestAndSwap(HarvestableDll candidate) =>
+        Act($"Copying {candidate.FileName} {candidate.Version} from {candidate.GameName}…", () =>
+        {
+            var build = _manager.HarvestBuild(candidate);
+            _manager.SwapDll(_game, _slot, build);
+            return $"{_slot.Definition.Label} is now {build.Version}.";
+        });
 
-    /// <summary>
-    /// How an archived build is titled. The file version leads, because that is what
-    /// the app reads off a real file and therefore what the "in the game now" row shows
-    /// — but for the FidelityFX runtimes that number is an SDK build nobody quotes, so
-    /// the vendor's own label rides alongside it.
-    /// </summary>
-    private static string DescribeRepositoryVersion(RepositoryBuild build) =>
-        build.Label.Length > 0 && !build.Version.StartsWith(build.Label, StringComparison.Ordinal)
-            ? $"{build.Version}  ·  {build.Label}"
-            : build.Version;
-
-    private static string DescribeRepositorySource(RepositoryBuild build)
-    {
-        var parts = new System.Collections.Generic.List<string> { DllRepository.SourceName };
-        if (build.Provenance.Length > 0) parts.Add($"originally from {build.Provenance}");
-        if (build.IsDevFile) parts.Add("development build");
-        if (!build.SignatureValid) parts.Add("unsigned or signature not verified");
-        if (DllRepositoryService.DescribeSize(build.ZipFileSize) is { Length: > 0 } size) parts.Add(size);
-        return string.Join(" · ", parts);
-    }
-
-    private async void DownloadRepositoryAndSwap(RepositoryBuild build)
+    private async void DownloadAndSwap(RepositoryBuild build)
     {
         SetStatus($"Downloading {build.FileName} {build.Version}…");
         try
@@ -320,179 +349,20 @@ public partial class DllSwapPage : UserControl, IHostedPage
         }
     }
 
-    /// <summary>
-    /// What the vendor publishes. Listed on open, because knowing whether a newer build
-    /// exists is the reason to be on this page — but nothing is fetched until a row is
-    /// pressed, and these files run to tens of megabytes.
-    /// </summary>
-    private async void RenderVendor()
-    {
-        var panel = this.FindControl<StackPanel>("VendorPanel");
-        if (panel is null) return;
-        panel.Children.Clear();
-
-        if (!_manager.SwapVendorDownloadsEnabled)
-        {
-            Text("VendorNoteText",
-                "Turned off in Settings, under DLL swapper. Nothing is asked of the vendor.");
-            return;
-        }
-
-        if (UpscalerManager.Core.Components.VendorDllSource.For(_slot.FileName) is not { } source)
-        {
-            Text("VendorNoteText",
-                $"{_slot.FileName} is not published on its own by its vendor, so it cannot be "
-                + "downloaded. OptiScaler's releases carry it, and those are listed above.");
-            return;
-        }
-
-        Text("VendorNoteText",
-            $"Downloaded straight from {source.Vendor}, never from a mirror this project runs. "
-            + source.Licence);
-        panel.Children.Add(Label($"Asking {source.Vendor} what is available…",
-            11, FontWeight.Normal, "BrTextSecondary"));
-
-        IReadOnlyList<VendorBuild> builds;
-        try
-        {
-            builds = await _manager.VendorBuildsAsync(_slot.FileName);
-        }
-        catch (Exception ex)
-        {
-            panel.Children.Clear();
-            panel.Children.Add(Label($"Could not reach {source.Vendor}: {ex.Message}",
-                11, FontWeight.Normal, "BrTextSecondary"));
-            return;
-        }
-
-        // The page can be re-rendered while this is in flight; bail if it has been.
-        if (!ReferenceEquals(panel, this.FindControl<StackPanel>("VendorPanel"))) return;
-
-        panel.Children.Clear();
-        var offered = builds.Where(b => !b.InLibrary).Take(8).ToList();
-        if (offered.Count == 0)
-        {
-            panel.Children.Add(Label(
-                builds.Count == 0
-                    ? $"{source.Vendor} published nothing that could be read, or the network is unavailable."
-                    : "You already hold every build the vendor publishes.",
-                11, FontWeight.Normal, "BrTextSecondary"));
-            return;
-        }
-
-        foreach (var build in offered)
-            panel.Children.Add(BuildRow(
-                build.Version,
-                $"from {build.Vendor}",
-                isCurrent: IsInstalled(build.Version),
-                action: "Download and use",
-                onAction: () => DownloadAndSwap(build)));
-    }
-
-    /// <summary>One version, its provenance, and the button that installs it.</summary>
-    private Control BuildRow(string version, string source, bool isCurrent, string action, Action onAction)
-    {
-        var grid = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-        };
-
-        var text = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center };
-        text.Children.Add(Label(version, 12.5, FontWeight.SemiBold, "BrTextPrimary"));
-        text.Children.Add(Label(source, 11, FontWeight.Normal, "BrTextSecondary"));
-        grid.Children.Add(text);
-
-        Control right;
-        if (isCurrent)
-        {
-            // Installing the build that is already there would be a no-op that still
-            // rewrote the game's file, so say so instead of offering it.
-            right = Label("installed", 11, FontWeight.SemiBold, "BrSuccess");
-            ((TextBlock)right).VerticalAlignment = VerticalAlignment.Center;
-        }
-        else
-        {
-            var button = new Button { Content = action, FontSize = 11, IsEnabled = _slot.Verdict.Allowed };
-            if (!_slot.Verdict.Allowed) ToolTip.SetTip(button, _slot.Verdict.Reason);
-            button.Click += (_, _) => onAction();
-            right = button;
-        }
-
-        Grid.SetColumn(right, 1);
-        grid.Children.Add(right);
-
-        return new Border
-        {
-            Padding = new Avalonia.Thickness(10, 8),
-            CornerRadius = new Avalonia.CornerRadius(6),
-            Background = Brush("BrBgSurface"),
-            Child = grid,
-        };
-    }
-
-    private bool IsInstalled(string version) =>
-        _slot.Version is { Length: > 0 } current
-        && string.Equals(current, version, StringComparison.OrdinalIgnoreCase);
-
-    // ── Actions ─────────────────────────────────────────────────────────────
-
-    private void Swap(LibraryDll build)
-    {
-        Act($"Installing {build.FileName} {build.Version}…", () =>
-        {
-            _manager.SwapDll(_game, _slot, build);
-            return $"{_slot.Definition.Label} is now {build.Version}.";
-        });
-    }
-
-    private void HarvestAndSwap(HarvestableDll candidate)
-    {
-        Act($"Copying {candidate.FileName} {candidate.Version} from {candidate.GameName}…", () =>
-        {
-            var build = _manager.HarvestBuild(candidate);
-            _manager.SwapDll(_game, _slot, build);
-            return $"{_slot.Definition.Label} is now {build.Version}, kept in your library.";
-        });
-    }
-
-    private async void DownloadAndSwap(VendorBuild build)
-    {
-        SetStatus($"Downloading {build.FileName} {build.Version} from {build.Vendor}… " +
-                  "these are large files, so this can take a minute.");
-        try
-        {
-            var progress = new Progress<double>(fraction =>
-                SetStatus($"Downloading {build.FileName} {build.Version} from {build.Vendor}… " +
-                          $"{fraction:P0}"));
-
-            var entry = await _manager.DownloadVendorBuildAsync(build, progress);
-            _manager.SwapDll(_game, _slot, entry);
-            Changed = true;
-            Reload();
-            SetStatus($"{_slot.Definition.Label} is now {entry.Version}, kept in your library.");
-        }
-        catch (Exception ex)
-        {
-            Reload();
-            SetStatus(ex.Message);
-        }
-    }
-
-    private void Revert(SwappedFile swapped, bool force)
-    {
+    private void Revert(SwappedFile swapped) =>
         Act("Restoring the game's own build…", () =>
         {
-            _manager.RevertSwap(_game, swapped, force);
+            _manager.RevertSwap(_game, swapped, force: false);
             return $"{_slot.Definition.Label} is back to the game's own build.";
         });
-    }
 
     /// <summary>
     /// Runs one file operation, reports what happened, and re-reads the game afterwards.
     ///
-    /// Every one of these rewrites a file in the player's game folder, so a failure has
-    /// to be visible rather than swallowed — and the page has to re-read from disk after,
-    /// because the version shown is what decides whether the next press is a no-op.
+    /// why: every one of these rewrites a file in the player's game folder, so a failure
+    /// has to be visible rather than swallowed — and the page has to re-read from disk
+    /// after, because the version shown is what decides whether the next press is a
+    /// no-op.
     /// </summary>
     private void Act(string busyText, Func<string> operation)
     {
@@ -541,29 +411,58 @@ public partial class DllSwapPage : UserControl, IHostedPage
         {
             var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
-                Title = $"Pick a {_slot.FileName}",
-                AllowMultiple = false,
+                Title = $"Pick a {_slot.FileName}, or a zip holding one",
+                AllowMultiple = true,
                 FileTypeFilter = new[]
                 {
-                    new FilePickerFileType("Windows DLL") { Patterns = new[] { "*.dll" } },
+                    new FilePickerFileType("DLLs and zips") { Patterns = new[] { "*.dll", "*.zip" } },
                 },
             });
 
-            if (files.Count == 0 || files[0].TryGetLocalPath() is not { Length: > 0 } path) return;
+            var paths = files
+                .Select(f => f.TryGetLocalPath())
+                .Where(p => p is { Length: > 0 })
+                .Select(p => p!)
+                .ToList();
+            if (paths.Count == 0) return;
 
-            Act($"Importing {System.IO.Path.GetFileName(path)}…", () =>
-            {
-                var build = _manager.ImportSwappableDll(path);
-                return build.FileName.Equals(_slot.FileName, StringComparison.OrdinalIgnoreCase)
-                    ? $"Imported {build.FileName} {build.Version}. Pick it above to install it."
-                    : $"Imported {build.FileName} {build.Version} — that is a different DLL, so it is " +
-                      $"in the library but not offered here.";
-            });
+            SetStatus(paths.Count == 1
+                ? $"Importing {System.IO.Path.GetFileName(paths[0])}…"
+                : $"Importing {paths.Count} files…");
+
+            var results = _manager.ImportSwappable(paths);
+            Changed = results.Any(r => r.Added.Count > 0);
+            Reload();
+            SetStatus(DescribeImport(results));
         }
         catch (Exception ex)
         {
             SetStatus(ex.Message);
         }
+    }
+
+    /// <summary>
+    /// What an import did, in one line. Builds of another DLL are still worth keeping —
+    /// they just belong to a different row, so say so rather than looking like nothing
+    /// happened.
+    /// </summary>
+    private string DescribeImport(IReadOnlyList<ManagerService.ImportResult> results)
+    {
+        var added = results.SelectMany(r => r.Added).ToList();
+        var failed = results.Where(r => r.Error is not null).ToList();
+
+        var mine = added.Count(b => b.FileName.Equals(_slot.FileName, StringComparison.OrdinalIgnoreCase));
+        var others = added.Count - mine;
+
+        var parts = new List<string>();
+        if (mine > 0) parts.Add(mine == 1 ? "Imported 1 build." : $"Imported {mine} builds.");
+        if (others > 0) parts.Add($"{others} more belong to other files, and are listed on their rows.");
+        if (failed.Count > 0)
+            parts.Add(failed.Count == 1
+                ? $"{failed[0].Source}: {failed[0].Error}"
+                : $"{failed.Count} files could not be imported.");
+
+        return parts.Count > 0 ? string.Join("  ", parts) : "Nothing was imported.";
     }
 
     private void OnClose(object? sender, RoutedEventArgs e) => RequestClose?.Invoke(Changed);
@@ -577,13 +476,13 @@ public partial class DllSwapPage : UserControl, IHostedPage
 
     private void SetStatus(string text) => Text("StatusText", text);
 
-    private static TextBlock Label(string text, double size, FontWeight weight, string brushKey) => new()
+    private static Control Chip(string text) => new Border
     {
-        Text = text,
-        FontSize = size,
-        FontWeight = weight,
-        TextWrapping = TextWrapping.Wrap,
-        Foreground = Brush(brushKey),
+        Background = Brush("BrBgElevated"),
+        CornerRadius = new Avalonia.CornerRadius(4),
+        Padding = new Avalonia.Thickness(6, 2),
+        VerticalAlignment = VerticalAlignment.Center,
+        Child = new TextBlock { Text = text, FontSize = 11, Foreground = Brush("BrTextSecondary") },
     };
 
     private static IBrush? Brush(string key) =>

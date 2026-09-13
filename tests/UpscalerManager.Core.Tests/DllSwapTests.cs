@@ -135,9 +135,8 @@ namespace UpscalerManager.Core.Tests
             // ffxDx12, ffxDx12Upscaler, ffxDx12FG, ffxDx12Denoiser, ffxDx12Radiance and
             // ffxVk). A game ships whichever ones it needs, so any that are missing
             // here are files a user can see in their game folder and not swap.
-            // Not swapped any more, but a game's page still has to identify and label
-            // every one of them — that is a detection concern, and OptiScaler puts
-            // several of these files there itself.
+            // A game's page has to identify and label every one of them, whether or not
+            // it offers a swap — OptiScaler puts several of these files there itself.
             foreach (var name in new[]
             {
                 "amd_fidelityfx_dx12.dll",
@@ -148,10 +147,7 @@ namespace UpscalerManager.Core.Tests
                 "amd_fidelityfx_radiancecache_dx12.dll",
                 "amd_fidelityfx_vk.dll",
             })
-            {
                 Assert.NotNull(UpscalerCatalog.For(name));
-                Assert.False(SwappableDlls.IsSwappable(name));
-            }
         }
 
         [Fact]
@@ -594,39 +590,109 @@ namespace UpscalerManager.Core.Tests
         }
 
         [Fact]
-        public void AFidelityFxFileGetsNoSwapRowAtAll()
+        public void AFidelityFxRuntimeGetsASwapRowAgain()
         {
-            // Swapping is DLSS and XeSS now. A game carrying AMD's runtime simply has no
-            // swap row for it — the FSR route is OptiScaler, on the other tab.
+            // Within one SDK generation this is an ordinary swap, and the archive is the
+            // only place these builds come from.
             GameDll("amd_fidelityfx_dx12.dll", "1.0.1.38338");
             _game.DetectedComponents = new() { Component("amd_fidelityfx_dx12.dll", "1.0.1.38338") };
 
-            Assert.Empty(new DllSwapService().Slots(_game));
+            var slot = SlotFor("amd_fidelityfx_dx12.dll");
+            Assert.True(slot.Verdict.Allowed);
+            Assert.False(slot.IsRetired);
         }
 
         [Fact]
-        public void AnExistingFidelityFxSwapKeepsItsRowSoItCanStillBeUndone()
+        public void OneSdk1RuntimeReplacesAnother()
+        {
+            // 1.0.1.38338 to 1.0.1.41314 is FSR 3.1.2 to 3.1.4, which is the whole point
+            // of offering these again.
+            GameDll("amd_fidelityfx_dx12.dll", "1.0.1.38338");
+            _game.DetectedComponents = new() { Component("amd_fidelityfx_dx12.dll", "1.0.1.38338") };
+
+            var build = AddToLibrary("amd_fidelityfx_dx12.dll", "1.0.1.41314");
+            var slot = SlotFor("amd_fidelityfx_dx12.dll");
+            Assert.Null(DllSwapService.CrossGenerationReason(slot, build.Path));
+
+            new DllSwapService().Swap(_game, slot, build);
+            Assert.Equal(
+                File.ReadAllBytes(build.Path),
+                File.ReadAllBytes(Path.Combine(_gameDir, "amd_fidelityfx_dx12.dll")));
+        }
+
+        [Fact]
+        public void AnSdk1RuntimeCannotLandOnAGameRunningTheSdk2Loader()
+        {
+            // The guard. A game on SDK 2 can still be shipping the old filename — AMD
+            // documents the loader as compatible with it — and dropping an SDK 1
+            // monolith over that leaves the game with no upscaler at all. The file
+            // version is the only evidence, so that is what decides it: no provider
+            // table and a major of 2 or more is a loader.
+            GameDll("amd_fidelityfx_dx12.dll", "2.3.0.2740");
+            _game.DetectedComponents = new() { Component("amd_fidelityfx_dx12.dll", "2.3.0.2740") };
+
+            var slot = SlotFor("amd_fidelityfx_dx12.dll");
+            Assert.Equal(FidelityFxRole.Loader, DllSwapService.CurrentRole(slot));
+
+            var build = AddToLibrary("amd_fidelityfx_dx12.dll", "1.0.1.41314");
+            var why = DllSwapService.CrossGenerationReason(slot, build.Path);
+            Assert.NotNull(why);
+            Assert.Contains("SDK 2 loader", why);
+
+            // And the refusal is in the swap itself, not only in what the page offers.
+            var before = File.ReadAllBytes(Path.Combine(_gameDir, "amd_fidelityfx_dx12.dll"));
+            var failed = Assert.Throws<InvalidOperationException>(
+                () => new DllSwapService().Swap(_game, slot, build));
+            Assert.Contains("SDK 2.0.0", failed.Message);
+            Assert.Equal(before, File.ReadAllBytes(Path.Combine(_gameDir, "amd_fidelityfx_dx12.dll")));
+        }
+
+        [Fact]
+        public void AndNeitherCanAnSdk2LoaderLandOnAnSdk1Game()
+        {
+            GameDll("amd_fidelityfx_dx12.dll", "1.0.1.38338");
+            _game.DetectedComponents = new() { Component("amd_fidelityfx_dx12.dll", "1.0.1.38338") };
+
+            var slot = SlotFor("amd_fidelityfx_dx12.dll");
+            var build = AddToLibrary("amd_fidelityfx_dx12.dll", "2.3.0.2740");
+            Assert.NotNull(DllSwapService.CrossGenerationReason(slot, build.Path));
+        }
+
+        [Fact]
+        public void TheGuardLeavesEveryOtherFileAlone()
+        {
+            // DLSS and XeSS have no generations to confuse, and a guard that fired on
+            // them would refuse every ordinary swap.
+            GameDll("nvngx_dlss.dll", "310.1.0.0");
+            _game.DetectedComponents = new() { Component("nvngx_dlss.dll", "310.1.0.0") };
+
+            var build = AddToLibrary("nvngx_dlss.dll", "310.3.0.0");
+            Assert.Null(DllSwapService.CrossGenerationReason(SlotFor("nvngx_dlss.dll"), build.Path));
+        }
+
+        [Fact]
+        public void AnExistingSwapOfARetiredFileKeepsItsRowSoItCanStillBeUndone()
         {
             // The hazard in withdrawing a file: someone may already have swapped one,
             // and their game's original is in this app's backup store with nothing else
             // pointing at it. Dropping the name outright would leave that game carrying
             // a file this app installed, with no way to undo it and a backup the Storage
             // page would offer to delete.
-            GameDll("amd_fidelityfx_dx12.dll", "1.0.1.38338");
-            _game.DetectedComponents = new() { Component("amd_fidelityfx_dx12.dll", "1.0.1.38338") };
+            GameDll("amdxcffx64.dll", "1.0.1.38338");
+            _game.DetectedComponents = new() { Component("amdxcffx64.dll", "1.0.1.38338") };
 
-            var target = Path.Combine(_gameDir, "amd_fidelityfx_dx12.dll");
+            var target = Path.Combine(_gameDir, "amdxcffx64.dll");
             var original = File.ReadAllBytes(target);
 
             // Stage a swap exactly as a previous version of the app would have left it.
             var store = new BackupStoreService();
-            var backupRelative = Path.Combine("swaps", "amd_fidelityfx_dx12.dll");
-            store.BackupFile(_gameDir, _gameDir, "amd_fidelityfx_dx12.dll", backupRelative);
+            var backupRelative = Path.Combine("swaps", "amdxcffx64.dll");
+            store.BackupFile(_gameDir, _gameDir, "amdxcffx64.dll", backupRelative);
             File.WriteAllBytes(target, PeTestData.BuildPe(PeTestData.MachineAmd64, "1.0.1.41314"));
 
             var record = new SwappedFile
             {
-                FileName = "amd_fidelityfx_dx12.dll",
+                FileName = "amdxcffx64.dll",
                 InstalledInDirectory = _gameDir,
                 InstalledVersion = "1.0.1.41314",
                 SourceLabel = "from the DLSS Swapper archive",
@@ -649,7 +715,7 @@ namespace UpscalerManager.Core.Tests
             Assert.True(slot.IsOurs);
             // Revert-only: the row exists to undo, not to install something new.
             Assert.False(slot.Verdict.Allowed);
-            Assert.Contains("no longer swaps", slot.Verdict.Reason);
+            Assert.Contains("does not swap", slot.Verdict.Reason);
 
             service.Revert(_game, slot.Swapped!);
             Assert.Equal(original, File.ReadAllBytes(target));
@@ -661,7 +727,7 @@ namespace UpscalerManager.Core.Tests
         {
             // The Storage page must not offer to delete the only copy of a game's
             // original just because the file is no longer swappable.
-            GameDll("amd_fidelityfx_dx12.dll", "1.0.1.38338");
+            GameDll("amdxcffx64.dll", "1.0.1.38338");
 
             var store = new BackupStoreService();
             Directory.CreateDirectory(store.GetBackupRoot(_gameDir));
@@ -675,7 +741,7 @@ namespace UpscalerManager.Core.Tests
                         {
                             new SwappedFile
                             {
-                                FileName = "amd_fidelityfx_dx12.dll",
+                                FileName = "amdxcffx64.dll",
                                 InstalledInDirectory = _gameDir,
                                 ExistedBefore = true,
                             },
@@ -917,88 +983,6 @@ namespace UpscalerManager.Core.Tests
             foreach (var name in Fsr4Int8Build.KnownDllNames)
                 Assert.False(SwappableDlls.IsSwappable(name));
         }
-
-        [Fact]
-        public void EveryVendorSourceNamesADllWeActuallySwap()
-        {
-            // A download that installed a file the swapper does not recognise would be
-            // fetched, imported, and then never offered anywhere.
-            foreach (var source in VendorDllSource.All)
-                Assert.True(SwappableDlls.IsSwappable(source.FileName),
-                    $"{source.FileName} is offered for download but is not swappable.");
-        }
-
-        [Fact]
-        public void VendorUrlsPointAtTheVendorsOwnRepository()
-        {
-            // The point of this route: the file comes from Nvidia or Intel, not from a
-            // mirror this project runs. If that ever changes, the licence position
-            // changes with it.
-            foreach (var source in VendorDllSource.All)
-            {
-                var url = VendorDllSource.UrlFor(source, "v1.2.3");
-                Assert.StartsWith("https://raw.githubusercontent.com/", url);
-                Assert.Contains($"/{source.Owner}/{source.Repo}/v1.2.3/", url);
-                Assert.EndsWith(source.PathInRepo, url);
-            }
-        }
-
-        [Fact]
-        public void OnlyReleaseBuildsForTheArchitectureGamesShipAreOffered()
-        {
-            // The repositories also carry aarch64, arm64ec and development builds.
-            // Installing a development build into a game would be a debugging-only
-            // surprise, and the wrong architecture simply would not load.
-            foreach (var source in VendorDllSource.All.Where(s => s.Owner == "NVIDIA"))
-            {
-                Assert.Contains("Windows_x86_64", source.PathInRepo);
-                Assert.Contains("/rel/", source.PathInRepo);
-            }
-        }
-
-        [Fact]
-        public void AmdRuntimesAreNotOfferedForDownload()
-        {
-            // AMD does not publish them as loose binaries; OptiScaler's releases carry
-            // them, which is why that local source exists.
-            Assert.False(VendorDllSource.CanDownload("amd_fidelityfx_dx12.dll"));
-            Assert.False(VendorDllSource.CanDownload("amd_fidelityfx_vk.dll"));
-            Assert.True(VendorDllSource.CanDownload("nvngx_dlss.dll"));
-            Assert.True(VendorDllSource.CanDownload("libxess.dll"));
-        }
-
-        [Fact]
-        public void TagsAreReadOutOfGitHubsResponse()
-        {
-            // The request cannot be exercised offline, so the parsing is. Shape taken
-            // from the real /tags response.
-            const string json = """
-                [
-                  {"name":"v310.9.1","commit":{"sha":"abc","url":"https://api.github.com/x"}},
-                  {"name":"v310.7.0","commit":{"sha":"def","url":"https://api.github.com/y"}}
-                ]
-                """;
-            Assert.Equal(new[] { "v310.9.1", "v310.7.0" }, VendorDllService.ParseTags(json));
-        }
-
-        [Theory]
-        [InlineData("not json at all")]
-        [InlineData("{\"message\":\"Not Found\"}")]
-        [InlineData("[]")]
-        [InlineData("[{\"commit\":{}}]")]
-        public void AResponseThatIsNotAListOfTagsYieldsNothing(string json)
-        {
-            // An error page or a rate-limit body must read as "no downloads offered",
-            // not as an exception on a page that is only showing an extra route.
-            Assert.Empty(VendorDllService.ParseTags(json));
-        }
-
-        [Theory]
-        [InlineData("v310.9.1", "310.9.1")]
-        [InlineData("v3.0.2", "3.0.2")]
-        [InlineData("3.0.2", "3.0.2")]
-        public void ATagNamesAVersion(string tag, string expected)
-            => Assert.Equal(expected, VendorDllSource.VersionFromTag(tag));
 
         // ── Swapping ─────────────────────────────────────────────────────────
 

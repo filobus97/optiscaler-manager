@@ -3,89 +3,40 @@
         x:Class="UpscalerManager.App.Views.Pages.DllSwapPage"
         XYFocus.NavigationModes="Keyboard,Gamepad">
 
-  <Grid RowDefinitions="Auto,*,Auto">
+  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
 
-    <StackPanel Grid.Row="0" Spacing="4">
-      <TextBlock Name="HeadingText" FontWeight="SemiBold" FontSize="{StaticResource SizeHeading}"
- Foreground="{StaticResource BrTextPrimary}"/>
-      <TextBlock Name="ExplanationText" TextWrapping="Wrap"
+    <TextBlock Grid.Row="0" Name="SubtitleText" TextWrapping="Wrap"
+ FontSize="{StaticResource SizeCaption}"
  Foreground="{StaticResource BrTextSecondary}"/>
-      <Border Name="WarningBox" IsVisible="False" Margin="0,6,0,0" Padding="10" CornerRadius="6"
- Background="{StaticResource BrBgElevated}" BorderBrush="{StaticResource BrError}" BorderThickness="1">
-        <TextBlock Name="WarningText" TextWrapping="Wrap"
- Foreground="{StaticResource BrTextPrimary}"/>
-      </Border>
-    </StackPanel>
 
-    <ScrollViewer Grid.Row="1" Name="Scroller" VerticalScrollBarVisibility="Auto" Margin="0,14,0,0">
-      <StackPanel Spacing="14" Margin="0,0,10,4">
+    <!-- Said once, however many rows it applies to. -->
+    <TextBlock Grid.Row="1" Name="GuardNoteText" IsVisible="False" TextWrapping="Wrap"
+ Margin="0,8,0,0" FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrWarning}"/>
 
-        <!-- What is in the game right now, and how to undo it -->
-        <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
- BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
-          <StackPanel Name="CurrentPanel" Spacing="8"/>
-        </Border>
+    <Border Grid.Row="2" Name="WarningBox" IsVisible="False" Margin="0,12,0,0" Padding="12,10"
+ CornerRadius="{StaticResource RadiusControl}"
+ Background="{StaticResource BrBgElevated}"
+ BorderBrush="{StaticResource BrError}" BorderThickness="1">
+      <TextBlock Name="WarningText" TextWrapping="Wrap"/>
+    </Border>
 
-        <!-- Builds already held -->
-        <StackPanel Spacing="6">
-          <TextBlock Text="In your library" FontWeight="SemiBold"
- Foreground="{StaticResource BrTextPrimary}"/>
-          <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
- BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
-            <StackPanel Name="LibraryPanel" Spacing="6"/>
-          </Border>
-        </StackPanel>
-
-        <!-- Builds sitting in the user's other games -->
-        <StackPanel Spacing="6">
-          <TextBlock Text="Already on your disk" FontWeight="SemiBold"
- Foreground="{StaticResource BrTextPrimary}"/>
-          <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
- BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
-            <StackPanel Spacing="8">
-              <TextBlock TextWrapping="Wrap" FontSize="{StaticResource SizeCaption}"
- Foreground="{StaticResource BrTextSecondary}"
- Text="Builds in your other games, and in the OptiScaler releases this app has already downloaded. Nothing is fetched for these — they work offline, and adding one copies it into the library, leaving the source untouched."/>
-              <StackPanel Name="HarvestPanel" Spacing="6"/>
-            </StackPanel>
-          </Border>
-        </StackPanel>
-
-        <!-- The DLSS Swapper project's archive of past vendor builds -->
-        <StackPanel Name="RepositorySection" Spacing="6" IsVisible="False">
-          <TextBlock Text="The DLSS Swapper archive" FontWeight="SemiBold"
- Foreground="{StaticResource BrTextPrimary}"/>
-          <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
- BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
-            <StackPanel Spacing="8">
-              <TextBlock Name="RepositoryNoteText" TextWrapping="Wrap" FontSize="{StaticResource SizeCaption}"
+    <!-- One list, newest first, whatever each build came from: the source is a caption
+         on the row rather than a headed section of its own. -->
+    <ScrollViewer Grid.Row="3" Name="Scroller" VerticalScrollBarVisibility="Auto" Margin="0,12,0,0">
+      <StackPanel Spacing="6" Margin="0,0,8,4">
+        <StackPanel Name="BuildList" Spacing="6"/>
+        <TextBlock Name="ListNoteText" TextWrapping="Wrap" Margin="2,4,0,0"
+ FontSize="{StaticResource SizeCaption}"
  Foreground="{StaticResource BrTextSecondary}"/>
-              <StackPanel Name="RepositoryPanel" Spacing="6"/>
-            </StackPanel>
-          </Border>
-        </StackPanel>
-
-        <!-- Straight from the vendor -->
-        <StackPanel Spacing="6">
-          <TextBlock Text="Download from the vendor" FontWeight="SemiBold"
- Foreground="{StaticResource BrTextPrimary}"/>
-          <Border Padding="14" CornerRadius="8" Background="{StaticResource BrBgCard}"
- BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
-            <StackPanel Spacing="8">
-              <TextBlock Name="VendorNoteText" TextWrapping="Wrap" FontSize="{StaticResource SizeCaption}"
- Foreground="{StaticResource BrTextSecondary}"/>
-              <StackPanel Name="VendorPanel" Spacing="6"/>
-            </StackPanel>
-          </Border>
-        </StackPanel>
-
       </StackPanel>
     </ScrollViewer>
 
-    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10" Margin="0,16,0,0">
-      <Button Name="ImportButton" Content="Import a DLL…" Click="OnImport"
-              ToolTip.Tip="Pick a DLL you already have. It has to be a 64-bit build of one of the swappable files, and carry a version — otherwise there is no way to tell it apart from what is already in the game."/>
+    <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="8" Margin="0,16,0,0">
+      <Button Name="ImportButton" Content="Import…" Click="OnImport"
+              ToolTip.Tip="Add DLLs you already have, or zips holding them. They have to be 64-bit builds of a file this app swaps, and carry a version."/>
       <TextBlock Name="StatusText" VerticalAlignment="Center" TextWrapping="Wrap"
+ FontSize="{StaticResource SizeCaption}"
  Foreground="{StaticResource BrTextSecondary}"/>
       <Button Name="CloseButton" Content="Done" Click="OnClose" IsCancel="True"
  HorizontalAlignment="Right"

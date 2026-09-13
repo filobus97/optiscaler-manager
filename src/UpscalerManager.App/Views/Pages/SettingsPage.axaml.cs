@@ -100,12 +100,10 @@ public partial class SettingsPage : UserControl, IHostedPage
     /// </summary>
     private void SetupSwapSourcesCard()
     {
-        var vendor = this.FindControl<CheckBox>("ChkVendorDownloads");
         var repository = this.FindControl<CheckBox>("ChkRepositoryDownloads");
-        if (vendor is null || repository is null) return;
+        if (repository is null) return;
 
         // Set before the handler can fire, so loading the page does not write config.
-        vendor.IsChecked = _manager.SwapVendorDownloadsEnabled;
         repository.IsChecked = _manager.SwapRepositoryDownloadsEnabled;
         _swapSourcesReady = true;
 
@@ -118,8 +116,6 @@ public partial class SettingsPage : UserControl, IHostedPage
     {
         if (!_swapSourcesReady) return;
 
-        if (this.FindControl<CheckBox>("ChkVendorDownloads") is { } vendor)
-            _manager.SwapVendorDownloadsEnabled = vendor.IsChecked == true;
         if (this.FindControl<CheckBox>("ChkRepositoryDownloads") is { } repository)
             _manager.SwapRepositoryDownloadsEnabled = repository.IsChecked == true;
 
@@ -127,29 +123,17 @@ public partial class SettingsPage : UserControl, IHostedPage
     }
 
     /// <summary>
-    /// Says what turning both off actually costs, because it is not obvious: the swap
-    /// route keeps working, but only with builds the user already has.
+    /// Says what turning the archive off actually costs, because it is not obvious:
+    /// swapping keeps working, with builds the user already has.
     /// </summary>
     private void RefreshSwapSourceNote()
     {
         if (this.FindControl<TextBlock>("RepositoryNoteText") is not { } note) return;
 
-        var vendor = _manager.SwapVendorDownloadsEnabled;
-        var repository = _manager.SwapRepositoryDownloadsEnabled;
-
-        note.Text = (vendor, repository) switch
-        {
-            (false, false) =>
-                "Both off: swapping still works, but only with builds already in your games, "
-                + "in releases this app downloaded, or files you import yourself.",
-            (true, false) =>
-                "The archive is off. Old DLSS builds and the FidelityFX runtimes will not be "
-                + "offered — the vendors do not publish those.",
-            (false, true) =>
-                "The vendors' own releases are off. The archive still covers the same files, "
-                + "one step further from the publisher.",
-            _ => "Both on. Nothing is downloaded until you press a row.",
-        };
+        note.Text = _manager.SwapRepositoryDownloadsEnabled
+            ? "Nothing is downloaded until you pick a build."
+            : "Off: swapping still works, with builds already in your games, in releases this "
+              + "app downloaded, or files you import yourself.";
     }
 
     /// <summary>Starts on the first control so a controller has somewhere to move from.</summary>
