@@ -223,6 +223,14 @@ Building from source is in [Building & running](#building--running).
   keys are never read while it is running
   ([how that value is chosen](#choosing-the-upscaler-key)).
 
+  The version list is built from the libraries **the install is about to add** — the
+  chosen OptiScaler release, community build, or your imported DLLs, all already in the
+  component caches — merged with whatever the game already has. Reading only the game
+  answers the wrong question: a game about to receive an FSR 4 build has no FSR 4 in it
+  yet, so the picker would offer 3.1.2 and older at exactly the moment FSR 4 was being
+  installed. The "newest" entry names the version it resolves to, so you can see what
+  you are getting rather than trusting the word.
+
   The list and its per-API codes are **OptiScaler's own**, read out of
   `MenuCommon::AddDx12Backends` and its DX11 and Vulkan counterparts, so this screen
   offers exactly what the in-game overlay does and cannot write a combination

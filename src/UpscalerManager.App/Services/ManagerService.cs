@@ -136,35 +136,70 @@ public sealed class ManagerService
         VendorBuild build, IProgress<double>? progress = null, CancellationToken cancel = default) =>
         _vendor.DownloadAsync(build, progress, cancel);
 
+    /// <summary>Which FSR versions an install will be able to choose from, and why.</summary>
+    /// <param name="Versions">Newest first. Empty when nothing could be read.</param>
+    /// <param name="Explanation">Where the list came from, for the line under the picker.</param>
+    public sealed record FfxVersionOptions(IReadOnlyList<string> Versions, string Explanation);
+
     /// <summary>
-    /// The FSR versions the FidelityFX library in this game reports, newest first.
+    /// The FSR versions that will be available <b>after</b> this install, newest first.
     ///
-    /// Read statically out of the binary, since running it is not an option here. Empty
-    /// when the game has no such library yet — in which case only "newest" can be
-    /// offered, because there is nothing to enumerate.
+    /// Composed from the libraries the install is about to copy in — which are already
+    /// on disk in the component caches — merged with whatever the game already has.
+    /// Reading only the game answers the wrong question: a game about to receive an
+    /// FSR 4 INT8 build has no FSR 4 in it yet, so the picker offered 3.1.2 and older
+    /// and FSR 4 looked unavailable at exactly the moment it was being installed.
     /// </summary>
-    public IReadOnlyList<string> FidelityFxProviderVersions(Game game)
+    public FfxVersionOptions FidelityFxVersionOptions(Game game, Fsr4Backend backend, string? int8Version)
     {
-        // The SDK 2 upscaler module first: it is the one that decides the FSR version.
-        // The SDK 1 monolith is the fallback, where the providers live in the runtime.
-        foreach (var name in new[] { "amd_fidelityfx_upscaler_dx12.dll", "amd_fidelityfx_dx12.dll" })
+        var fromGame = FidelityFxProviderScanner.FromDirectory(game.InstallPath);
+        FfxProviders? fromInstall = null;
+        string? label = null;
+
+        switch (backend)
         {
-            var component = game.DetectedComponents.FirstOrDefault(
-                c => c.FileName.Equals(name, StringComparison.OrdinalIgnoreCase));
-            if (component is null) continue;
+            case Fsr4Backend.Int8Community when !string.IsNullOrWhiteSpace(int8Version):
+                fromInstall = FidelityFxProviderScanner.FromDirectory(
+                    _components.GetExtrasDllCachePath(int8Version!));
+                label = $"the {int8Version} community build";
 
-            var relative = component.RelativePath;
-            if (string.IsNullOrWhiteSpace(relative)) continue;
-            var path = System.IO.Path.IsPathRooted(relative)
-                ? relative
-                : System.IO.Path.Combine(game.InstallPath, relative);
-            if (!System.IO.File.Exists(path)) continue;
+                // Not downloaded yet, so there is no binary to read. The Extras releases
+                // are tagged by the FSR version they carry, so the tag is the next best
+                // statement — and it is flagged as the author's label, not a file read.
+                if (fromInstall is null
+                    && FidelityFxProviderScanner.VersionFromReleaseTag(int8Version) is { } tagged)
+                {
+                    fromInstall = new FfxProviders(new[] { tagged }, $"the {int8Version} release tag");
+                    label = $"the {int8Version} community build (from its release name — it is not downloaded yet)";
+                }
+                break;
 
-            var versions = FidelityFxVersion.AllFromBinary(path);
-            if (versions.Count > 0) return versions;
+            case Fsr4Backend.CustomMerged:
+                fromInstall = FidelityFxProviderScanner.FromDirectory(_components.GetCustomDllsPath());
+                label = "the DLLs you imported";
+                break;
+
+            default:
+                fromInstall = FidelityFxProviderScanner.FromDirectory(
+                    _components.GetOptiScalerCachePath(_components.OptiScalerVersion ?? "latest"));
+                label = "the OptiScaler release being installed";
+                break;
         }
 
-        return Array.Empty<string>();
+        var versions = FidelityFxProviderScanner.Merge(fromInstall?.Versions, fromGame?.Versions);
+
+        var explanation = (fromInstall, fromGame) switch
+        {
+            (not null, not null) =>
+                $"From {label} ({fromInstall.FromFile}) and what the game already has "
+                + $"({fromGame.FromFile}).",
+            (not null, null) => $"From {label} ({fromInstall.FromFile}).",
+            (null, not null) => $"From the FidelityFX library already in this game ({fromGame.FromFile}).",
+            _ => "No FidelityFX library could be read yet, so only \u201cnewest\u201d can be offered. "
+                 + "OptiScaler's overlay lists every version the library it loads provides.",
+        };
+
+        return new FfxVersionOptions(versions, explanation);
     }
 
     /// <summary>Takes a file the user chose into the library.</summary>

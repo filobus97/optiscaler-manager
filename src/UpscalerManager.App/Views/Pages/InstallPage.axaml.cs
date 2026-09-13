@@ -280,36 +280,53 @@ public partial class InstallPage : UserControl, IHostedPage
             .ToList()
             .FindIndex(i => (i.Tag as UpscalerChoice.Choice)?.Id == UpscalerChoice.FidelityFxId));
 
-        SetupFfxVersionPicker();
+        RefreshFfxVersionPicker();
     }
 
-    private void SetupFfxVersionPicker()
+    /// <summary>
+    /// Signature of the inputs the FSR version list depends on, so the combo is rebuilt
+    /// when they change and left alone when they have not — rebuilding it on every
+    /// option change would reset the user's pick, and doing it inside its own
+    /// SelectionChanged handler would loop.
+    /// </summary>
+    private string _ffxVersionSource = string.Empty;
+
+    private void RefreshFfxVersionPicker()
     {
+        var backend = CurrentBackend();
+        var int8 = CurrentInt8Version();
+        var signature = $"{backend}|{int8}";
+        if (signature == _ffxVersionSource) return;
+        _ffxVersionSource = signature;
+
         var combo = this.FindControl<ComboBox>("FfxVersionCombo")!;
+        var options = _manager.FidelityFxVersionOptions(_game, backend, int8);
+
         combo.Items.Clear();
 
-        // Index 0 is exact: AMD sorts the list it reports newest-first, so "newest" is
-        // position 0 whatever that list turns out to contain on this machine.
-        combo.Items.Add(new ComboBoxItem { Content = "Newest available (recommended)", Tag = (int?)0 });
+        // Index 0 is exact whatever the list turns out to hold, because AMD sorts the
+        // list it reports newest-first. Naming the version it resolves to matters: left
+        // as a bare "newest", a user installing FSR 4 could see 3.1.2 and older spelled
+        // out below and conclude FSR 4 was not on offer.
+        combo.Items.Add(new ComboBoxItem
+        {
+            Content = options.Versions.Count > 0
+                ? $"Newest available — FSR {options.Versions[0]} (recommended)"
+                : "Newest available (recommended)",
+            Tag = (int?)0,
+        });
 
-        var reported = _manager.FidelityFxProviderVersions(_game);
-        for (var i = 1; i < reported.Count; i++)
-            combo.Items.Add(new ComboBoxItem { Content = $"FSR {reported[i]}", Tag = (int?)i });
+        for (var i = 1; i < options.Versions.Count; i++)
+            combo.Items.Add(new ComboBoxItem { Content = $"FSR {options.Versions[i]}", Tag = (int?)i });
 
         combo.SelectedIndex = 0;
 
         var note = this.FindControl<TextBlock>("FfxVersionNoteText")!;
-        note.Text = reported.Count > 1
-            ? $"The FidelityFX library in this game reports FSR {string.Join(", ", reported)}. "
-              + "Anything other than \u201cnewest\u201d is a request, not a guarantee: AMD builds that "
-              + "list at run time and drops providers your GPU cannot run, so a specific version can "
-              + "move. OptiScaler's overlay shows what is actually in use."
-            : reported.Count == 1
-                ? $"The FidelityFX library in this game reports only FSR {reported[0]}."
-                : "No FidelityFX library was found in this game yet, so only \u201cnewest\u201d can be "
-                  + "offered. Once OptiScaler is installed, its overlay lists every version the "
-                  + "library it loads provides.";
-        note.IsVisible = true;
+        note.Text = options.Versions.Count > 1
+            ? $"{options.Explanation} Anything other than \u201cnewest\u201d is a request, not a "
+              + "guarantee: AMD builds that list at run time and drops providers your GPU cannot "
+              + "run, so a specific version can move. OptiScaler's overlay shows what is in use."
+            : options.Explanation;
     }
 
     /// <summary>Shows the FSR version row only for the family where it means something.</summary>
@@ -318,6 +335,7 @@ public partial class InstallPage : UserControl, IHostedPage
         var selection = CurrentUpscaler();
         var choice = selection.Choice;
 
+        RefreshFfxVersionPicker();
         this.FindControl<StackPanel>("FfxVersionRow")!.IsVisible = selection.IsFidelityFx;
         this.FindControl<TextBlock>("FfxVersionNoteText")!.IsVisible = selection.IsFidelityFx;
         this.FindControl<TextBlock>("UpscalerNoteText")!.Text = choice.Note;
