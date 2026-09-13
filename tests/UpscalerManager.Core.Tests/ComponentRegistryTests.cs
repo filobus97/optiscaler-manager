@@ -93,7 +93,7 @@ namespace UpscalerManager.Core.Tests
         [Fact]
         public void InstallPreview_Default_IsCoreOnly_ButStillForcesFsrAvailability()
         {
-            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selectFsr4: true);
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selection: UpscalerSelection.NewestFsr);
             Assert.Contains("dxgi.dll", preview.Files);
             Assert.DoesNotContain("amd_fidelityfx_upscaler_dx12.dll", preview.Files);
             Assert.DoesNotContain("amdxcffx64.dll", preview.Files);
@@ -105,7 +105,7 @@ namespace UpscalerManager.Core.Tests
         [Fact]
         public void InstallPreview_CustomOverlay_ListsOnlyYourDlls_Annotated()
         {
-            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.CustomMerged, selectFsr4: true,
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.CustomMerged, selection: UpscalerSelection.NewestFsr,
                 customDlls: new[] { "amd_fidelityfx_upscaler_dx12.dll", "amdxcffx64.dll" });
 
             // A custom DLL with an OptiScaler-shipped name swaps the bundled file…
@@ -122,7 +122,7 @@ namespace UpscalerManager.Core.Tests
         {
             foreach (var b in new[] { Fsr4Backend.Default, Fsr4Backend.Int8Community, Fsr4Backend.CustomMerged })
             {
-                var p = ComponentRegistry.BuildInstallPreview(b, selectFsr4: false);
+                var p = ComponentRegistry.BuildInstallPreview(b, selection: UpscalerSelection.Auto);
                 Assert.Contains(p.IniKeys, k => k.Section == "FSR" && k.Key == "Fsr4Update" && k.Value == "true");
             }
         }
@@ -130,12 +130,14 @@ namespace UpscalerManager.Core.Tests
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public void InstallPreview_SelectFsr4_DrivesTheUpscalerChoice(bool select)
+        public void InstallPreview_UpscalerChoice_DrivesTheUpscalerKey(bool select)
         {
             // The preview must show the key that actually decides which upscaler runs.
-            // UpscalerIndex never did: its default is already 0, so the "0" the Manager
-            // used to write was indistinguishable from writing nothing.
-            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Int8Community, selectFsr4: select);
+            // UpscalerIndex never did on its own: its default is already 0, so the "0"
+            // the Manager used to write was indistinguishable from writing nothing.
+            var preview = ComponentRegistry.BuildInstallPreview(
+                Fsr4Backend.Int8Community,
+                select ? UpscalerSelection.NewestFsr : UpscalerSelection.Auto);
             var dx12 = Assert.Single(preview.IniKeys, k => k.Section == "Upscalers" && k.Key == "Dx12Upscaler");
 
             if (select)
@@ -149,17 +151,17 @@ namespace UpscalerManager.Core.Tests
         [Fact]
         public void InstallPreview_MenuKey_AddsShortcutKey_WhenSet()
         {
-            var without = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Int8Community, selectFsr4: true);
+            var without = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Int8Community, selection: UpscalerSelection.NewestFsr);
             Assert.DoesNotContain(without.IniKeys, k => k.Section == "Menu");
 
-            var with = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Int8Community, selectFsr4: true, menuKeyVk: "0x78");
+            var with = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Int8Community, selection: UpscalerSelection.NewestFsr, menuKeyVk: "0x78");
             Assert.Contains(with.IniKeys, k => k.Section == "Menu" && k.Key == "ShortcutKey" && k.Value == "0x78");
         }
 
         [Fact]
         public void InstallPreview_Addons_ListFilesAndFgInputKey()
         {
-            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selectFsr4: true,
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selection: UpscalerSelection.NewestFsr,
                 addFakenvapi: true, addNukemFg: true);
 
             Assert.Contains("nvapi64.dll", preview.Files);
@@ -172,7 +174,7 @@ namespace UpscalerManager.Core.Tests
         [Fact]
         public void InstallPreview_NoAddons_OmitsAddonFilesAndKeys()
         {
-            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selectFsr4: true);
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selection: UpscalerSelection.NewestFsr);
             Assert.DoesNotContain("nvapi64.dll", preview.Files);
             Assert.DoesNotContain("dlssg_to_fsr3_amd_is_better.dll", preview.Files);
             Assert.DoesNotContain(preview.IniKeys, k => k.Section == "FrameGen");
@@ -182,7 +184,7 @@ namespace UpscalerManager.Core.Tests
         [Fact]
         public void InstallPreview_SpoofDxgi_ForcesDxgiKey_NoPluginBits()
         {
-            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selectFsr4: true,
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selection: UpscalerSelection.NewestFsr,
                 spoofMethod: SpoofMethod.Dxgi);
             Assert.Contains(preview.IniKeys, k => k.Section == "Spoofing" && k.Key == "Dxgi" && k.Value == "true");
             Assert.DoesNotContain(preview.IniKeys, k => k.Section == "Plugins");
@@ -192,7 +194,7 @@ namespace UpscalerManager.Core.Tests
         [Fact]
         public void InstallPreview_SpoofOptiPatcher_AddsPluginAndKey_NoDxgiSpoof()
         {
-            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selectFsr4: true,
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selection: UpscalerSelection.NewestFsr,
                 spoofMethod: SpoofMethod.OptiPatcher);
             Assert.Contains(preview.Files, f => f.Contains("OptiPatcher.asi"));
             Assert.Contains(preview.IniKeys, k => k.Section == "Plugins" && k.Key == "LoadAsiPlugins" && k.Value == "true");
@@ -202,7 +204,7 @@ namespace UpscalerManager.Core.Tests
         [Fact]
         public void InstallPreview_Fsr4Toggles_ForceIniKeys()
         {
-            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selectFsr4: true,
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selection: UpscalerSelection.NewestFsr,
                 forceInt8: true, fsr4Watermark: true);
             Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "Fsr4ForceEnableInt8" && k.Value == "true");
             Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "Fsr4EnableWatermark" && k.Value == "true");
@@ -214,7 +216,7 @@ namespace UpscalerManager.Core.Tests
             // Add-ons write disjoint files from every backend, so no pair conflicts.
             foreach (var backend in new[] { Fsr4Backend.Int8Community, Fsr4Backend.CustomMerged })
             {
-                var preview = ComponentRegistry.BuildInstallPreview(backend, selectFsr4: true,
+                var preview = ComponentRegistry.BuildInstallPreview(backend, selection: UpscalerSelection.NewestFsr,
                     addFakenvapi: true, addNukemFg: true);
                 Assert.Empty(preview.Conflicts);
             }
@@ -268,7 +270,7 @@ namespace UpscalerManager.Core.Tests
             // OptiScaler defaults [FrameGen] Enabled to false, so setting only the input
             // deployed the DLL and left frame generation off.
             var preview = ComponentRegistry.BuildInstallPreview(
-                Fsr4Backend.Default, selectFsr4: true, addNukemFg: true);
+                Fsr4Backend.Default, selection: UpscalerSelection.NewestFsr, addNukemFg: true);
 
             Assert.Contains(preview.IniKeys, k => k.Section == "FrameGen" && k.Key == "Enabled" && k.Value == "true");
             Assert.Contains(preview.IniKeys, k => k.Section == "FrameGen" && k.Key == "FGInput" && k.Value == "nukems");
@@ -277,7 +279,7 @@ namespace UpscalerManager.Core.Tests
         [Fact]
         public void FrameGen_IsNotTouchedWhenNukemIsNotSelected()
         {
-            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selectFsr4: true);
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selection: UpscalerSelection.NewestFsr);
             Assert.DoesNotContain(preview.IniKeys, k => k.Section == "FrameGen");
         }
 

@@ -21,8 +21,8 @@ public partial class InstallPage : UserControl, IHostedPage
     /// <summary>The backend the user confirmed.</summary>
     public Fsr4Backend SelectedBackend { get; private set; } = Fsr4Backend.Default;
 
-    /// <summary>Whether the Manager selects the FSR 4 upscaler ([Upscalers]) vs leaving it auto.</summary>
-    public bool SelectFsr4 { get; private set; } = true;
+    /// <summary>Which upscaler the user chose for OptiScaler to run, and which FSR provider.</summary>
+    public UpscalerSelection SelectedUpscaler { get; private set; } = UpscalerSelection.NewestFsr;
 
     /// <summary>The INT8 community build version the user confirmed (null unless INT8 chosen).</summary>
     public string? SelectedInt8Version { get; private set; }
@@ -68,6 +68,7 @@ public partial class InstallPage : UserControl, IHostedPage
 
         SetupBackendOptions();
         SetupProfiles();
+        SetupUpscalerPickers();
         SetupOptiScalerVersions();
 
         _ready = true;
@@ -98,8 +99,6 @@ public partial class InstallPage : UserControl, IHostedPage
         def.IsCheckedChanged += OnOptionChanged;
 
         // Step 2 radios drive the [Upscalers] selection in the preview.
-        this.FindControl<RadioButton>("RbSelectNow")!.IsCheckedChanged += OnOptionChanged;
-        this.FindControl<RadioButton>("RbSelectInGame")!.IsCheckedChanged += OnOptionChanged;
 
         // Step 2 toggles + Step 3 add-ons all feed the live preview.
         this.FindControl<CheckBox>("ChkForceInt8")!.IsCheckedChanged += OnOptionChanged;
@@ -241,8 +240,88 @@ public partial class InstallPage : UserControl, IHostedPage
         return Fsr4Backend.Default;
     }
 
-    private bool CurrentSelectFsr4()
-        => this.FindControl<RadioButton>("RbSelectInGame")!.IsChecked != true;
+    private UpscalerSelection CurrentUpscaler()
+    {
+        var choice = (this.FindControl<ComboBox>("UpscalerCombo")!.SelectedItem as ComboBoxItem)?.Tag
+            as UpscalerChoice.Choice ?? UpscalerChoice.Auto;
+
+        if (!choice.Id.Equals(UpscalerChoice.FidelityFxId, StringComparison.OrdinalIgnoreCase))
+            return new UpscalerSelection(choice.Id, null);
+
+        var index = (this.FindControl<ComboBox>("FfxVersionCombo")!.SelectedItem as ComboBoxItem)?.Tag as int?;
+        return new UpscalerSelection(choice.Id, index ?? 0);
+    }
+
+    /// <summary>
+    /// Fills the upscaler picker from OptiScaler's own list, and the FSR version picker
+    /// from whatever the upscaler module in this game reports.
+    ///
+    /// DLSS is shown only on Nvidia, which is the rule OptiScaler applies in its own
+    /// picker — it skips the option unless the primary GPU is DLSS-capable. Where the
+    /// GPU cannot be identified, everything is offered rather than nothing: guessing a
+    /// user out of the option they came for is worse than letting the overlay refuse it.
+    /// </summary>
+    private void SetupUpscalerPickers()
+    {
+        var combo = this.FindControl<ComboBox>("UpscalerCombo")!;
+        var vendor = _manager.DetectPrimaryGpu()?.Vendor.ToString();
+
+        combo.Items.Clear();
+        foreach (var choice in UpscalerChoice.AvailableFor(vendor))
+            combo.Items.Add(new ComboBoxItem
+            {
+                Content = choice.Vendor is { Length: > 0 } v ? $"{choice.Label}  ({v})" : choice.Label,
+                Tag = choice,
+            });
+
+        // The FidelityFX family, which is what "pre-enable FSR 4" used to mean.
+        combo.SelectedIndex = Math.Max(0, combo.Items
+            .OfType<ComboBoxItem>()
+            .ToList()
+            .FindIndex(i => (i.Tag as UpscalerChoice.Choice)?.Id == UpscalerChoice.FidelityFxId));
+
+        SetupFfxVersionPicker();
+    }
+
+    private void SetupFfxVersionPicker()
+    {
+        var combo = this.FindControl<ComboBox>("FfxVersionCombo")!;
+        combo.Items.Clear();
+
+        // Index 0 is exact: AMD sorts the list it reports newest-first, so "newest" is
+        // position 0 whatever that list turns out to contain on this machine.
+        combo.Items.Add(new ComboBoxItem { Content = "Newest available (recommended)", Tag = (int?)0 });
+
+        var reported = _manager.FidelityFxProviderVersions(_game);
+        for (var i = 1; i < reported.Count; i++)
+            combo.Items.Add(new ComboBoxItem { Content = $"FSR {reported[i]}", Tag = (int?)i });
+
+        combo.SelectedIndex = 0;
+
+        var note = this.FindControl<TextBlock>("FfxVersionNoteText")!;
+        note.Text = reported.Count > 1
+            ? $"The FidelityFX library in this game reports FSR {string.Join(", ", reported)}. "
+              + "Anything other than \u201cnewest\u201d is a request, not a guarantee: AMD builds that "
+              + "list at run time and drops providers your GPU cannot run, so a specific version can "
+              + "move. OptiScaler's overlay shows what is actually in use."
+            : reported.Count == 1
+                ? $"The FidelityFX library in this game reports only FSR {reported[0]}."
+                : "No FidelityFX library was found in this game yet, so only \u201cnewest\u201d can be "
+                  + "offered. Once OptiScaler is installed, its overlay lists every version the "
+                  + "library it loads provides.";
+        note.IsVisible = true;
+    }
+
+    /// <summary>Shows the FSR version row only for the family where it means something.</summary>
+    private void RefreshUpscalerRows()
+    {
+        var selection = CurrentUpscaler();
+        var choice = selection.Choice;
+
+        this.FindControl<StackPanel>("FfxVersionRow")!.IsVisible = selection.IsFidelityFx;
+        this.FindControl<TextBlock>("FfxVersionNoteText")!.IsVisible = selection.IsFidelityFx;
+        this.FindControl<TextBlock>("UpscalerNoteText")!.Text = choice.Note;
+    }
 
     private string? CurrentInt8Version()
     {
@@ -265,7 +344,8 @@ public partial class InstallPage : UserControl, IHostedPage
     private void UpdatePreview()
     {
         if (!_ready) return;
-        var preview = _manager.BuildInstallPreview(_game, CurrentBackend(), CurrentSelectFsr4(),
+        RefreshUpscalerRows();
+        var preview = _manager.BuildInstallPreview(_game, CurrentBackend(), CurrentUpscaler(),
             addFakenvapi: IsChecked("ChkFakenvapi"), addNukemFg: IsChecked("ChkNukemFg"),
             spoofMethod: CurrentSpoofMethod(), forceInt8: IsChecked("ChkForceInt8"),
             fsr4Watermark: IsChecked("ChkWatermark"));
@@ -307,7 +387,7 @@ public partial class InstallPage : UserControl, IHostedPage
     private void OnConfirm(object? sender, RoutedEventArgs e)
     {
         SelectedBackend = CurrentBackend();
-        SelectFsr4 = CurrentSelectFsr4();
+        SelectedUpscaler = CurrentUpscaler();
         SelectedInt8Version = SelectedBackend == Fsr4Backend.Int8Community ? CurrentInt8Version() : null;
         SelectedProfile = CurrentProfile();
         AddFakenvapi = IsChecked("ChkFakenvapi");

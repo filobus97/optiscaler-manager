@@ -47,18 +47,29 @@
       </StackPanel>
 
       <StackPanel Spacing="6">
-        <TextBlock Text="2. FSR 4 — whether to pre-select it" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
+        <TextBlock Text="2. Which upscaler OptiScaler should run" FontWeight="SemiBold" Foreground="{StaticResource BrTextPrimary}"/>
         <Border Padding="12" CornerRadius="8" Background="{StaticResource BrBgCard}"
                 BorderBrush="{StaticResource BrBorderSubtle}" BorderThickness="1">
           <StackPanel Spacing="6">
-            <TextBlock Text="FSR 4 is always made available (Fsr4Update=true); this only decides whether it is pre-selected. This section concerns FSR alone — to use XeSS or DLSS instead, pick &quot;I'll select it in-game&quot; and choose from OptiScaler's overlay."
+            <TextBlock Text="The whole point of OptiScaler: the upscaler a game asks for need not be the one it gets. This writes [Upscalers] Dx12Upscaler and its DX11 and Vulkan equivalents. Without it the DX12 default is XeSS, and the FSR settings are never read."
                        FontSize="11" Foreground="{StaticResource BrTextSecondary}" TextWrapping="Wrap"/>
-            <RadioButton Name="RbSelectNow" GroupName="Fsr4Select" Content="Select FSR 4 for me now"
-                         Foreground="{StaticResource BrTextPrimary}" IsChecked="True"
-                         ToolTip.Tip="Sets [Upscalers] Dx12Upscaler (and the DX11/Vulkan equivalents) to the FSR upscaler, so FSR 4 is active immediately. Without this the DX12 default is XeSS, and the FSR settings are never read."/>
-            <RadioButton Name="RbSelectInGame" GroupName="Fsr4Select" Content="I'll select it in-game"
-                         Foreground="{StaticResource BrTextPrimary}"
-                         ToolTip.Tip="Leaves [Upscalers] on auto so OptiScaler picks, and you choose the upscaler from its in-game overlay."/>
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Text="Upscaler:" VerticalAlignment="Center" Width="66"
+                         Foreground="{StaticResource BrTextSecondary}"/>
+              <ComboBox Name="UpscalerCombo" MinWidth="260" SelectionChanged="OnOptionChanged"
+                        ToolTip.Tip="The same list OptiScaler's own overlay offers, taken from its source. You can still change it in-game at any time."/>
+            </StackPanel>
+            <TextBlock Name="UpscalerNoteText" FontSize="11" TextWrapping="Wrap" Margin="76,0,0,0"
+                       Foreground="{StaticResource BrTextSecondary}"/>
+
+            <StackPanel Name="FfxVersionRow" Orientation="Horizontal" Spacing="10" IsVisible="False">
+              <TextBlock Text="FSR version:" VerticalAlignment="Center" Width="66"
+                         Foreground="{StaticResource BrTextSecondary}" TextWrapping="Wrap"/>
+              <ComboBox Name="FfxVersionCombo" MinWidth="260" SelectionChanged="OnOptionChanged"
+                        ToolTip.Tip="One FidelityFX code covers FSR 2.3, 3.1 and 4.x — this picks which of them runs, via [FSR] UpscalerIndex. &quot;Newest available&quot; is exact; a specific version is a request, because AMD filters the list by what your GPU supports."/>
+            </StackPanel>
+            <TextBlock Name="FfxVersionNoteText" FontSize="11" TextWrapping="Wrap" Margin="76,0,0,0"
+                       IsVisible="False" Foreground="{StaticResource BrTextSecondary}"/>
             <CheckBox Name="ChkForceInt8" Content="Force INT8 model on unsupported GPUs (Fsr4ForceEnableInt8)"
                       Foreground="{StaticResource BrTextPrimary}" FontSize="12"
                       ToolTip.Tip="FSR 4.1.1 officially supports only RDNA4 (FP8) and desktop RDNA3 (INT8); other GPUs silently fall back to FSR 3. This forces the SDK upscaler's INT8 capability check to pass on RDNA2 / mobile RDNA3 / Intel / Nvidia. It cannot make GPUs without INT8 support work, and RDNA2 Windows users are still recommended the INT8 community 4.0.2c build."/>

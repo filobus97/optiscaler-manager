@@ -215,12 +215,32 @@ Building from source is in [Building & running](#building--running).
       (third-party, **not** the official OptiScaler project), at a **version you pick**
       (upstream still recommends **4.0.2c** for RDNA2 on Windows).
 
-  **Step 2 — FSR 4 selection:** the Manager **always forces the flag that makes FSR 4
-  *available*** (`[FSR] Fsr4Update=true`); you then choose whether it also **selects**
-  FSR 4 for you or leaves that to OptiScaler so you pick it in the in-game overlay.
-  Selecting it writes `[Upscalers] Dx12Upscaler` (plus the DX11/Vulkan equivalents) —
-  the setting that decides *which upscaler runs at all*, because the DX12 default is
-  XeSS ([how that value is chosen](#choosing-the-upscaler-key)). Two optional toggles
+  **Step 2 — which upscaler OptiScaler should run:** this is the whole point of
+  OptiScaler, so it is a real choice rather than a switch. Pick **FSR (FidelityFX)**,
+  **DLSS**, **XeSS**, **FSR 2.2**, **FSR 2.1**, or leave it to OptiScaler. That writes
+  `[Upscalers] Dx12Upscaler` plus the DX11 and Vulkan equivalents — the setting that
+  decides *which upscaler runs at all*, because the DX12 default is XeSS and the FSR
+  keys are never read while it is running
+  ([how that value is chosen](#choosing-the-upscaler-key)).
+
+  The list and its per-API codes are **OptiScaler's own**, read out of
+  `MenuCommon::AddDx12Backends` and its DX11 and Vulkan counterparts, so this screen
+  offers exactly what the in-game overlay does and cannot write a combination
+  OptiScaler would reject. DLSS appears only on Nvidia, which is the same gate
+  OptiScaler applies — it hides the option unless the primary GPU is DLSS-capable.
+
+  **The FSR version is a second question**, because one code covers a family:
+  `ffx` means FSR 2.3, 3.1 *and* 4.x alike, and which of them runs is decided by
+  `[FSR] UpscalerIndex`. So choosing FSR reveals a version picker listing every
+  provider the FidelityFX library in that game reports — read straight out of the
+  binary. **"Newest available" is exact**: AMD sorts the list it reports newest-first
+  (`GetProviderVersions` ends with a sort whose own comment says so), making index 0
+  always the newest. Asking for a *specific* older version is a request rather than a
+  guarantee, and the app says so, because AMD builds that list at run time and drops
+  providers the GPU cannot run — so a given version's position can shift. OptiScaler's
+  overlay always shows what is genuinely in use.
+
+  Two optional toggles
   cover FSR 4.1.1's new GPU validation:
   **Force INT8 on unsupported GPUs** (`Fsr4ForceEnableInt8=true`, for RDNA2 / mobile
   RDNA3 / Intel / Nvidia — it can't help GPUs without INT8 support) and **Show the FSR4
@@ -245,7 +265,7 @@ Building from source is in [Building & running](#building--running).
 
   Plus the **`OptiScaler.ini`** to use — OptiScaler's default, or one of your saved
   profiles. When you pick a custom `.ini`, the options above overwrite **only the keys
-  they affect** (`Fsr4Update`, the `[Upscalers]` selection, the optional toggles above,
+  they affect** (the `[Upscalers]` selection, `[FSR] UpscalerIndex`, the optional toggles above,
   and the menu key); the rest of your `.ini` is left exactly as you wrote it.
 - **A details page per game.** *Details* opens in place and answers "what is in this
   game": every upscaling component found next to it — DLSS, FSR, XeSS, frame
@@ -445,10 +465,15 @@ backup moves into the first group and can be removed normally.
 
 When you click **Install OptiScaler**, the screen lets you pick which files to
 install (OptiScaler default — first and pre-selected — then your custom DLLs, then
-the INT8 community build) and which `.ini` profile to write. The Manager always sets `[FSR] Fsr4Update = true` and the
-`[Upscalers]` selection per your Step-2 choice (these win over the chosen profile,
-matching what is written to disk). You always see the exact file and ini changes
-in the live preview first.
+the INT8 community build) and which `.ini` profile to write. The Manager writes the
+`[Upscalers]` selection and `[FSR] UpscalerIndex` from your Step-2 choice (these win
+over the chosen profile, matching what is written to disk). You always see the exact
+file and ini changes in the live preview first.
+
+`[FSR] Fsr4Update` is **no longer written unconditionally**: it is gone from current
+OptiScaler entirely, replaced by `[FSR] UpscalerIndex`, so writing it left an inert
+key in the config and a log line claiming something had been engaged. It is now
+written only where the installed release still documents the key.
 
 ![The install screen](docs/screenshots/install.png)
 

@@ -136,6 +136,37 @@ public sealed class ManagerService
         VendorBuild build, IProgress<double>? progress = null, CancellationToken cancel = default) =>
         _vendor.DownloadAsync(build, progress, cancel);
 
+    /// <summary>
+    /// The FSR versions the FidelityFX library in this game reports, newest first.
+    ///
+    /// Read statically out of the binary, since running it is not an option here. Empty
+    /// when the game has no such library yet — in which case only "newest" can be
+    /// offered, because there is nothing to enumerate.
+    /// </summary>
+    public IReadOnlyList<string> FidelityFxProviderVersions(Game game)
+    {
+        // The SDK 2 upscaler module first: it is the one that decides the FSR version.
+        // The SDK 1 monolith is the fallback, where the providers live in the runtime.
+        foreach (var name in new[] { "amd_fidelityfx_upscaler_dx12.dll", "amd_fidelityfx_dx12.dll" })
+        {
+            var component = game.DetectedComponents.FirstOrDefault(
+                c => c.FileName.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (component is null) continue;
+
+            var relative = component.RelativePath;
+            if (string.IsNullOrWhiteSpace(relative)) continue;
+            var path = System.IO.Path.IsPathRooted(relative)
+                ? relative
+                : System.IO.Path.Combine(game.InstallPath, relative);
+            if (!System.IO.File.Exists(path)) continue;
+
+            var versions = FidelityFxVersion.AllFromBinary(path);
+            if (versions.Count > 0) return versions;
+        }
+
+        return Array.Empty<string>();
+    }
+
     /// <summary>Takes a file the user chose into the library.</summary>
     public LibraryDll ImportSwappableDll(string path) => _library.Import(path);
 
@@ -373,10 +404,10 @@ public sealed class ManagerService
     /// with the chosen FSR 4 backend and ini profile. What the preview shows is
     /// precisely what gets installed.
     /// </summary>
-    public InstallPreview BuildInstallPreview(Game game, Fsr4Backend backend, bool selectFsr4,
+    public InstallPreview BuildInstallPreview(Game game, Fsr4Backend backend, UpscalerSelection selection,
         bool addFakenvapi = false, bool addNukemFg = false,
         SpoofMethod? spoofMethod = null, bool forceInt8 = false, bool fsr4Watermark = false)
-        => ComponentRegistry.BuildInstallPreview(backend, selectFsr4, ComponentRegistry.DefaultInjectionDll, MenuShortcutKey,
+        => ComponentRegistry.BuildInstallPreview(backend, selection, ComponentRegistry.DefaultInjectionDll, MenuShortcutKey,
             backend == Fsr4Backend.CustomMerged ? _components.GetCustomDlls().Select(d => d.Name).ToList() : null,
             addFakenvapi, addNukemFg, spoofMethod, forceInt8, fsr4Watermark);
 
@@ -401,7 +432,7 @@ public sealed class ManagerService
     public bool IsBetaOptiScalerVersion(string version) => _components.BetaVersions.Contains(version);
 
     // ── Install OptiScaler ──────────────────────────────────────────────────
-    public async Task InstallAsync(Game game, Fsr4Backend backend, string? int8Version, bool selectFsr4,
+    public async Task InstallAsync(Game game, Fsr4Backend backend, string? int8Version, UpscalerSelection selection,
         OptiScalerProfile? iniProfile, IProgress<string>? status = null,
         bool addFakenvapi = false, bool addNukemFg = false,
         SpoofMethod? spoofMethod = null, bool forceInt8 = false, bool fsr4Watermark = false,
@@ -476,7 +507,7 @@ public sealed class ManagerService
         // Force ONLY the keys the Manager owns; everything else in the chosen ini
         // (default or custom) is left untouched. FSR 4 is always made *available*;
         // whether it is *selected* depends on selectFsr4.
-        ApplyForcedIniKeys(gameDir, selectFsr4, spoofMethod, forceInt8, fsr4Watermark);
+        ApplyForcedIniKeys(gameDir, selection, spoofMethod, forceInt8, fsr4Watermark);
 
         status?.Report("Done.");
     }
@@ -550,27 +581,36 @@ public sealed class ManagerService
 
     /// <summary>
     /// Writes the (and only the) OptiScaler.ini keys the Manager is responsible for:
-    /// [FSR] Fsr4Update=true always, [Upscalers] Dx12/Dx11/VulkanUpscaler (the FSR
-    /// upscaler when the Manager selects FSR 4, auto when the user selects it in-game),
+    /// [Upscalers] Dx12/Dx11/VulkanUpscaler and [FSR] UpscalerIndex from the chosen
+    /// upscaler, the legacy [FSR] Fsr4Update where a release still has it,
     /// the opt-in [FSR] Fsr4ForceEnableInt8 /
     /// Fsr4EnableWatermark and [Spoofing] Dxgi toggles, and [Menu] ShortcutKey when a
     /// menu key is configured. Applied last, so it overrides anything the backend
     /// installers set. Off toggles leave the keys untouched (OptiScaler's auto behaviour).
     /// </summary>
-    private void ApplyForcedIniKeys(string gameDir, bool selectFsr4, SpoofMethod? spoofMethod = null,
+    private void ApplyForcedIniKeys(string gameDir, UpscalerSelection selection, SpoofMethod? spoofMethod = null,
         bool forceInt8 = false, bool fsr4Watermark = false)
     {
-        GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4Update", "true");
+        // Only where the release still has the key; it is gone from current OptiScaler.
+        GameInstallationService.SelectLegacyFsr4Update(gameDir);
 
-        // Which upscaler runs at all. This is the setting that makes "select FSR 4"
-        // mean anything; the DX12 default is XeSS, and FSR keys are not read while it
-        // is running. Written after Fsr4Update so it wins over the backend installers.
-        GameInstallationService.SelectFsr4Upscaler(gameDir, selectFsr4);
-
-        // UpscalerIndex picks *which* FSR version the FSR upscaler uses, by position in
-        // a list the FidelityFX runtime reports. Its default is already 0, so the 0 that
-        // older Manager versions wrote here was a no-op; write auto to clear it.
-        GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "UpscalerIndex", "auto");
+        // Which upscaler runs at all, and for the FidelityFX family which provider
+        // version. This is the setting that makes the choice mean anything: the DX12
+        // default is XeSS, and the FSR keys are not read while it is running. Written
+        // after the backend installers so it wins over them.
+        if (selection.IsAuto)
+        {
+            GameInstallationService.SelectUpscaler(gameDir, UpscalerChoice.Auto, null);
+            // Clear any provider index an earlier install left behind, so "let
+            // OptiScaler decide" really does.
+            GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "UpscalerIndex", "auto");
+        }
+        else
+        {
+            GameInstallationService.SelectUpscaler(gameDir, selection.Choice, selection.FfxProviderIndex);
+            if (!selection.IsFidelityFx)
+                GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "UpscalerIndex", "auto");
+        }
 
         if (forceInt8)
             GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4ForceEnableInt8", "true");

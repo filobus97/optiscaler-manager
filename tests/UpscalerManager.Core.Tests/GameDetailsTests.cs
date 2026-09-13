@@ -226,8 +226,10 @@ namespace UpscalerManager.Core.Tests
         [Fact]
         public void ReportsFsr4AndFrameGenerationInWords()
         {
-            WriteIni("[FSR]\nFsr4Update=true\nFsr4ForceEnableInt8=true\n\n[FrameGen]\nFGInput=nukems\n");
-            Assert.Equal("Yes", ValueOf("Upgrade FSR 3 to FSR 4"));
+            WriteIni("[FSR]\nUpscalerIndex=0\nFsr4ForceEnableInt8=true\n\n[FrameGen]\nFGInput=nukems\n");
+            // One FidelityFX code covers FSR 2.3, 3.1 and 4.x; the index is what picks,
+            // and AMD sorts the list newest-first so 0 is the newest available.
+            Assert.Equal("The newest the FidelityFX library provides", ValueOf("FSR version requested"));
             Assert.Contains("INT8", ValueOf("Force FSR 4 on unsupported GPUs"));
             Assert.Contains("Nukem", ValueOf("Frame generation"));
         }
@@ -246,8 +248,8 @@ namespace UpscalerManager.Core.Tests
         [Fact]
         public void CommentsAndBlankLinesDoNotConfuseTheReader()
         {
-            WriteIni("; a comment\n\n[FSR]\n; another\nFsr4Update = true   \n");
-            Assert.Equal("Yes", ValueOf("Upgrade FSR 3 to FSR 4"));
+            WriteIni("; a comment\n\n[FSR]\n; another\nUpscalerIndex = 0   \n");
+            Assert.Equal("The newest the FidelityFX library provides", ValueOf("FSR version requested"));
         }
 
         [Fact]

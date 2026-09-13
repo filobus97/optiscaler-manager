@@ -75,17 +75,25 @@ public static class FidelityFxVersion
     /// cannot be established. Never throws: an unreadable file just means the row falls
     /// back to showing the build number, which is what it did before.
     /// </summary>
-    public static string? FromBinary(string path)
+    public static string? FromBinary(string path) =>
+        AllFromBinary(path).FirstOrDefault(v => MajorOf(v) >= LowestRealFsrMajor);
+
+    /// <summary>
+    /// Every FSR version a module on disk can provide, newest first, or empty when it
+    /// cannot be read. Never throws.
+    /// </summary>
+    public static IReadOnlyList<string> AllFromBinary(string path)
     {
         try
         {
-            // These libraries run to about 6.5 MB; reading one to find three short
-            // strings is cheap next to the directory scan that found it.
-            return FromProviderTable(File.ReadAllBytes(path));
+            // These libraries run to 6.5 MB for an SDK 1 monolith and 29 MB for an
+            // SDK 2 upscaler; reading one to find three short strings is still cheap
+            // next to the directory scan that found it.
+            return AllFromProviderTable(File.ReadAllBytes(path));
         }
         catch
         {
-            return null;
+            return Array.Empty<string>();
         }
     }
 
@@ -104,9 +112,31 @@ public static class FidelityFxVersion
     /// fallback rather than the primary route, and it declines to answer rather than
     /// guess when nothing is in FSR's range.</para>
     /// </summary>
-    internal static string? FromProviderTable(ReadOnlySpan<byte> bytes)
+    internal static string? FromProviderTable(ReadOnlySpan<byte> bytes) =>
+        AllFromProviderTable(bytes).FirstOrDefault(v => MajorOf(v) >= LowestRealFsrMajor);
+
+    private static int MajorOf(string version) =>
+        int.TryParse(version.Split('.')[0], out var major) ? major : 0;
+
+    /// <summary>
+    /// Every provider version in the binary's table, <b>newest first</b>.
+    ///
+    /// The order matters and is not arbitrary. AMD sorts the list it reports at runtime
+    /// — <c>GetProviderVersions</c> in the SDK ends with an insertion sort whose comment
+    /// reads "Sort the returned versions by version ids so newest version is at
+    /// beginning of array" — so newest-first is the order
+    /// <c>[FSR] UpscalerIndex</c> indexes into, and the order used here.
+    ///
+    /// Unlike <see cref="FromProviderTable"/> this applies no floor, because every
+    /// entry is a real choice — OptiScaler's overlay lists them all as "FSR &lt;name&gt;"
+    /// and a game that misbehaves on FSR 4 can be pinned to the FSR 3.1 provider in the
+    /// same module. The floor exists only for <em>labelling</em> a file, where reporting
+    /// an SDK-era 2.3.x as though it were an FSR version would invent something that
+    /// does not exist.
+    /// </summary>
+    internal static IReadOnlyList<string> AllFromProviderTable(ReadOnlySpan<byte> bytes)
     {
-        (int Major, int Minor, int Patch)? best = null;
+        var found = new List<(int Major, int Minor, int Patch)>();
 
         for (var i = 1; i < bytes.Length - 1; i++)
         {
@@ -119,15 +149,14 @@ public static class FidelityFxVersion
             var length = end - i;
             if (length is < 5 or > 8) { i = end; continue; }   // "1.2.3" … "12.34.567"
 
-            if (Parse(bytes.Slice(i, length)) is { } parsed
-                && parsed.Major >= LowestRealFsrMajor
-                && (best is null || Compare(parsed, best.Value) > 0))
-                best = parsed;
+            if (Parse(bytes.Slice(i, length)) is { } parsed && !found.Contains(parsed))
+                found.Add(parsed);
 
             i = end;
         }
 
-        return best is { } v ? $"{v.Major}.{v.Minor}.{v.Patch}" : null;
+        found.Sort((a, b) => Compare(b, a));   // newest first, as AMD reports them
+        return found.Select(v => $"{v.Major}.{v.Minor}.{v.Patch}").ToList();
     }
 
     /// <summary>

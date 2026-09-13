@@ -387,7 +387,7 @@ public partial class MainWindow : Window
 
         try
         {
-            await _manager.InstallAsync(row.Game, dialog.SelectedBackend, dialog.SelectedInt8Version, dialog.SelectFsr4, dialog.SelectedProfile, progress,
+            await _manager.InstallAsync(row.Game, dialog.SelectedBackend, dialog.SelectedInt8Version, dialog.SelectedUpscaler, dialog.SelectedProfile, progress,
                 addFakenvapi: dialog.AddFakenvapi, addNukemFg: dialog.AddNukemFg,
                 spoofMethod: dialog.SelectedSpoofMethod, forceInt8: dialog.ForceInt8, fsr4Watermark: dialog.Fsr4Watermark,
                 optiscalerVersion: dialog.SelectedOptiScalerVersion);

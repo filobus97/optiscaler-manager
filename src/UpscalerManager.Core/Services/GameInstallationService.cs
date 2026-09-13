@@ -16,6 +16,7 @@
 
 using System;
 using System.IO;
+using System.Globalization;
 using System.Linq;
 using System.Collections.Generic;
 using System.Security.Cryptography;
@@ -1762,10 +1763,10 @@ namespace UpscalerManager.Core.Services
             foreach (var (dllName, sourcePath) in files)
                 CopyFileIntoTrackedInstall(manifest, storeKey, gameDir, dllName, sourcePath, previouslyOurs, logTag);
 
-            // Engage FSR4: Fsr4Update lets OptiScaler upgrade FSR 3.x to FSR 4, and
             // [Upscalers] selects the FSR upscaler in the first place — without it the
-            // DX12 default is XeSS and none of the FSR keys are even read.
-            ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4Update", "true");
+            // DX12 default is XeSS and none of the FSR keys are even read. Fsr4Update is
+            // only written where the release still has it.
+            SelectLegacyFsr4Update(gameDir);
             SelectFsr4Upscaler(gameDir, true);
 
             manifest.IncludesCustomFsrSdk = true;
@@ -1780,7 +1781,7 @@ namespace UpscalerManager.Core.Services
             game.Fsr4ExtraVersion = null;
 
             Log.Write($"[{logTag}] Installed v{versionLabel} and updated OptiScaler.ini " +
-                      "([FSR] Fsr4Update=true, and [Upscalers] set to the FSR upscaler)");
+                      "([Upscalers] set to the FidelityFX upscaler)");
         }
 
         /// <summary>
@@ -1788,6 +1789,122 @@ namespace UpscalerManager.Core.Services
         /// file, the section, or the key as needed. Unlike ModifyOptiScalerIni (which
         /// only handles [General]), this is section-aware.
         /// </summary>
+        /// <summary>
+        /// Every code the installed OptiScaler documents in its <c>[Upscalers]</c>
+        /// comments, lowercased.
+        ///
+        /// The release's own ini is the only trustworthy statement of what it accepts:
+        /// the codes were renamed once already (<c>fsr31</c> to <c>ffx</c>), and writing
+        /// a value a release does not understand does not fail loudly — it falls back to
+        /// that release's default, which on DX12 is XeSS. So a user who asked for FSR
+        /// would silently get XeSS.
+        /// </summary>
+        public static IReadOnlySet<string> DocumentedUpscalerCodes(string gameDir)
+        {
+            var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var iniPath = Path.Combine(gameDir, "OptiScaler.ini");
+            if (!File.Exists(iniPath)) return codes;
+
+            try
+            {
+                var inSection = false;
+                foreach (var raw in File.ReadAllLines(iniPath))
+                {
+                    var line = raw.Trim();
+                    if (line.StartsWith("["))
+                    {
+                        // Only the [Upscalers] comments describe these codes; "ffx"
+                        // appears elsewhere in the file for unrelated settings.
+                        inSection = line.Equals("[Upscalers]", StringComparison.OrdinalIgnoreCase);
+                        continue;
+                    }
+                    if (!inSection || !line.StartsWith(";")) continue;
+
+                    foreach (Match m in Regex.Matches(line, @"\b(auto|dlss|dlssd|xess(_12)?|fsr21(_12)?|fsr22(_12)?|fsr31(_12)?|ffx(_12)?)\b",
+                                                      RegexOptions.IgnoreCase))
+                        codes.Add(m.Value.ToLowerInvariant());
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Write($"[Upscaler] Could not read the upscaler codes from OptiScaler.ini: {ex.Message}");
+            }
+
+            return codes;
+        }
+
+        /// <summary>
+        /// Which spelling of a choice's codes this release understands, or null when it
+        /// documents neither — in which case nothing is written, because leaving
+        /// OptiScaler's own default alone beats installing a value that downgrades the
+        /// upscaler without saying so.
+        /// </summary>
+        public static Components.UpscalerCodes? ResolveUpscalerCodes(string gameDir, Components.UpscalerChoice.Choice choice)
+        {
+            var documented = DocumentedUpscalerCodes(gameDir);
+            if (documented.Count == 0) return null;
+
+            bool Known(Components.UpscalerCodes? codes) =>
+                codes is not null
+                && new[] { codes.Dx12, codes.Dx11, codes.Vulkan }
+                    .Where(c => c is { Length: > 0 })
+                    .Any(c => documented.Contains(c!));
+
+            if (Known(choice.Codes)) return choice.Codes;
+            if (Known(choice.LegacyCodes)) return choice.LegacyCodes;
+            return null;
+        }
+
+        /// <summary>
+        /// Writes the chosen upscaler into <c>[Upscalers]</c>, and the chosen FidelityFX
+        /// provider into <c>[FSR] UpscalerIndex</c>.
+        ///
+        /// <para><paramref name="ffxProviderIndex"/> is only meaningful for the
+        /// FidelityFX family, where one backend code covers FSR 2.3, 3.1 and 4.x. Index
+        /// 0 is always the newest provider the module offers — AMD sorts the list it
+        /// reports newest-first — so 0 is exact. Any other index is a preference rather
+        /// than a guarantee: AMD filters the list by what the GPU supports and DX12 adds
+        /// a driver-supplied provider, neither of which can be evaluated from here, so
+        /// the position of a specific version can shift on the user's machine. Passing
+        /// null leaves the key alone.</para>
+        /// </summary>
+        public static void SelectUpscaler(string gameDir, Components.UpscalerChoice.Choice choice, int? ffxProviderIndex)
+        {
+            if (choice.Id.Equals(Components.UpscalerChoice.AutoId, StringComparison.OrdinalIgnoreCase))
+            {
+                // Hand the choice back to OptiScaler rather than leaving a stale value
+                // behind from an earlier install.
+                ModifyOptiScalerIniKey(gameDir, "Upscalers", "Dx12Upscaler", "auto");
+                ModifyOptiScalerIniKey(gameDir, "Upscalers", "Dx11Upscaler", "auto");
+                ModifyOptiScalerIniKey(gameDir, "Upscalers", "VulkanUpscaler", "auto");
+                Log.Write("[Upscaler] Left the upscaler choice to OptiScaler ([Upscalers] = auto).");
+                return;
+            }
+
+            if (ResolveUpscalerCodes(gameDir, choice) is not { } codes)
+            {
+                Log.Write($"[Upscaler] This OptiScaler release does not document a code for " +
+                          $"{choice.Label}, so [Upscalers] was left alone rather than written with " +
+                          "a value it may not understand.");
+                return;
+            }
+
+            // A code that is null for an API means this choice does not exist there;
+            // "auto" keeps that API on OptiScaler's own default instead of a wrong value.
+            ModifyOptiScalerIniKey(gameDir, "Upscalers", "Dx12Upscaler", codes.Dx12 ?? "auto");
+            ModifyOptiScalerIniKey(gameDir, "Upscalers", "Dx11Upscaler", codes.Dx11 ?? "auto");
+            ModifyOptiScalerIniKey(gameDir, "Upscalers", "VulkanUpscaler", codes.Vulkan ?? "auto");
+            Log.Write($"[Upscaler] Selected {choice.Label} ([Upscalers] Dx12Upscaler={codes.Dx12 ?? "auto"}).");
+
+            if (choice.Id.Equals(Components.UpscalerChoice.FidelityFxId, StringComparison.OrdinalIgnoreCase)
+                && ffxProviderIndex is { } index and >= 0)
+            {
+                ModifyOptiScalerIniKey(gameDir, "FSR", "UpscalerIndex", index.ToString(CultureInfo.InvariantCulture));
+                Log.Write($"[Upscaler] Requested FidelityFX provider index {index}" +
+                          (index == 0 ? " (the newest the module offers)." : "."));
+            }
+        }
+
         /// <summary>
         /// The <c>[Upscalers]</c> codes that select the FSR 3.1/4 upscaler for each API.
         /// </summary>
@@ -1857,28 +1974,69 @@ namespace UpscalerManager.Core.Services
         /// </summary>
         public static void SelectFsr4Upscaler(string gameDir, bool select)
         {
-            if (!select)
+            // One implementation now. "Select FSR 4" is the FidelityFX family with the
+            // newest provider the module offers, which is what index 0 means.
+            var choice = select
+                ? Components.UpscalerChoice.For(Components.UpscalerChoice.FidelityFxId)!
+                : Components.UpscalerChoice.Auto;
+
+            SelectUpscaler(gameDir, choice, select ? 0 : null);
+        }
+
+        /// <summary>
+        /// Writes the legacy <c>[FSR] Fsr4Update</c> key, but only where the installed
+        /// release still documents it.
+        ///
+        /// It was how older OptiScaler builds were told to upgrade FSR 3.x to FSR 4, and
+        /// it is <b>gone from current OptiScaler entirely</b> — no reference anywhere in
+        /// the source, replaced by <c>[FSR] UpscalerIndex</c>. This app was writing it
+        /// unconditionally, which on a current release is an inert key in a config file
+        /// and, worse, a line in the install log claiming something had been engaged.
+        /// </summary>
+        public static void SelectLegacyFsr4Update(string gameDir)
+        {
+            if (!IniDocumentsKey(gameDir, "FSR", "Fsr4Update"))
             {
-                // Hand the choice back to OptiScaler rather than leaving a stale value
-                // behind from an earlier install.
-                ModifyOptiScalerIniKey(gameDir, "Upscalers", "Dx12Upscaler", "auto");
-                ModifyOptiScalerIniKey(gameDir, "Upscalers", "Dx11Upscaler", "auto");
-                ModifyOptiScalerIniKey(gameDir, "Upscalers", "VulkanUpscaler", "auto");
+                Log.Write("[Upscaler] This OptiScaler release has no [FSR] Fsr4Update key — " +
+                          "the FidelityFX provider is chosen with [FSR] UpscalerIndex instead.");
                 return;
             }
 
-            var codes = DetectFsr4UpscalerCodes(gameDir);
-            if (codes is null)
+            ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4Update", "true");
+            Log.Write("[Upscaler] Set the legacy [FSR] Fsr4Update=true for this older release.");
+        }
+
+        /// <summary>
+        /// Whether the installed OptiScaler.ini mentions a key at all, in a comment or as
+        /// a setting. Used to tell an old release from a current one by what its own
+        /// config documents, rather than by parsing a version number.
+        /// </summary>
+        public static bool IniDocumentsKey(string gameDir, string section, string key)
+        {
+            var iniPath = Path.Combine(gameDir, "OptiScaler.ini");
+            if (!File.Exists(iniPath)) return false;
+
+            try
             {
-                Log.Write("[FSR4] OptiScaler.ini does not document its upscaler codes — leaving " +
-                          "[Upscalers] alone so an unsupported value cannot downgrade the upscaler.");
-                return;
+                var inSection = false;
+                foreach (var raw in File.ReadAllLines(iniPath))
+                {
+                    var line = raw.Trim();
+                    if (line.StartsWith("["))
+                    {
+                        inSection = line.Equals($"[{section}]", StringComparison.OrdinalIgnoreCase);
+                        continue;
+                    }
+                    if (inSection && Regex.IsMatch(line, $@"\b{Regex.Escape(key)}\b", RegexOptions.IgnoreCase))
+                        return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Write($"[Upscaler] Could not read OptiScaler.ini: {ex.Message}");
             }
 
-            ModifyOptiScalerIniKey(gameDir, "Upscalers", "Dx12Upscaler", codes.Dx12);
-            ModifyOptiScalerIniKey(gameDir, "Upscalers", "Dx11Upscaler", codes.Dx11);
-            ModifyOptiScalerIniKey(gameDir, "Upscalers", "VulkanUpscaler", codes.Vulkan);
-            Log.Write($"[FSR4] Selected the FSR 4 upscaler ([Upscalers] Dx12Upscaler={codes.Dx12}).");
+            return false;
         }
 
         /// <summary>

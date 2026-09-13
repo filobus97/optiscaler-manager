@@ -157,7 +157,7 @@ public static class ComponentRegistry
     /// </list>
     /// </summary>
     /// <param name="backend">The backend/DLL set to install.</param>
-    /// <param name="selectFsr4">True to have the Manager select FSR 4 (UpscalerIndex=0).</param>
+    /// <param name="selection">Which upscaler the Manager will select, and which FidelityFX provider.</param>
     /// <param name="injectionDll">Injection DLL name (defaults to dxgi.dll).</param>
     /// <param name="menuKeyVk">Configured overlay key (VK hex, e.g. "0x78"), or null to leave OptiScaler's default.</param>
     /// <param name="customDlls">
@@ -174,8 +174,27 @@ public static class ComponentRegistry
     /// </param>
     /// <param name="forceInt8">Force [FSR] Fsr4ForceEnableInt8=true (INT8 model on unsupported GPUs).</param>
     /// <param name="fsr4Watermark">Force [FSR] Fsr4EnableWatermark=true (on-screen FSR4/FSR4-i8/FSR3 verification).</param>
+    /// <summary>
+    /// What the preview shows for one <c>[Upscalers]</c> key. Both spellings are named
+    /// where a choice has two, because which one is written depends on the OptiScaler
+    /// release being installed and is only known once its ini is on disk.
+    /// </summary>
+    private static string DescribeCode(UpscalerSelection selection, UpscalerApi api)
+    {
+        if (selection.IsAuto) return "auto";
+
+        var choice = selection.Choice;
+        var modern = choice.Codes.For(api);
+        var legacy = choice.LegacyCodes?.For(api);
+
+        if (modern is null or "") return "auto";
+        return legacy is { Length: > 0 } && !legacy.Equals(modern, StringComparison.OrdinalIgnoreCase)
+            ? $"{modern} / {legacy} (to match this release)"
+            : modern;
+    }
+
     public static InstallPreview BuildInstallPreview(
-        Fsr4Backend backend, bool selectFsr4, string? injectionDll = null, string? menuKeyVk = null,
+        Fsr4Backend backend, UpscalerSelection selection, string? injectionDll = null, string? menuKeyVk = null,
         IReadOnlyList<string>? customDlls = null,
         bool addFakenvapi = false, bool addNukemFg = false,
         SpoofMethod? spoofMethod = null, bool forceInt8 = false, bool fsr4Watermark = false)
@@ -213,9 +232,9 @@ public static class ComponentRegistry
             new IniKeyChange("FSR", "Fsr4Update", "true"),
             // The exact code depends on the OptiScaler release (newer ones renamed
             // "fsr31" to "ffx"), so it is read from the ini that ships with it.
-            new IniKeyChange("Upscalers", "Dx12Upscaler", selectFsr4 ? "ffx / fsr31 (to match this release)" : "auto"),
-            new IniKeyChange("Upscalers", "Dx11Upscaler", selectFsr4 ? "ffx_12 / fsr31_12 (to match this release)" : "auto"),
-            new IniKeyChange("Upscalers", "VulkanUpscaler", selectFsr4 ? "ffx_12 / fsr31_12 (to match this release)" : "auto"),
+            new IniKeyChange("Upscalers", "Dx12Upscaler", DescribeCode(selection, UpscalerApi.Dx12)),
+            new IniKeyChange("Upscalers", "Dx11Upscaler", DescribeCode(selection, UpscalerApi.Dx11)),
+            new IniKeyChange("Upscalers", "VulkanUpscaler", DescribeCode(selection, UpscalerApi.Vulkan)),
             new IniKeyChange("FSR", "UpscalerIndex", "auto"),
         };
         if (forceInt8)

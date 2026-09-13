@@ -39,9 +39,8 @@ public static class OptiScalerConfigReader
         {
             new("Upscaler in use", DescribeUpscaler(Get("Upscalers", "Dx12Upscaler")),
                 "[Upscalers] Dx12Upscaler"),
-            new("Upgrade FSR 3 to FSR 4", OnOffAuto(Get("FSR", "Fsr4Update"),
-                    on: "Yes", off: "No", auto: "Only on GPUs OptiScaler considers capable"),
-                "[FSR] Fsr4Update"),
+            new("FSR version requested", DescribeProviderIndex(Get("FSR", "UpscalerIndex")),
+                "[FSR] UpscalerIndex"),
             new("Force FSR 4 on unsupported GPUs", OnOffAuto(Get("FSR", "Fsr4ForceEnableInt8"),
                     on: "Yes (INT8 mode)", off: "No", auto: "No"),
                 "[FSR] Fsr4ForceEnableInt8"),
@@ -54,6 +53,21 @@ public static class OptiScalerConfigReader
         };
         return facts;
     }
+
+    /// <summary>
+    /// What <c>[FSR] UpscalerIndex</c> selects. One FidelityFX code covers FSR 2.3, 3.1
+    /// and 4.x, and this is the position in the list the runtime reports — which AMD
+    /// sorts newest-first, so 0 is always the newest the loaded library provides.
+    /// </summary>
+    private static string DescribeProviderIndex(string value) => value.Trim().ToLowerInvariant() switch
+    {
+        "" or "auto" => "Whichever the FidelityFX library defaults to",
+        "0" => "The newest the FidelityFX library provides",
+        var v when int.TryParse(v, out var index) && index > 0 =>
+            $"Entry {index} in the list the library reports, counting from the newest — "
+            + "OptiScaler's overlay names the version actually in use",
+        _ => value,
+    };
 
     private static string DescribeUpscaler(string value) => value.ToLowerInvariant() switch
     {
