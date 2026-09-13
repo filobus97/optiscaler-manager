@@ -75,12 +75,74 @@ public partial class DllSwapPage : UserControl, IHostedPage
             Text("WarningText", _slot.Verdict.Reason);
         }
 
+        RenderGuidance();
         RenderCurrent();
         RenderLibrary();
         RenderHarvestable();
         RenderCommunity();
         RenderRepository();
         RenderVendor();
+    }
+
+    /// <summary>
+    /// Where the FSR version actually comes from, said on the rows where this file is
+    /// not the answer.
+    ///
+    /// The FidelityFX runtime and loader do not decide which FSR a game runs — the
+    /// upscaler module does. Without this the page is silently misleading: it offers
+    /// builds of a runtime to someone who came here to get FSR 4, and the only thing
+    /// that told them otherwise used to be a download that failed after the fact.
+    /// </summary>
+    private void RenderGuidance()
+    {
+        var box = this.FindControl<Border>("GuidanceBox");
+        var panel = this.FindControl<StackPanel>("GuidancePanel");
+        if (box is null || panel is null) return;
+
+        var role = _slot.FidelityFxRole;
+        box.IsVisible = role is FidelityFxRole.Loader or FidelityFxRole.Monolith;
+        if (!box.IsVisible) return;
+
+        panel.Children.Clear();
+        panel.Children.Add(Label("Looking for FSR 4?", 12.5, FontWeight.SemiBold, "BrTextPrimary"));
+
+        // Does this game actually carry an upscaler module? That decides whether the
+        // swap route can reach FSR 4 here at all, and it is the difference between
+        // "use the other row" and "swapping cannot do this".
+        var upscaler = SwappableSiblings()
+            .FirstOrDefault(s => s.FidelityFxRole == FidelityFxRole.Upscaler);
+
+        if (upscaler is not null)
+        {
+            panel.Children.Add(Label(
+                $"Not from this file. {_slot.FileName} loads AMD's upscaler; the FSR version is set "
+                + $"by {upscaler.FileName}, which this game has at {upscaler.VersionText}. Go back and "
+                + $"open the \u201c{upscaler.Definition.Label}\u201d row — the community FSR 4 builds "
+                + "are offered there.",
+                11.5, FontWeight.Normal, "BrTextSecondary"));
+            return;
+        }
+
+        panel.Children.Add(Label(
+            $"Not from this file, and not by swapping. {_slot.FileName} loads AMD's upscaler rather "
+            + "than containing it, and the FSR version comes from amd_fidelityfx_upscaler_dx12.dll — "
+            + "which this game does not ship. Swapping can only replace a library a game already "
+            + "has, so there is nothing here to upgrade to FSR 4.",
+            11.5, FontWeight.Normal, "BrTextSecondary"));
+        panel.Children.Add(Label(
+            "OptiScaler is the route for this game: it brings its own upscaler and drives it from "
+            + "the game's existing FSR or DLSS option. Install it from the OptiScaler tab.",
+            11.5, FontWeight.Normal, "BrTextSecondary"));
+    }
+
+    /// <summary>
+    /// The other swappable files in this game, so a row can say what sits beside it.
+    /// Failures are swallowed: this only ever adds an explanation.
+    /// </summary>
+    private IReadOnlyList<SwapSlot> SwappableSiblings()
+    {
+        try { return _manager.SwapSlots(_game); }
+        catch { return System.Array.Empty<SwapSlot>(); }
     }
 
     /// <summary>What is in the game now, and the way back if this app put it there.</summary>

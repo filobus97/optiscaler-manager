@@ -281,5 +281,47 @@ namespace UpscalerManager.Core.Tests
                 + "Kits/FidelityFX/signedbin/amd_fidelityfx_upscaler_dx12.dll",
                 VendorDllSource.UrlFor(source, "v2.3.0"));
         }
+
+        // ── Which sources can actually deliver ──────────────────────────────
+
+        [Fact]
+        public void TheCommunityReleasesAreOnlyOfferedForTheFilesTheyShip()
+        {
+            // The bug this pins down: v0.26.0 offered the community FSR 4 builds on the
+            // FSR (DX12) row too, reasoning that those releases are matched sets
+            // carrying the runtime alongside the upscaler. They are not — they ship the
+            // upscaler. So the row had a "Download and use" button that could only fail,
+            // and the failure arrived after the download.
+            Assert.True(ManagerSurface.TakesCommunityBuilds("amdxcffx64.dll"));
+            Assert.True(ManagerSurface.TakesCommunityBuilds("amd_fidelityfx_upscaler_dx12.dll"));
+
+            Assert.False(ManagerSurface.TakesCommunityBuilds("amd_fidelityfx_dx12.dll"));
+            Assert.False(ManagerSurface.TakesCommunityBuilds("amd_fidelityfx_vk.dll"));
+            Assert.False(ManagerSurface.TakesCommunityBuilds("amd_fidelityfx_loader_dx12.dll"));
+            Assert.False(ManagerSurface.TakesCommunityBuilds("nvngx_dlss.dll"));
+        }
+
+        [Fact]
+        public void EveryNameAnInt8BuildShipsAsIsOfferedTheCommunitySource()
+        {
+            // Stated the other way round, so the two lists cannot drift: anything the
+            // community section is offered for must be a name an INT8 build ships as.
+            foreach (var name in Fsr4Int8Build.KnownDllNames)
+                Assert.True(ManagerSurface.TakesCommunityBuilds(name));
+        }
+    }
+}
+
+namespace UpscalerManager.Core.Tests
+{
+    /// <summary>
+    /// The gating rule the app layer applies, restated here so it can be tested without
+    /// referencing the UI project. Kept identical to
+    /// <c>ManagerService.TakesCommunityBuilds</c>, and both point at
+    /// <see cref="Fsr4Int8Build"/> so there is one list rather than two.
+    /// </summary>
+    internal static class ManagerSurface
+    {
+        public static bool TakesCommunityBuilds(string fileName) => Fsr4Int8Build.IsKnown(fileName);
     }
 }

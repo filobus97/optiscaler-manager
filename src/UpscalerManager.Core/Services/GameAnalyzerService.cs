@@ -410,8 +410,13 @@ public class GameAnalyzerService
             if (cached.DirectoryWriteStampUtc != directoryWriteStamp)
                 return false;
 
-            // Entries written before component detection existed carry no list; treat
-            // them as stale so the details view is not empty until the folder changes.
+            // An entry produced by a build that detected less than this one does. The
+            // folder has not changed, so nothing else would ever mark it stale.
+            if (cached.SchemaVersion != AnalysisSchemaVersion)
+                return false;
+
+            // Belt and braces: an entry carrying no list at all would leave the details
+            // view empty until the folder changed.
             if (cached.DetectedComponents is null)
                 return false;
 
@@ -685,8 +690,34 @@ public class GameAnalyzerService
         return "0.0.0.0";
     }
 
+    /// <summary>
+    /// What the cached analysis is expected to contain.
+    ///
+    /// Bumped whenever a scan starts producing something it did not before, because the
+    /// cache is keyed on the game folder's write stamp and nothing else — so a folder
+    /// that has not changed keeps serving an answer computed by an older build of this
+    /// app, indefinitely. That is not hypothetical: adding the FSR version to
+    /// <see cref="DetectedComponent"/> changed nothing on screen for anyone with an
+    /// existing cache, because their entries had been written before the field existed
+    /// and were still considered fresh.
+    ///
+    /// <list type="bullet">
+    /// <item>1 — component detection, the original shape.</item>
+    /// <item>2 — DetectedComponent.FsrVersion, so a FidelityFX runtime can be labelled
+    /// with the FSR version it actually provides rather than an SDK build number.</item>
+    /// </list>
+    /// </summary>
+    private const int AnalysisSchemaVersion = 2;
+
     private sealed class AnalysisCacheEntry
     {
+        /// <summary>
+        /// Which build's idea of an analysis this is. Absent (and so zero) in every
+        /// entry written before this existed, which is exactly the behaviour wanted:
+        /// they are all stale.
+        /// </summary>
+        public int SchemaVersion { get; set; }
+
         public DateTime DirectoryWriteStampUtc { get; set; }
         public string? DlssVersion { get; set; }
         public string? DlssPath { get; set; }
@@ -704,6 +735,7 @@ public class GameAnalyzerService
         {
             return new AnalysisCacheEntry
             {
+                SchemaVersion = AnalysisSchemaVersion,
                 DirectoryWriteStampUtc = directoryWriteStampUtc,
                 DlssVersion = game.DlssVersion,
                 DlssPath = game.DlssPath,

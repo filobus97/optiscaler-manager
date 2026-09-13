@@ -105,18 +105,21 @@ public sealed class ManagerService
         _library.FromCommunityBuilds(fileName);
 
     /// <summary>
-    /// True when the community releases are worth offering for this DLL.
+    /// True when the community releases can actually supply this DLL.
     ///
-    /// The whole FidelityFX family, not just the two names an INT8 upscaler ships as.
-    /// These releases are drops of a matched set — a patched upscaler alongside the
-    /// runtime it was built against — so gating on the upscaler's filename alone hid
-    /// the source on exactly the pages where nothing else could supply the file.
-    /// Whether a given release actually carries the file being asked for is settled by
-    /// looking inside it, not guessed from its name.
+    /// Only the two names an FSR 4 upscaler ships as. v0.26.0 widened this to the whole
+    /// FidelityFX family on the reasoning that these releases are drops of a matched set
+    /// — a patched upscaler alongside the runtime it was built against — and that was an
+    /// assumption, not a fact. They ship the upscaler. So the widening put a
+    /// "Download and use" button on the FSR (DX12) row that could only ever fail, and
+    /// telling a user afterwards that the release did not contain the file is no
+    /// substitute for not offering it.
+    ///
+    /// A source is offered only where it can deliver. Where it cannot,
+    /// <see cref="Views.Pages.DllSwapPage"/> says where the FSR version does come from
+    /// instead.
     /// </summary>
-    public static bool TakesCommunityBuilds(string fileName) =>
-        fileName.StartsWith("amd_fidelityfx", StringComparison.OrdinalIgnoreCase)
-        || Fsr4Int8Build.IsKnown(fileName);
+    public static bool TakesCommunityBuilds(string fileName) => Fsr4Int8Build.IsKnown(fileName);
 
     /// <summary>
     /// Community build versions available to download, newest first, paired with

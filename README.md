@@ -110,7 +110,7 @@ Building from source is in [Building & running](#building--running).
   | Your other games | none | Whatever versions your installed games ship. |
   | OptiScaler releases you have downloaded | none | A release bundles the libraries it hooks. |
   | Community releases you have downloaded | none | The same cache the OptiScaler route uses, so a version fetched once serves both. |
-  | FSR 4 community builds | download | From [`Agustinm28/OptiScaler-Extras`](https://github.com/Agustinm28/OptiScaler-Extras) — a third party, not AMD. The only route to FSR 4, in its own section because presenting it beside the vendor downloads would imply it is equally official. |
+  | FSR 4 community builds | download | From [`Agustinm28/OptiScaler-Extras`](https://github.com/Agustinm28/OptiScaler-Extras) — a third party, not AMD. These ship the FSR 4 **upscaler**, so they are offered on the upscaler rows only; on a FidelityFX runtime row the page says where the FSR version actually comes from instead. Its own section, because presenting it beside the vendor downloads would imply it is equally official. |
   | The DLSS Swapper archive | download | ~229 archived builds of nine vendor files. A third-party mirror, hash-checked. |
   | The vendor | download | Straight from Nvidia's, Intel's and AMD's own repositories. |
 

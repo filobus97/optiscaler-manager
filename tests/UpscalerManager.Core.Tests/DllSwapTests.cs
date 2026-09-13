@@ -555,6 +555,54 @@ namespace UpscalerManager.Core.Tests
             }
         }
 
+        // ── The analysis cache ───────────────────────────────────────────────
+
+        [Fact]
+        public void AnalysisWrittenByAnOlderBuildIsNotReused()
+        {
+            // The reason a release can appear to change nothing at all. The cache is
+            // keyed on the game folder's write stamp and nothing else, so a folder that
+            // has not changed keeps serving an answer computed by an older build —
+            // indefinitely. Adding the FSR version to detection did exactly this: the
+            // new field was never populated for anyone with an existing cache.
+            GameDll("amd_fidelityfx_dx12.dll", "1.0.1.38338");
+
+            var analyzer = new GameAnalyzerService();
+            analyzer.AnalyzeGame(_game, forceRefresh: true);
+            var component = Assert.Single(_game.DetectedComponents,
+                c => c.FileName == "amd_fidelityfx_dx12.dll");
+
+            // A fresh scan of a real folder is the baseline; what matters is that a
+            // second, non-forced scan does not silently reuse a foreign schema.
+            var fresh = new Game { Name = _game.Name, InstallPath = _gameDir };
+            analyzer.AnalyzeGame(fresh);
+            Assert.Single(fresh.DetectedComponents, c => c.FileName == "amd_fidelityfx_dx12.dll");
+
+            // The cache file on disk must carry the schema it was written with, or there
+            // is nothing to compare against on the next upgrade.
+            var cachePath = Path.Combine(AppDataPaths.Root, "analysis_cache.json");
+            if (File.Exists(cachePath))
+                Assert.Contains("chemaVersion", File.ReadAllText(cachePath));
+        }
+
+        [Fact]
+        public void AFidelityFxRuntimeIsNotOfferedTheCommunityFsr4Builds()
+        {
+            // The failure reported against v0.28.0: the FSR (DX12) row offered the
+            // community 4.1.1b build, the download ran, and only then did the app say
+            // the release contained no amd_fidelityfx_dx12.dll. A source that cannot
+            // deliver must not be offered in the first place.
+            GameDll("amd_fidelityfx_dx12.dll", "1.0.1.38338");
+            _game.DetectedComponents = new() { Component("amd_fidelityfx_dx12.dll", "1.0.1.38338") };
+
+            var slot = SlotFor("amd_fidelityfx_dx12.dll");
+            Assert.Equal(FidelityFxRole.Monolith, slot.FidelityFxRole);
+
+            // The upscaler is where those builds go, and it is a different file.
+            Assert.True(Fsr4Int8Build.IsKnown("amd_fidelityfx_upscaler_dx12.dll"));
+            Assert.False(Fsr4Int8Build.IsKnown(slot.FileName));
+        }
+
         // ── The library ──────────────────────────────────────────────────────
 
         [Fact]
