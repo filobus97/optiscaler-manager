@@ -157,9 +157,9 @@ public static class ComponentRegistry
     /// <param name="addFakenvapi">Include the fakenvapi add-on (nvapi64.dll + fakenvapi.ini).</param>
     /// <param name="addNukemFg">Include Nukem's DLSSG-to-FSR3 mod (adds [FrameGen] FGInput=nukems).</param>
     /// <param name="spoofMethod">
-    /// Nvidia override method for this game, or null for none. Dxgi forces
-    /// [Spoofing] Dxgi=true; OptiPatcher installs plugins/OptiPatcher.asi and forces
-    /// [Plugins] LoadAsiPlugins=true.
+    /// What to write for the Nvidia override: Default leaves [Spoofing] Dxgi=auto,
+    /// ForceDxgi/ForceOff write true/false, OptiPatcher adds plugins/OptiPatcher.asi and
+    /// forces [Plugins] LoadAsiPlugins=true.
     /// </param>
     /// <param name="forceInt8">Force [FSR] Fsr4ForceEnableInt8=true (INT8 model on unsupported GPUs).</param>
     /// <param name="fsr4Watermark">Force [FSR] Fsr4EnableWatermark=true (on-screen FSR4/FSR4-i8/FSR3 verification).</param>
@@ -192,7 +192,7 @@ public static class ComponentRegistry
         Fsr4Backend backend, UpscalerSelection selection, string? injectionDll = null, string? menuKeyVk = null,
         IReadOnlyList<string>? customDlls = null,
         bool addFakenvapi = false, bool addNukemFg = false,
-        SpoofMethod? spoofMethod = null, bool forceInt8 = false, bool fsr4Watermark = false,
+        SpoofMethod spoofMethod = SpoofMethod.Default, bool forceInt8 = false, bool fsr4Watermark = false,
         bool legacyFsr4UpdateKey = false)
     {
         var ids = new List<string> { ComponentIds.OptiScaler };
@@ -251,8 +251,14 @@ public static class ComponentRegistry
             iniKeys.Add(new IniKeyChange("FrameGen", "Enabled", "true"));
             iniKeys.Add(new IniKeyChange("FrameGen", "FGInput", "nukems"));
         }
-        if (spoofMethod == SpoofMethod.Dxgi)
-            iniKeys.Add(new IniKeyChange("Spoofing", "Dxgi", "true"));
+        // Always written, so a reinstall can undo a force the last one applied. "auto"
+        // is not a no-op line: it is what hands the decision back to OptiScaler.
+        iniKeys.Add(new IniKeyChange("Spoofing", "Dxgi", spoofMethod switch
+        {
+            SpoofMethod.ForceDxgi => "true",
+            SpoofMethod.ForceOff => "false",
+            _ => "auto  (OptiScaler decides: on for AMD and Intel)",
+        }));
         if (spoofMethod == SpoofMethod.OptiPatcher)
             iniKeys.Add(new IniKeyChange("Plugins", "LoadAsiPlugins", "true"));
         if (!string.IsNullOrWhiteSpace(menuKeyVk))

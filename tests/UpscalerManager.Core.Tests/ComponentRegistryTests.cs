@@ -194,17 +194,36 @@ namespace UpscalerManager.Core.Tests
             Assert.DoesNotContain("nvapi64.dll", preview.Files);
             Assert.DoesNotContain("dlssg_to_fsr3_amd_is_better.dll", preview.Files);
             Assert.DoesNotContain(preview.IniKeys, k => k.Section == "FrameGen");
-            Assert.DoesNotContain(preview.IniKeys, k => k.Section == "Spoofing");
+            Assert.DoesNotContain(preview.IniKeys, k => k.Section == "Plugins");
         }
 
         [Fact]
-        public void InstallPreview_SpoofDxgi_ForcesDxgiKey_NoPluginBits()
+        public void InstallPreview_LeavesTheSpoofingDecisionToOptiScalerUnlessAsked()
+        {
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selection: UpscalerSelection.NewestFsr);
+            var dxgi = Assert.Single(preview.IniKeys, k => k.Section == "Spoofing" && k.Key == "Dxgi");
+            Assert.StartsWith("auto", dxgi.Value);
+            Assert.DoesNotContain(preview.IniKeys, k => k.Section == "Plugins");
+        }
+
+        [Fact]
+        public void InstallPreview_SpoofForceOn_ForcesDxgiKey_NoPluginBits()
         {
             var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selection: UpscalerSelection.NewestFsr,
-                spoofMethod: SpoofMethod.Dxgi);
+                spoofMethod: SpoofMethod.ForceDxgi);
             Assert.Contains(preview.IniKeys, k => k.Section == "Spoofing" && k.Key == "Dxgi" && k.Value == "true");
             Assert.DoesNotContain(preview.IniKeys, k => k.Section == "Plugins");
             Assert.DoesNotContain(preview.Files, f => f.Contains("OptiPatcher"));
+        }
+
+        [Fact]
+        public void InstallPreview_SpoofForceOff_WritesFalseRatherThanNothing()
+        {
+            // The checkbox this replaced could only write true; off wrote no key at all,
+            // and OptiScaler's own default then spoofed anyway on AMD and Intel.
+            var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selection: UpscalerSelection.NewestFsr,
+                spoofMethod: SpoofMethod.ForceOff);
+            Assert.Contains(preview.IniKeys, k => k.Section == "Spoofing" && k.Key == "Dxgi" && k.Value == "false");
         }
 
         [Fact]
@@ -214,7 +233,10 @@ namespace UpscalerManager.Core.Tests
                 spoofMethod: SpoofMethod.OptiPatcher);
             Assert.Contains(preview.Files, f => f.Contains("OptiPatcher.asi"));
             Assert.Contains(preview.IniKeys, k => k.Section == "Plugins" && k.Key == "LoadAsiPlugins" && k.Value == "true");
-            Assert.DoesNotContain(preview.IniKeys, k => k.Section == "Spoofing");
+            // Left at auto on purpose: OptiScaler switches spoofing off itself once the
+            // patch lands, and keeps it if the patch fails.
+            var dxgi = Assert.Single(preview.IniKeys, k => k.Section == "Spoofing" && k.Key == "Dxgi");
+            Assert.StartsWith("auto", dxgi.Value);
         }
 
         [Fact]

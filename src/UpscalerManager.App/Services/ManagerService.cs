@@ -35,11 +35,21 @@ public sealed class ManagerService
     }
 
     // ── GPU banner ──────────────────────────────────────────────────────────
+    /// <summary>
+    /// The GPU the app reports, and which OptiScaler's spoofing default turns on. Cached:
+    /// detection shells out to lspci on Linux, and the install screen asks again.
+    /// </summary>
     public GpuInfo? DetectPrimaryGpu()
     {
-        try { return _gpu?.GetDiscreteGPU() ?? _gpu?.GetPrimaryGPU(); }
-        catch { return null; }
+        if (_gpuDetected) return _primaryGpu;
+        _gpuDetected = true;
+        try { _primaryGpu = _gpu?.GetDiscreteGPU() ?? _gpu?.GetPrimaryGPU(); }
+        catch { _primaryGpu = null; }
+        return _primaryGpu;
     }
+
+    private GpuInfo? _primaryGpu;
+    private bool _gpuDetected;
 
     // ── Game scan ───────────────────────────────────────────────────────────
     public async Task<List<Game>> ScanGamesAsync()
@@ -496,7 +506,7 @@ public sealed class ManagerService
     /// </summary>
     public InstallPreview BuildInstallPreview(Game game, Fsr4Backend backend, UpscalerSelection selection,
         bool addFakenvapi = false, bool addNukemFg = false,
-        SpoofMethod? spoofMethod = null, bool forceInt8 = false, bool fsr4Watermark = false,
+        SpoofMethod spoofMethod = SpoofMethod.Default, bool forceInt8 = false, bool fsr4Watermark = false,
         string? optiscalerVersion = null)
         => ComponentRegistry.BuildInstallPreview(backend, selection, ComponentRegistry.DefaultInjectionDll, MenuShortcutKey,
             backend == Fsr4Backend.CustomMerged ? _components.GetCustomDlls().Select(d => d.Name).ToList() : null,
@@ -539,7 +549,7 @@ public sealed class ManagerService
     public async Task InstallAsync(Game game, Fsr4Backend backend, string? int8Version, UpscalerSelection selection,
         OptiScalerProfile? iniProfile, IProgress<string>? status = null,
         bool addFakenvapi = false, bool addNukemFg = false,
-        SpoofMethod? spoofMethod = null, bool forceInt8 = false, bool fsr4Watermark = false,
+        SpoofMethod spoofMethod = SpoofMethod.Default, bool forceInt8 = false, bool fsr4Watermark = false,
         string? optiscalerVersion = null)
     {
         if (!IsBackendAvailable(backend))
@@ -687,12 +697,13 @@ public sealed class ManagerService
     /// Writes the (and only the) OptiScaler.ini keys the Manager is responsible for:
     /// [Upscalers] Dx12/Dx11/VulkanUpscaler and [FSR] UpscalerIndex from the chosen
     /// upscaler, the legacy [FSR] Fsr4Update where a release still has it,
-    /// the opt-in [FSR] Fsr4ForceEnableInt8 /
-    /// Fsr4EnableWatermark and [Spoofing] Dxgi toggles, and [Menu] ShortcutKey when a
-    /// menu key is configured. Applied last, so it overrides anything the backend
-    /// installers set. Off toggles leave the keys untouched (OptiScaler's auto behaviour).
+    /// the opt-in [FSR] Fsr4ForceEnableInt8 / Fsr4EnableWatermark toggles,
+    /// [Spoofing] Dxgi, and [Menu] ShortcutKey when a menu key is configured. Applied
+    /// last, so it overrides anything the backend installers set. Off toggles leave the
+    /// keys untouched (OptiScaler's auto behaviour).
     /// </summary>
-    private void ApplyForcedIniKeys(string gameDir, UpscalerSelection selection, SpoofMethod? spoofMethod = null,
+    private void ApplyForcedIniKeys(string gameDir, UpscalerSelection selection,
+        SpoofMethod spoofMethod = SpoofMethod.Default,
         bool forceInt8 = false, bool fsr4Watermark = false)
     {
         // Only where the release still has the key; it is gone from current OptiScaler.
@@ -720,8 +731,16 @@ public sealed class ManagerService
             GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4ForceEnableInt8", "true");
         if (fsr4Watermark)
             GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4EnableWatermark", "true");
-        if (spoofMethod == SpoofMethod.Dxgi)
-            GameInstallationService.ModifyOptiScalerIniKey(gameDir, "Spoofing", "Dxgi", "true");
+        // Written on every install, including "auto": the ini is preserved across a
+        // reinstall, so leaving the key alone would keep a force the user has since
+        // turned off. Auto is also the only value OptiScaler's own per-game spoofing
+        // fixes are read under.
+        GameInstallationService.ModifyOptiScalerIniKey(gameDir, "Spoofing", "Dxgi", spoofMethod switch
+        {
+            SpoofMethod.ForceDxgi => "true",
+            SpoofMethod.ForceOff => "false",
+            _ => "auto",
+        });
         if (spoofMethod == SpoofMethod.OptiPatcher)
             GameInstallationService.ModifyOptiScalerIniKey(gameDir, "Plugins", "LoadAsiPlugins", "true");
 

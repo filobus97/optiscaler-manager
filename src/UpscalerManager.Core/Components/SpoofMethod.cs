@@ -5,21 +5,38 @@
 namespace UpscalerManager.Core.Components;
 
 /// <summary>
-/// How the "Nvidia override" is applied to a game. Chosen per install; null/absent
-/// means no override at all.
+/// What the install writes for the "Nvidia override" — the vendor check that hides a
+/// game's DLSS option on AMD and Intel.
 /// </summary>
+/// <remarks>
+/// why: every automatic decision OptiScaler makes about DXGI spoofing — its per-game
+/// quirks, the Luma and Sekiro detections, turning it off when OptiPatcher lands or when
+/// no nvngx replacement is found — is guarded by the ini key having no explicit value.
+/// So writing true or false is not just a preference, it opts the game out of all of
+/// that, and <see cref="Default"/> has to stay the default.
+/// </remarks>
 public enum SpoofMethod
 {
     /// <summary>
-    /// OptiScaler's built-in DXGI spoofing: forces [Spoofing] Dxgi=true so the game
-    /// sees an Nvidia GPU (RTX 4090 by default). The default method.
+    /// Leave <c>[Spoofing] Dxgi=auto</c>: on for AMD and Intel, off for Nvidia, minus
+    /// the games OptiScaler knows it breaks.
     /// </summary>
-    Dxgi,
+    Default,
 
     /// <summary>
-    /// The OptiPatcher ASI plugin: installs plugins/OptiPatcher.asi and forces
-    /// [Plugins] LoadAsiPlugins=true. Patches games' vendor checks in memory instead
-    /// of spoofing the adapter.
+    /// Force <c>[Spoofing] Dxgi=true</c> — the game is told it has an RTX 4090.
+    /// </summary>
+    ForceDxgi,
+
+    /// <summary>
+    /// Force <c>[Spoofing] Dxgi=false</c>, for games that crash when the adapter lies.
+    /// </summary>
+    ForceOff,
+
+    /// <summary>
+    /// Install <c>plugins/OptiPatcher.asi</c> and force <c>[Plugins] LoadAsiPlugins=true</c>,
+    /// patching the game's vendor checks in memory. Dxgi stays at auto: OptiScaler turns
+    /// spoofing off itself once the patch lands, and leaves it on if the patch fails.
     /// </summary>
     OptiPatcher,
 }

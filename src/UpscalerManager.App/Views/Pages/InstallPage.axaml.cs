@@ -10,6 +10,7 @@ using Avalonia.Media;
 using UpscalerManager.App.Services;
 using UpscalerManager.Core.Components;
 using UpscalerManager.Core.Models;
+using UpscalerManager.Core.Services;
 
 namespace UpscalerManager.App.Views.Pages;
 
@@ -37,8 +38,8 @@ public partial class InstallPage : UserControl, IHostedPage
     /// <summary>Install Nukem's DLSSG-to-FSR3 mod (imported DLL + FGInput=nukems).</summary>
     public bool AddNukemFg { get; private set; }
 
-    /// <summary>Nvidia override method for this game (null = no override).</summary>
-    public SpoofMethod? SelectedSpoofMethod { get; private set; }
+    /// <summary>What the user chose for the Nvidia override.</summary>
+    public SpoofMethod SelectedSpoofMethod { get; private set; } = SpoofMethod.Default;
 
     /// <summary>The OptiScaler release version to install (null = latest).</summary>
     public string? SelectedOptiScalerVersion { get; private set; }
@@ -115,22 +116,25 @@ public partial class InstallPage : UserControl, IHostedPage
         this.FindControl<CheckBox>("ChkWatermark")!.IsCheckedChanged += OnOptionChanged;
         this.FindControl<CheckBox>("ChkFakenvapi")!.IsCheckedChanged += OnOptionChanged;
 
-        // Nvidia override: checkbox reveals the method combo (DXGI spoofing / OptiPatcher).
-        var spoof = this.FindControl<CheckBox>("ChkSpoofNvidia")!;
-        var methodPanel = this.FindControl<StackPanel>("SpoofMethodPanel")!;
-        var methodCombo = this.FindControl<ComboBox>("SpoofMethodCombo")!;
-        methodCombo.ItemsSource = new[]
+        // Nvidia override. Four outcomes in one list, because the old checkbox could
+        // only ever write true: left unticked it wrote nothing, and OptiScaler's own
+        // default then spoofed anyway on AMD and Intel — so the screen said off while
+        // the game was told it had an RTX 4090.
+        var spoofCombo = this.FindControl<ComboBox>("SpoofCombo")!;
+        spoofCombo.ItemsSource = new[]
         {
-            "Default — DXGI spoofing ([Spoofing] Dxgi=true)",
-            "OptiPatcher plugin (plugins/OptiPatcher.asi)",
+            "Let OptiScaler decide",
+            "Force it on — report an RTX 4090",
+            "Force it off",
+            "Patch the game instead — OptiPatcher",
         };
-        methodCombo.SelectedIndex = 0;
-        methodCombo.SelectionChanged += OnOptionChanged;
-        spoof.IsCheckedChanged += (_, e) =>
+        spoofCombo.SelectedIndex = 0;
+        spoofCombo.SelectionChanged += (s, e) =>
         {
-            methodPanel.IsVisible = spoof.IsChecked == true;
-            OnOptionChanged(spoof, e);
+            UpdateSpoofNote();
+            OnOptionChanged(s, e);
         };
+        UpdateSpoofNote();
 
         var nukem = this.FindControl<CheckBox>("ChkNukemFg")!;
         if (!_manager.IsNukemFgCached)
@@ -236,12 +240,46 @@ public partial class InstallPage : UserControl, IHostedPage
         return (combo.SelectedItem as ComboBoxItem)?.Tag as string;
     }
 
-    private SpoofMethod? CurrentSpoofMethod()
+    private SpoofMethod CurrentSpoofMethod() =>
+        this.FindControl<ComboBox>("SpoofCombo")!.SelectedIndex switch
+        {
+            1 => SpoofMethod.ForceDxgi,
+            2 => SpoofMethod.ForceOff,
+            3 => SpoofMethod.OptiPatcher,
+            _ => SpoofMethod.Default,
+        };
+
+    /// <summary>
+    /// What the chosen override actually does, including what the default resolves to on
+    /// the GPU in this machine — the one thing the list itself cannot say.
+    /// </summary>
+    private void UpdateSpoofNote()
     {
-        if (!IsChecked("ChkSpoofNvidia")) return null;
-        var combo = this.FindControl<ComboBox>("SpoofMethodCombo")!;
-        return combo.SelectedIndex == 1 ? SpoofMethod.OptiPatcher : SpoofMethod.Dxgi;
+        var note = this.FindControl<TextBlock>("SpoofNoteText");
+        if (note is null) return;
+        note.Text = CurrentSpoofMethod() switch
+        {
+            SpoofMethod.ForceDxgi =>
+                "Writes Dxgi=true. OptiScaler stops applying its own fixes for the games "
+                + "this is known to break, because it reads those only while the key is auto.",
+            SpoofMethod.ForceOff =>
+                "Writes Dxgi=false, for a game that crashes when the adapter lies. A game "
+                + "that hides DLSS behind a vendor check will not offer it.",
+            SpoofMethod.OptiPatcher =>
+                "Patches the game's vendor checks in memory instead, and leaves Dxgi at "
+                + "auto — OptiScaler turns spoofing off itself once the patch lands.",
+            _ => "Writes Dxgi=auto. " + DefaultSpoofReads(),
+        };
     }
+
+    /// <summary>What OptiScaler's own default comes out as, named for this machine's GPU.</summary>
+    private string DefaultSpoofReads() => _manager.DetectPrimaryGpu()?.Vendor switch
+    {
+        GpuVendor.AMD => "On for your AMD GPU, minus the games OptiScaler knows it breaks.",
+        GpuVendor.Intel => "On for your Intel GPU, minus the games OptiScaler knows it breaks.",
+        GpuVendor.NVIDIA => "Off for your Nvidia GPU — there is nothing to spoof.",
+        _ => "On for AMD and Intel, off for Nvidia, minus the games OptiScaler knows it breaks.",
+    };
 
     private Fsr4Backend CurrentBackend()
     {

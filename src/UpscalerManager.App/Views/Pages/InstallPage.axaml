@@ -90,15 +90,18 @@
                       ToolTip.Tip="Installs nvapi64.dll and fakenvapi.ini from the optiscaler/fakenvapi releases. Translates Nvidia Reflex calls, and is required for Nukem's frame generation on AMD and Intel."/>
             <CheckBox Name="ChkNukemFg" Content="Nukem DLSSG-to-FSR3 frame generation"
                       ToolTip.Tip="Installs your imported dlssg_to_fsr3_amd_is_better.dll and turns frame generation on ([FrameGen] Enabled, FGInput=nukems). Needs fakenvapi on AMD and Intel, so it selects that too."/>
-            <CheckBox Name="ChkSpoofNvidia" Content="Report an Nvidia GPU to this game"
-                      ToolTip.Tip="For games that hide their DLSS options on AMD and Intel. Per game, chosen on each install."/>
-            <StackPanel Name="SpoofMethodPanel" Orientation="Horizontal" Spacing="8"
- Margin="26,0,0,0" IsVisible="False">
-              <TextBlock Text="Method" VerticalAlignment="Center"
+          </StackPanel>
+
+          <Border Height="1" Background="{StaticResource BrBorderSubtle}" Margin="0,2"/>
+
+          <TextBlock Text="Nvidia override" FontSize="{StaticResource SizeCaption}"
  Foreground="{StaticResource BrTextSecondary}"/>
-              <ComboBox Name="SpoofMethodCombo" MinWidth="260"
-                        ToolTip.Tip="DXGI spoofing reports the adapter as an RTX 4090 ([Spoofing] Dxgi). OptiPatcher installs a plugin that patches the game's vendor checks in memory instead."/>
-            </StackPanel>
+          <StackPanel Spacing="6">
+            <ComboBox Name="SpoofCombo" HorizontalAlignment="Stretch"
+                      ToolTip.Tip="Whether this game is told it has an Nvidia GPU, which is what unlocks a DLSS option on AMD and Intel. OptiScaler decides this per game by default, and some games crash when the adapter lies — forcing it either way turns those decisions off."/>
+            <TextBlock Name="SpoofNoteText" TextWrapping="Wrap"
+ FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
           </StackPanel>
 
           <Border Height="1" Background="{StaticResource BrBorderSubtle}" Margin="0,2"/>
