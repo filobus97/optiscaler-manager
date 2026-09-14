@@ -268,6 +268,21 @@ public sealed class ManagerService
         RefreshGameAnalysis(game);
     }
 
+    /// <summary>Whether the build this app swapped in is still the one in the game.</summary>
+    public static DllSwapService.SwapStanding SwapStandingOf(SwappedFile? swapped) =>
+        DllSwapService.StandingOf(swapped);
+
+    /// <summary>
+    /// Clears a swap the game has since replaced, restoring whatever copies are still
+    /// ours and leaving the rest alone. Returns the directories left alone.
+    /// </summary>
+    public IReadOnlyList<string> ForgetSwap(Game game, SwappedFile swapped)
+    {
+        var left = _swaps.RevertWhatRemains(game, swapped);
+        RefreshGameAnalysis(game);
+        return left;
+    }
+
     /// <summary>Swapped files an OptiScaler install would overwrite, for the warning.</summary>
     public IReadOnlyList<string> SwapsOptiScalerWouldOverwrite(Game game) =>
         _swaps.SwapsOptiScalerWouldOverwrite(game);

@@ -752,6 +752,117 @@ namespace UpscalerManager.Core.Tests
             Assert.True(new DllSwapService().HasSwapsForDirectory(_gameDir));
         }
 
+        // ── When a game patches a swapped file ───────────────────────────────
+
+        [Fact]
+        public void AnIntactSwapReadsAsIntact()
+        {
+            GameDll("nvngx_dlss.dll", "310.1.0.0");
+            _game.DetectedComponents = new() { Component("nvngx_dlss.dll", "310.1.0.0") };
+
+            var service = new DllSwapService();
+            var swapped = service.Swap(
+                _game, SlotFor("nvngx_dlss.dll"), AddToLibrary("nvngx_dlss.dll", "310.3.0.0"));
+
+            Assert.Equal(DllSwapService.SwapStanding.Intact, DllSwapService.StandingOf(swapped));
+            Assert.Equal(0, DllSwapService.ReplacedCopies(swapped));
+            Assert.Equal(DllSwapService.SwapStanding.NotOurs, DllSwapService.StandingOf(null));
+        }
+
+        [Fact]
+        public void AGamePatchingTheFileIsNotADeadEnd()
+        {
+            // The dead end this fixes: after a patch an ordinary revert refuses, because
+            // writing the older original over the newer file would undo the patch — and
+            // the row was left offering a button that could only fail, with a backup
+            // Storage would not let go of either.
+            GameDll("nvngx_dlss.dll", "310.1.0.0");
+            _game.DetectedComponents = new() { Component("nvngx_dlss.dll", "310.1.0.0") };
+
+            var service = new DllSwapService();
+            var swapped = service.Swap(
+                _game, SlotFor("nvngx_dlss.dll"), AddToLibrary("nvngx_dlss.dll", "310.3.0.0"));
+
+            // The game patches the DLL out from under the swap.
+            var target = Path.Combine(_gameDir, "nvngx_dlss.dll");
+            File.WriteAllBytes(target, PeTestData.BuildPe(PeTestData.MachineAmd64, "310.9.1.0"));
+            var patched = File.ReadAllBytes(target);
+
+            Assert.Equal(DllSwapService.SwapStanding.Replaced, DllSwapService.StandingOf(swapped));
+
+            // An ordinary revert still refuses, and says why.
+            var refused = Assert.Throws<InvalidOperationException>(
+                () => service.Revert(_game, swapped));
+            Assert.Contains("no longer the build this app installed", refused.Message);
+
+            // Forgetting it leaves the patched file exactly as the game wrote it…
+            var left = service.RevertWhatRemains(_game, swapped);
+            Assert.Equal(new[] { _gameDir }, left);
+            Assert.Equal(patched, File.ReadAllBytes(target));
+
+            // …clears the record, so no row claims a swap that is not there…
+            Assert.Empty(service.LoadManifest(_game).Files);
+            Assert.False(service.HasSwaps(_game));
+
+            // …and keeps the original, which the Storage page can now offer to remove
+            // because nothing points at it any more.
+            Assert.False(service.HasSwapsForDirectory(_gameDir));
+            var stored = Path.Combine(
+                new BackupStoreService().GetFilesDir(_gameDir), swapped.Copies[0].BackupRelative);
+            Assert.True(File.Exists(stored), "the game's original was deleted rather than kept");
+        }
+
+        [Fact]
+        public void APartlyPatchedSwapPutsBackWhatIsStillOurs()
+        {
+            GameDll("nvngx_dlss.dll", "310.1.0.0");
+            var nested = NestedDll("nvngx_dlss.dll", "310.1.0.0", Path.Combine("Engine", "Binaries"));
+            _game.DetectedComponents = new() { Component("nvngx_dlss.dll", "310.1.0.0"), nested };
+
+            var root = Path.Combine(_gameDir, "nvngx_dlss.dll");
+            var deep = Path.Combine(_gameDir, "Engine", "Binaries", "nvngx_dlss.dll");
+            var originalDeep = File.ReadAllBytes(deep);
+
+            var service = new DllSwapService();
+            var swapped = service.Swap(
+                _game, SlotFor("nvngx_dlss.dll"), AddToLibrary("nvngx_dlss.dll", "310.3.0.0"));
+            Assert.Equal(2, swapped.Copies.Count);
+
+            // Only the copy beside the executable is patched.
+            File.WriteAllBytes(root, PeTestData.BuildPe(PeTestData.MachineAmd64, "310.9.1.0"));
+            var patched = File.ReadAllBytes(root);
+
+            Assert.Equal(DllSwapService.SwapStanding.PartlyReplaced, DllSwapService.StandingOf(swapped));
+            Assert.Equal(1, DllSwapService.ReplacedCopies(swapped));
+
+            var left = service.RevertWhatRemains(_game, swapped);
+
+            Assert.Equal(new[] { _gameDir }, left);
+            Assert.Equal(patched, File.ReadAllBytes(root));        // the patch survives
+            Assert.Equal(originalDeep, File.ReadAllBytes(deep));   // ours is put back
+            Assert.Empty(service.LoadManifest(_game).Files);
+        }
+
+        [Fact]
+        public void ForgettingAnIntactSwapIsJustARevert()
+        {
+            // The same button on a swap nothing has touched must still do the ordinary
+            // thing, rather than leaving the app's build in place.
+            GameDll("libxess.dll", "2.0.0.0");
+            _game.DetectedComponents = new() { Component("libxess.dll", "2.0.0.0") };
+
+            var target = Path.Combine(_gameDir, "libxess.dll");
+            var original = File.ReadAllBytes(target);
+
+            var service = new DllSwapService();
+            var swapped = service.Swap(
+                _game, SlotFor("libxess.dll"), AddToLibrary("libxess.dll", "2.0.2.0"));
+
+            Assert.Empty(service.RevertWhatRemains(_game, swapped));
+            Assert.Equal(original, File.ReadAllBytes(target));
+            Assert.Empty(service.LoadManifest(_game).Files);
+        }
+
         // ── The library ──────────────────────────────────────────────────────
 
         [Fact]

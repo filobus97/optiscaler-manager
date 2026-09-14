@@ -138,25 +138,47 @@ public partial class DllSwapPage : UserControl, IHostedPage
             .ToList();
     }
 
+    /// <summary>
+    /// The build in the game, and the way back when this app put it there.
+    ///
+    /// why: the way back depends on whether the swap still stands. Once a game patches
+    /// the file, restoring the older original would undo the patch — so that row offers
+    /// to forget the swap instead of a button that can only fail.
+    /// </summary>
     private Candidate Current()
     {
         var swapped = _slot.Swapped;
-        var source = swapped is null
-            ? "in the game now, and the build it shipped with"
-            : $"in the game now, put there by this app — {swapped.SourceLabel}";
+        if (swapped is null)
+            return new Candidate(
+                _slot.Version!, _slot.VersionText,
+                "in the game now, and the build it shipped with",
+                null, null, IsCurrent: true);
 
-        // Revert restores what was backed up, so it is only offered for our own swap.
+        var standing = ManagerService.SwapStandingOf(swapped);
+        var (source, action) = standing switch
+        {
+            DllSwapService.SwapStanding.Replaced => (
+                "the game has replaced this app's build since — its original is kept, and "
+                + "putting it back now would undo that change",
+                "Forget this swap"),
+            DllSwapService.SwapStanding.PartlyReplaced => (
+                $"put there by this app, but the game has replaced it in "
+                + $"{DllSwapService.ReplacedCopies(swapped)} of {swapped.Copies.Count} places since",
+                "Put back what is still ours"),
+            _ => ($"in the game now, put there by this app — {swapped.SourceLabel}",
+                swapped.ExistedBefore ? "Put the game's own build back" : "Remove it"),
+        };
+
         return new Candidate(
             _slot.Version!,
             _slot.VersionText,
             source,
-            swapped is null ? null : RevertLabel(swapped),
-            swapped is null ? null : () => Revert(swapped),
+            action,
+            standing == DllSwapService.SwapStanding.Intact
+                ? () => Revert(swapped)
+                : () => Forget(swapped),
             IsCurrent: true);
     }
-
-    private static string RevertLabel(SwappedFile swapped) =>
-        swapped.ExistedBefore ? "Put the game's own build back" : "Remove it";
 
     private Candidate Held(LibraryDll build) => new(
         build.Version,
@@ -354,6 +376,17 @@ public partial class DllSwapPage : UserControl, IHostedPage
         {
             _manager.RevertSwap(_game, swapped, force: false);
             return $"{_slot.Definition.Label} is back to the game's own build.";
+        });
+
+    private void Forget(SwappedFile swapped) =>
+        Act("Clearing the record of this swap…", () =>
+        {
+            var left = _manager.ForgetSwap(_game, swapped);
+            return left.Count == 0
+                ? $"{_slot.Definition.Label} is back to the game's own build."
+                : $"Forgot the swap. The {(left.Count == 1 ? "copy" : $"{left.Count} copies")} the "
+                  + "game had already replaced were left as they are, and those originals are now "
+                  + "in Storage to remove.";
         });
 
     /// <summary>

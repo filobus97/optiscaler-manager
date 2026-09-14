@@ -682,6 +682,119 @@ public sealed class DllSwapService
                   $"in {swapped.Copies.Count} place(s).");
     }
 
+    /// <summary>Whether the build this app installed is still the one in the game.</summary>
+    public enum SwapStanding
+    {
+        /// <summary>This app did not put the current file there.</summary>
+        NotOurs,
+
+        /// <summary>Every copy is still the build this app installed.</summary>
+        Intact,
+
+        /// <summary>Some copies are still ours; something else has replaced the rest.</summary>
+        PartlyReplaced,
+
+        /// <summary>Nothing of ours is left — the game has replaced every copy.</summary>
+        Replaced,
+    }
+
+    /// <summary>
+    /// Whether this app's swap still stands, by hashing what is actually in the game.
+    ///
+    /// why: a game patch replaces the DLL, and the stored original is then older than
+    /// what the game now has. Restoring it would undo the patch, so a replaced swap is
+    /// forgotten rather than reverted — and a row has to know which it is before it
+    /// offers an action.
+    /// </summary>
+    public static SwapStanding StandingOf(SwappedFile? swapped)
+    {
+        if (swapped is null) return SwapStanding.NotOurs;
+        swapped.Normalize();
+        if (swapped.Copies.Count == 0) return SwapStanding.NotOurs;
+
+        var ours = swapped.Copies.Count(c => StillOurs(c, swapped.FileName));
+        return ours == swapped.Copies.Count ? SwapStanding.Intact
+            : ours == 0 ? SwapStanding.Replaced
+            : SwapStanding.PartlyReplaced;
+    }
+
+    private static string Places(int count) => count == 1 ? "1 place" : $"{count} places";
+
+    /// <summary>How many copies of this swap something else has replaced.</summary>
+    public static int ReplacedCopies(SwappedFile swapped)
+    {
+        swapped.Normalize();
+        return swapped.Copies.Count(c => !StillOurs(c, swapped.FileName));
+    }
+
+    /// <summary>
+    /// True when this copy is still the build this app installed. A missing file counts
+    /// as ours: there is nothing of anybody else's to overwrite.
+    /// </summary>
+    private static bool StillOurs(SwappedCopy copy, string fileName)
+    {
+        var path = Path.Combine(copy.Directory, fileName);
+        if (!File.Exists(path)) return true;
+        if (copy.InstalledSha256 is not { Length: > 0 } expected) return true;
+
+        var actual = FileHash.Sha256(path);
+        return actual is null || actual == expected;
+    }
+
+    /// <summary>
+    /// Restores every copy this app still owns, leaves any that something else has
+    /// replaced, and clears the record either way.
+    ///
+    /// why: this is the way out of what would otherwise be a dead end. Once a game
+    /// patches a swapped DLL, an ordinary revert refuses — correctly, since it would
+    /// write an older file over the patch — and without this the row kept offering a
+    /// button that could only fail. The originals of the copies left alone are kept:
+    /// clearing the record turns them into spent backups the Storage page can remove.
+    /// </summary>
+    /// <returns>The directories left alone, for the caller to report.</returns>
+    public IReadOnlyList<string> RevertWhatRemains(Game game, SwappedFile swapped)
+    {
+        swapped.Normalize();
+
+        if (RunningProcessIn(game.InstallPath) is { } running)
+            throw new InvalidOperationException(
+                $"{game.Name} looks like it is running ({running}). Close it first — a DLL " +
+                "the game already has open cannot be replaced.");
+
+        var ours = swapped.Copies.Where(c => StillOurs(c, swapped.FileName)).ToList();
+        var replaced = swapped.Copies.Where(c => !StillOurs(c, swapped.FileName)).ToList();
+
+        if (replaced.Count == 0)
+        {
+            Revert(game, swapped);
+            return Array.Empty<string>();
+        }
+
+        if (ours.Count > 0)
+        {
+            // A record naming only the copies still ours, so the tested revert path does
+            // the restoring and drops exactly those stored originals. The hashes were
+            // just checked here, which is why it does not check them again.
+            var restorable = new SwappedFile { FileName = swapped.FileName };
+            foreach (var copy in ours) restorable.Copies.Add(copy);
+            Revert(game, restorable, force: true);
+        }
+        else
+        {
+            var manifest = LoadManifest(game);
+            manifest.Files.RemoveAll(
+                f => f.FileName.Equals(swapped.FileName, StringComparison.OrdinalIgnoreCase));
+            SaveManifest(game, manifest);
+            GameAnalyzerService.InvalidateCacheForPath(game.InstallPath);
+        }
+
+        Log.Write($"[Swap] {game.Name}: forgot the swap of {swapped.FileName}. Something else had " +
+                  $"replaced it in {Places(replaced.Count)}, so those were left alone and their " +
+                  "originals are kept as spent backups.");
+
+        return replaced.Select(c => c.Directory).ToList();
+    }
+
     /// <summary>
     /// Drops records whose file is no longer where it was installed — the game was
     /// moved, verified or reinstalled. Without this, a stale record makes the page claim
