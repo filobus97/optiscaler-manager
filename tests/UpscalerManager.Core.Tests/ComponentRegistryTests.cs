@@ -198,32 +198,35 @@ namespace UpscalerManager.Core.Tests
         }
 
         [Fact]
-        public void InstallPreview_LeavesTheSpoofingDecisionToOptiScalerUnlessAsked()
+        public void InstallPreview_SpoofsNothingUnlessAsked()
         {
+            // OptiScaler's own default for the key is on for AMD and Intel, so "nothing
+            // asked for" has to be written as false rather than left out.
             var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selection: UpscalerSelection.NewestFsr);
             var dxgi = Assert.Single(preview.IniKeys, k => k.Section == "Spoofing" && k.Key == "Dxgi");
-            Assert.StartsWith("auto", dxgi.Value);
+            Assert.Equal("false", dxgi.Value);
             Assert.DoesNotContain(preview.IniKeys, k => k.Section == "Plugins");
         }
 
         [Fact]
-        public void InstallPreview_SpoofForceOn_ForcesDxgiKey_NoPluginBits()
+        public void InstallPreview_SpoofOn_ForcesDxgiKey_NoPluginBits()
         {
             var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selection: UpscalerSelection.NewestFsr,
-                spoofMethod: SpoofMethod.ForceDxgi);
+                spoofMethod: SpoofMethod.On);
             Assert.Contains(preview.IniKeys, k => k.Section == "Spoofing" && k.Key == "Dxgi" && k.Value == "true");
             Assert.DoesNotContain(preview.IniKeys, k => k.Section == "Plugins");
             Assert.DoesNotContain(preview.Files, f => f.Contains("OptiPatcher"));
         }
 
         [Fact]
-        public void InstallPreview_SpoofForceOff_WritesFalseRatherThanNothing()
+        public void InstallPreview_SpoofAuto_HandsTheDecisionBackToOptiScaler()
         {
-            // The checkbox this replaced could only write true; off wrote no key at all,
-            // and OptiScaler's own default then spoofed anyway on AMD and Intel.
+            // Auto is the only value OptiScaler reads its own per-game spoofing quirks
+            // under, so "let OptiScaler decide" has to write the word, not nothing.
             var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selection: UpscalerSelection.NewestFsr,
-                spoofMethod: SpoofMethod.ForceOff);
-            Assert.Contains(preview.IniKeys, k => k.Section == "Spoofing" && k.Key == "Dxgi" && k.Value == "false");
+                spoofMethod: SpoofMethod.Auto);
+            var dxgi = Assert.Single(preview.IniKeys, k => k.Section == "Spoofing" && k.Key == "Dxgi");
+            Assert.StartsWith("auto", dxgi.Value);
         }
 
         [Fact]

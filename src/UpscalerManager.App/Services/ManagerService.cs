@@ -506,7 +506,7 @@ public sealed class ManagerService
     /// </summary>
     public InstallPreview BuildInstallPreview(Game game, Fsr4Backend backend, UpscalerSelection selection,
         bool addFakenvapi = false, bool addNukemFg = false,
-        SpoofMethod spoofMethod = SpoofMethod.Default, bool forceInt8 = false, bool fsr4Watermark = false,
+        SpoofMethod spoofMethod = SpoofMethod.Off, bool forceInt8 = false, bool fsr4Watermark = false,
         string? optiscalerVersion = null)
         => ComponentRegistry.BuildInstallPreview(backend, selection, ComponentRegistry.DefaultInjectionDll, MenuShortcutKey,
             backend == Fsr4Backend.CustomMerged ? _components.GetCustomDlls().Select(d => d.Name).ToList() : null,
@@ -549,7 +549,7 @@ public sealed class ManagerService
     public async Task InstallAsync(Game game, Fsr4Backend backend, string? int8Version, UpscalerSelection selection,
         OptiScalerProfile? iniProfile, IProgress<string>? status = null,
         bool addFakenvapi = false, bool addNukemFg = false,
-        SpoofMethod spoofMethod = SpoofMethod.Default, bool forceInt8 = false, bool fsr4Watermark = false,
+        SpoofMethod spoofMethod = SpoofMethod.Off, bool forceInt8 = false, bool fsr4Watermark = false,
         string? optiscalerVersion = null)
     {
         if (!IsBackendAvailable(backend))
@@ -703,7 +703,7 @@ public sealed class ManagerService
     /// keys untouched (OptiScaler's auto behaviour).
     /// </summary>
     private void ApplyForcedIniKeys(string gameDir, UpscalerSelection selection,
-        SpoofMethod spoofMethod = SpoofMethod.Default,
+        SpoofMethod spoofMethod = SpoofMethod.Off,
         bool forceInt8 = false, bool fsr4Watermark = false)
     {
         // Only where the release still has the key; it is gone from current OptiScaler.
@@ -737,8 +737,8 @@ public sealed class ManagerService
         // fixes are read under.
         GameInstallationService.ModifyOptiScalerIniKey(gameDir, "Spoofing", "Dxgi", spoofMethod switch
         {
-            SpoofMethod.ForceDxgi => "true",
-            SpoofMethod.ForceOff => "false",
+            SpoofMethod.On => "true",
+            SpoofMethod.Off => "false",
             _ => "auto",
         });
         if (spoofMethod == SpoofMethod.OptiPatcher)

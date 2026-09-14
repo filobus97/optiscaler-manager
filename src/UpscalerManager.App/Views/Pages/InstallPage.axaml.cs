@@ -39,7 +39,7 @@ public partial class InstallPage : UserControl, IHostedPage
     public bool AddNukemFg { get; private set; }
 
     /// <summary>What the user chose for the Nvidia override.</summary>
-    public SpoofMethod SelectedSpoofMethod { get; private set; } = SpoofMethod.Default;
+    public SpoofMethod SelectedSpoofMethod { get; private set; } = SpoofMethod.Off;
 
     /// <summary>The OptiScaler release version to install (null = latest).</summary>
     public string? SelectedOptiScalerVersion { get; private set; }
@@ -116,16 +116,16 @@ public partial class InstallPage : UserControl, IHostedPage
         this.FindControl<CheckBox>("ChkWatermark")!.IsCheckedChanged += OnOptionChanged;
         this.FindControl<CheckBox>("ChkFakenvapi")!.IsCheckedChanged += OnOptionChanged;
 
-        // Nvidia override. Four outcomes in one list, because the old checkbox could
-        // only ever write true: left unticked it wrote nothing, and OptiScaler's own
-        // default then spoofed anyway on AMD and Intel — so the screen said off while
-        // the game was told it had an RTX 4090.
+        // Nvidia override. Off unless asked: OptiScaler's own default for the key turns
+        // spoofing on for AMD and Intel, and the old checkbox could only ever write
+        // true — so left alone the screen said off while the game was being told it had
+        // an RTX 4090. Only a DLSS option the game hides needs this at all.
         var spoofCombo = this.FindControl<ComboBox>("SpoofCombo")!;
         spoofCombo.ItemsSource = new[]
         {
+            "Off — the game sees your real GPU",
+            "On — the game is told it has an RTX 4090",
             "Let OptiScaler decide",
-            "Force it on — report an RTX 4090",
-            "Force it off",
             "Patch the game instead — OptiPatcher",
         };
         spoofCombo.SelectedIndex = 0;
@@ -243,15 +243,15 @@ public partial class InstallPage : UserControl, IHostedPage
     private SpoofMethod CurrentSpoofMethod() =>
         this.FindControl<ComboBox>("SpoofCombo")!.SelectedIndex switch
         {
-            1 => SpoofMethod.ForceDxgi,
-            2 => SpoofMethod.ForceOff,
+            1 => SpoofMethod.On,
+            2 => SpoofMethod.Auto,
             3 => SpoofMethod.OptiPatcher,
-            _ => SpoofMethod.Default,
+            _ => SpoofMethod.Off,
         };
 
     /// <summary>
-    /// What the chosen override actually does, including what the default resolves to on
-    /// the GPU in this machine — the one thing the list itself cannot say.
+    /// What the chosen override actually does, including what "let OptiScaler decide"
+    /// resolves to on the GPU in this machine — the one thing the list cannot say.
     /// </summary>
     private void UpdateSpoofNote()
     {
@@ -259,16 +259,16 @@ public partial class InstallPage : UserControl, IHostedPage
         if (note is null) return;
         note.Text = CurrentSpoofMethod() switch
         {
-            SpoofMethod.ForceDxgi =>
-                "Writes Dxgi=true. OptiScaler stops applying its own fixes for the games "
-                + "this is known to break, because it reads those only while the key is auto.",
-            SpoofMethod.ForceOff =>
-                "Writes Dxgi=false, for a game that crashes when the adapter lies. A game "
-                + "that hides DLSS behind a vendor check will not offer it.",
+            SpoofMethod.On =>
+                "Writes Dxgi=true. This is what unlocks a DLSS option the game hides from "
+                + "AMD and Intel; OptiScaler then drives FSR or XeSS through it.",
+            SpoofMethod.Auto =>
+                "Writes Dxgi=auto. " + DefaultSpoofReads(),
             SpoofMethod.OptiPatcher =>
                 "Patches the game's vendor checks in memory instead, and leaves Dxgi at "
                 + "auto — OptiScaler turns spoofing off itself once the patch lands.",
-            _ => "Writes Dxgi=auto. " + DefaultSpoofReads(),
+            _ => "Writes Dxgi=false. Turn it on only if this game's DLSS option is hidden "
+                + "— a game that offers FSR or XeSS needs no lie, and some crash with one.",
         };
     }
 

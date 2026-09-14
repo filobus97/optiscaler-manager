@@ -192,7 +192,7 @@ public static class ComponentRegistry
         Fsr4Backend backend, UpscalerSelection selection, string? injectionDll = null, string? menuKeyVk = null,
         IReadOnlyList<string>? customDlls = null,
         bool addFakenvapi = false, bool addNukemFg = false,
-        SpoofMethod spoofMethod = SpoofMethod.Default, bool forceInt8 = false, bool fsr4Watermark = false,
+        SpoofMethod spoofMethod = SpoofMethod.Off, bool forceInt8 = false, bool fsr4Watermark = false,
         bool legacyFsr4UpdateKey = false)
     {
         var ids = new List<string> { ComponentIds.OptiScaler };
@@ -255,8 +255,8 @@ public static class ComponentRegistry
         // is not a no-op line: it is what hands the decision back to OptiScaler.
         iniKeys.Add(new IniKeyChange("Spoofing", "Dxgi", spoofMethod switch
         {
-            SpoofMethod.ForceDxgi => "true",
-            SpoofMethod.ForceOff => "false",
+            SpoofMethod.On => "true",
+            SpoofMethod.Off => "false",
             _ => "auto  (OptiScaler decides: on for AMD and Intel)",
         }));
         if (spoofMethod == SpoofMethod.OptiPatcher)

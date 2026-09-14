@@ -5,33 +5,32 @@
 namespace UpscalerManager.Core.Components;
 
 /// <summary>
-/// What the install writes for the "Nvidia override" — the vendor check that hides a
-/// game's DLSS option on AMD and Intel.
+/// What the install writes for the "Nvidia override" — the lie that unlocks a DLSS
+/// option a game hides from AMD and Intel. <see cref="Off"/> is the app's default:
+/// nothing but a hidden DLSS option needs it, and some games crash with it.
 /// </summary>
-/// <remarks>
-/// why: every automatic decision OptiScaler makes about DXGI spoofing — its per-game
-/// quirks, the Luma and Sekiro detections, turning it off when OptiPatcher lands or when
-/// no nvngx replacement is found — is guarded by the ini key having no explicit value.
-/// So writing true or false is not just a preference, it opts the game out of all of
-/// that, and <see cref="Default"/> has to stay the default.
-/// </remarks>
 public enum SpoofMethod
 {
     /// <summary>
+    /// Write <c>[Spoofing] Dxgi=false</c>. Costs nothing but a DLSS option the game
+    /// gates on the vendor: OptiScaler's own automatic decisions about this key only
+    /// ever turn it off, and the one place that turns it on regardless — the FSR 4 INT8
+    /// path, which needs the hook to reach FidelityFX — overrides the key anyway and
+    /// reports the real GPU while doing it.
+    /// </summary>
+    Off,
+
+    /// <summary>
+    /// Write <c>[Spoofing] Dxgi=true</c> — the game is told it has an RTX 4090.
+    /// </summary>
+    On,
+
+    /// <summary>
     /// Leave <c>[Spoofing] Dxgi=auto</c>: on for AMD and Intel, off for Nvidia, minus
-    /// the games OptiScaler knows it breaks.
+    /// the games OptiScaler's own quirk table knows it breaks. Those quirks, and its
+    /// Luma and Sekiro detections, are read only while the key is auto.
     /// </summary>
-    Default,
-
-    /// <summary>
-    /// Force <c>[Spoofing] Dxgi=true</c> — the game is told it has an RTX 4090.
-    /// </summary>
-    ForceDxgi,
-
-    /// <summary>
-    /// Force <c>[Spoofing] Dxgi=false</c>, for games that crash when the adapter lies.
-    /// </summary>
-    ForceOff,
+    Auto,
 
     /// <summary>
     /// Install <c>plugins/OptiPatcher.asi</c> and force <c>[Plugins] LoadAsiPlugins=true</c>,
