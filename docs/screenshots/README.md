@@ -1,19 +1,19 @@
 # Screenshots
 
 Rendered from the running application against a **sample game library** — synthetic
-game folders containing minimal DLLs that carry real version resources, so the
-versions shown are read by the same code that reads them on a real install.
+game folders holding minimal DLLs that carry real version resources, so the versions
+shown are read by the same code that reads them on a real install.
 
-They are captured by rendering the window to a bitmap under a virtual X server, so
-they stay in step with the actual UI rather than being mocked up by hand. Regenerate
-them after UI changes; reviewing them is also a cheap way to catch stale wording —
-the "DLSS 3.7.10 shown as 3.7.1" bug and several outdated tooltips were found exactly
-that way.
+The window is rendered to a bitmap under a virtual X server by the UI harness, so these
+stay in step with the actual UI rather than being mocked up by hand. Regenerate them
+after UI changes and read them: the "DLSS 3.7.10 shown as 3.7.1" bug, a clipped card
+row, a dead ini key promised by the install preview and several stale tooltips were all
+found exactly that way.
 
-`swap.png` is rendered against two synthetic game folders holding real 64-bit DLLs
-with version resources, one carrying a newer build than the other — so the harvest,
-swap and revert shown there are the real operations on real files, not a mock-up.
-
-`storage.png` is rendered against a **sample cache** instead: component versions,
-imported DLLs and per-game backups written to a scratch config directory, so the
-sizes and the live/spent split are produced by the real scan rather than invented.
+- `swap.png` and `swap-guard.png` run against real 64-bit DLLs in synthetic game
+  folders, one carrying a newer build than the other, and against the live archive
+  index — so the builds, the harvest and the refused cross-generation swap are the real
+  operations, not a mock-up.
+- `storage.png` runs against a sample cache instead: component versions, imported DLLs
+  and per-game backups written to a scratch config directory, so the sizes and the
+  live/spent split come from the real scan.

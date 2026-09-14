@@ -44,22 +44,13 @@ public sealed record RepositoryBuild(
 /// <summary>
 /// Downloads swappable DLLs from the DLSS Swapper project's archive.
 ///
-/// See <see cref="DllRepository"/> for what the archive is and why this app links to
-/// it rather than mirroring it. The mechanics here are DLSS Swapper's own, because its
-/// hygiene around this is good and worth copying rather than re-deciding:
+/// The index is cached on disk and re-fetched only when stale, a stale copy beats no
+/// list when the network is down, and the zip is checked against the manifest's hash
+/// before it is opened and the extracted DLL before it is filed.
 ///
-/// <list type="bullet">
-/// <item>the manifest is cached on disk and re-fetched only when stale, so opening a
-/// picker costs nothing;</item>
-/// <item>a stale cache is preferred to no list at all when the network is down;</item>
-/// <item>the downloaded archive is checked against the manifest's
-/// <c>zip_md5_hash</c> <em>before</em> being opened, and the extracted DLL against
-/// <c>md5_hash</c> before being filed.</item>
-/// </list>
-///
-/// The one thing deliberately not copied is its Authenticode check: there is no
-/// <c>wintrust</c> on Linux, so the manifest's recorded signature state is surfaced as
-/// information on the row instead of enforced.
+/// why: no Authenticode check, unlike DLSS Swapper — there is no wintrust on Linux, so
+/// the manifest's recorded signature state is shown on the row instead of enforced.
+/// See <see cref="DllRepository"/> and docs/swapping.md.
 /// </summary>
 public sealed class DllRepositoryService
 {

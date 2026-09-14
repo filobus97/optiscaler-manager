@@ -7,35 +7,24 @@ using System.Text.RegularExpressions;
 namespace UpscalerManager.Core.Models;
 
 /// <summary>
-/// Orders component version strings newest-first.
+/// Orders component version strings newest-first, for every component this app tracks.
 ///
-/// Every component we track — OptiScaler, its betas and extras, OptiPatcher, fakenvapi,
-/// Nukem's FG — tags releases in the same rough shape, so they all sort the same way
-/// here rather than each growing its own comparer. Real tags from the OptiScaler repo
-/// show what this has to cope with:
+/// Five rules, each pinned down by real tags — v0.9.3, v0.7.7-pre9, v0.7.0-pre66,
+/// v0.6.7-pre14, v0.7-old_nightly from OptiScaler, and 4.0.2d / 4.1.1b from the
+/// community FSR builds:
 ///
-///     v0.9.3   v0.7.9   v0.7.7-pre9   v0.7.0-pre66   v0.6.7   v0.6.7-pre14   v0.7-old_nightly
+/// <list type="number">
+/// <item>The numeric part decides first, so 0.9.3 beats 0.7.9.</item>
+/// <item>A final release outranks a pre-release of the same version.</item>
+/// <item>Among pre-releases of one version, the trailing number decides: pre66 > pre14.</item>
+/// <item>A letter attached directly to the number is a later revision, not a
+/// pre-release: 4.0.2d outranks 4.0.2. Only a "-" or "+" suffix means pre-release.</item>
+/// <item>Plain text last, so the order is at least stable.</item>
+/// </list>
 ///
-/// which pins down all four rules below:
-///
-///   1. Compare the numeric part first, so 0.9.3 beats 0.7.9.
-///   2. A final release outranks a pre-release of the same version: 0.6.7 beats 0.6.7-pre14.
-///   3. Among pre-releases of one version, order by the trailing number: pre66 > pre14 > pre9.
-///   4. Fall back to plain text so the order is at least stable and repeatable.
-///
-/// Sorting these as plain strings — which several call sites used to do — gets rules 1
-/// and 3 wrong (pre9 above pre14, and 1.9 above 1.10), and that order is not cosmetic:
-/// the offline fallback installs whatever lands first.
-///
-/// One more rule comes from the community FSR builds, which tag revisions with a bare
-/// trailing letter:
-///
-///     4.0.2   4.0.2d   4.1.1   4.1.1b
-///
-///   5. A letter attached directly to the number is a <em>later</em> revision, not a
-///      pre-release: 4.0.2d outranks 4.0.2, and 4.1.1b outranks 4.1.1. Only a suffix
-///      introduced by "-" or "+" means pre-release. Without this the newest build of a
-///      version sorted below the oldest, and "latest first" listed the wrong one first.
+/// why: sorting these as plain strings gets rules 1 and 3 backwards (pre9 above pre14,
+/// 1.9 above 1.10), and that order is not cosmetic — the offline fallback installs
+/// whatever lands first.
 /// </summary>
 public static class VersionOrder
 {

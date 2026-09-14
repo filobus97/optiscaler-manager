@@ -38,46 +38,11 @@ public enum FidelityFxRole
 /// <summary>
 /// Which generation of AMD's FidelityFX runtime a file belongs to, and what it holds.
 ///
-/// <para><b>The thing that makes this necessary.</b> AMD restructured the runtime in
-/// FidelityFX SDK 2.0.0. This is what lets the app both label these files and swap them
-/// safely: "which FSR version is this game running" is the same question whether
-/// OptiScaler or the game itself put the files there, and it is also the question that
-/// decides whether a build can replace another.
-/// Before SDK 2.0.0, <c>amd_fidelityfx_dx12.dll</c> was a monolith
-/// containing every effect — upscaling included. From 2.0.0 the effects were split into
-/// separate modules behind a loader, and AMD's documentation is explicit:</para>
-///
-/// <para><i>"Starting with AMD FidelityFX™ SDK 2.0.0 the effects, previously combined in
-/// amd_fidelityfx_dx12.dll, are split into multiple DLLs based on effect type… A small
-/// loader DLL, not containing any effect code… It is interface- and behavior-compatible
-/// with amd_fidelityfx_dx12.dll. Applications previously loading amd_fidelityfx_dx12.dll
-/// must now load amd_fidelityfx_loader_dx12.dll instead."</i></para>
-///
-/// <para>Because the loader is deliberately compatible with the old name, a game
-/// migrating to SDK 2 can keep shipping <c>amd_fidelityfx_dx12.dll</c> — and in the
-/// wild, they do. So that one filename means two completely different things, and
-/// telling them apart is not optional: SDK 1 effects are deprecated to SDK 1, so
-/// dropping a monolith over a loader leaves SDK 1 code trying to drive SDK 2 modules.
-/// Both build sources this app offers for that filename — the DLSS Swapper archive and
-/// a game's own files — can hold either generation.</para>
-///
-/// <para><b>What the real binaries say.</b> Read out of AMD's own signed builds in
-/// <c>FidelityFX-SDK</c> at tag v2.3.0, whose release notes state it contains FSR
-/// Upscaling 4.1.1:</para>
-///
-/// <list type="table">
-/// <item><term>amd_fidelityfx_loader_dx12.dll</term><description>file version 2.3.0.2740 — the SDK version — and an empty provider table. 26 KB.</description></item>
-/// <item><term>amd_fidelityfx_upscaler_dx12.dll</term><description>file version 4.1.1.2740, providers 2.3.4 / 3.1.5 / 4.1.1. So FSR 4.1.1, and the file version already says so.</description></item>
-/// <item><term>amd_fidelityfx_framegeneration_dx12.dll</term><description>file version 4.0.1.2740, providers 3.1.6 / 3.1.7 / 4.0.1.</description></item>
-/// <item><term>amd_fidelityfx_denoiser_dx12.dll</term><description>file version 1.2.0.2740.</description></item>
-/// <item><term>amd_fidelityfx_radiancecache_dx12.dll</term><description>file version 0.9.0.2740.</description></item>
-/// </list>
-///
-/// <para>Two conclusions that shape everything below. For an SDK 2 module the file
-/// version <em>is</em> the effect version, so nothing needs translating. For the loader
-/// the file version is the SDK version and the FSR version is not in that file at all —
-/// showing it as though it were an FSR version is exactly the confusion this exists to
-/// prevent.</para>
+/// why: one filename covers both SDK generations, because AMD documents the SDK 2
+/// loader as compatible with the SDK 1 name and games keep it across the migration. So
+/// the generation is read out of the file, never taken from the name — and a swap across
+/// that line is refused. See docs/fidelityfx.md for the documentation and the binaries
+/// this was verified against.
 /// </summary>
 public static class FidelityFxLayout
 {
@@ -101,26 +66,17 @@ public static class FidelityFxLayout
     };
 
     /// <summary>
-    /// What this file is.
+    /// What this file is: settled by name where the name is unambiguous, and otherwise
+    /// by evidence — a provider table topping out at 4.x or above is an effect module,
+    /// one in the 3.x range is an SDK 1 monolith, and no table with a major of 2 or more
+    /// is a loader.
     ///
-    /// Unambiguous names are settled by name. The two legacy names are settled by
-    /// evidence, in this order:
-    ///
-    /// <list type="number">
-    /// <item>A provider table topping out in the 3.x range is an SDK 1 monolith — that
-    /// is FSR 3.1.x upscaling code sitting inside the file.</item>
-    /// <item>A provider table topping out at 4.x or above is an effect module, whatever
-    /// it has been named. Community and OptiScaler drops do rename these.</item>
-    /// <item>No provider table and a major version of 2 or more is a loader: no effect
-    /// code, and a version number in the SDK's own series.</item>
-    /// <item>Otherwise, assume a monolith — that is the older layout, and the
-    /// conservative answer, since it is the one that gets a cross-generation swap
-    /// refused rather than allowed.</item>
-    /// </list>
+    /// why: the fallback is Monolith rather than Loader because that is the answer which
+    /// gets a cross-generation swap refused rather than allowed.
     /// </summary>
     /// <param name="fileVersion">The version resource, e.g. "2.3.0.2740".</param>
     /// <param name="effectVersion">
-    /// The highest provider version found in the binary, from
+    /// The highest provider version in the binary, from
     /// <see cref="FidelityFxVersion.FromBinary"/>. Null when there is no table, which is
     /// itself the evidence that identifies a loader.
     /// </param>
@@ -149,12 +105,8 @@ public static class FidelityFxLayout
         fileName is not null && (ByName.ContainsKey(fileName) || LegacyNames.Contains(fileName));
 
     /// <summary>
-    /// True when a build of one role can stand in for a file of the other.
-    ///
-    /// Only same-for-same. SDK 1 effects are deprecated to SDK 1, so dropping a
-    /// monolith over a loader leaves SDK 1 code trying to drive SDK 2 modules, and the
-    /// reverse leaves a game calling into a loader with no modules beside it. Files
-    /// outside the FidelityFX runtime are nobody's business here, so they pass.
+    /// True when a build of one role can stand in for a file of the other: same-for-same
+    /// only, and anything outside the FidelityFX runtime passes. See docs/fidelityfx.md.
     /// </summary>
     public static bool Interchangeable(FidelityFxRole current, FidelityFxRole candidate) =>
         current == FidelityFxRole.NotFidelityFx
@@ -192,10 +144,10 @@ public static class FidelityFxLayout
     };
 
     /// <summary>
-    /// How a FidelityFX file's version should be written for a player.
+    /// How a FidelityFX file's version should be written for a player: the label that is
+    /// true of its role.
     ///
-    /// Each role gets the label that is actually true of it. The loader is the one that
-    /// matters most: its 2.3.0 is an SDK version, and left bare it reads as an FSR
+    /// why: the loader's 2.3.0 is an SDK version, and left bare it reads as an FSR
     /// version two generations behind the 4.1.1 module sitting next to it.
     /// </summary>
     public static string Describe(string? fileName, string? fileVersion, string? effectVersion)
@@ -221,9 +173,9 @@ public static class FidelityFxLayout
     }
 
     /// <summary>
-    /// An effect module's version. Its file version already <em>is</em> the effect
-    /// version — AMD stamps the upscaler that provides FSR 4.1.1 as 4.1.1.2740 — so the
-    /// provider table is only a fallback for a module whose resource is missing.
+    /// An effect module's version, which its file version already is — AMD stamps the
+    /// upscaler providing FSR 4.1.1 as 4.1.1.2740. The provider table is the fallback
+    /// for a module whose resource is missing.
     /// </summary>
     private static string Effect(string label, string? fileVersion, string? effectVersion)
     {
@@ -233,8 +185,7 @@ public static class FidelityFxLayout
 
     /// <summary>
     /// Drops the shared SDK build number from the tail: every module in SDK 2.3.0 ends
-    /// in .2740, which carries no information a player can use and makes four versions
-    /// on one page look alike.
+    /// in .2740, which makes four versions on one page look alike.
     /// </summary>
     private static string Trim(string version)
     {

@@ -105,29 +105,23 @@ namespace UpscalerManager.Core.Models
         public List<string> ScanDriveRoots { get; set; } = new();
 
         /// <summary>
-        /// OptiScaler overlay/menu shortcut key as a Windows virtual-key hex string
-        /// (e.g. "0x2D" = Insert, "0x78" = F9). When set, the Manager forces
-        /// [Menu] ShortcutKey to this value on every install. Null = leave OptiScaler's
-        /// own default (Insert).
+        /// The overlay key as a Windows virtual-key hex string ("0x2D" is Insert), forced
+        /// as [Menu] ShortcutKey on every install. Null leaves OptiScaler's default.
         /// </summary>
         public string? MenuShortcutKey { get; set; } = null;
 
         /// <summary>
-        /// Drive the UI with a game controller (Linux/evdev). On by default — it is
-        /// inert when no controller is connected. Turn off if a controller mapped to
-        /// keyboard input (e.g. by Steam Input) causes doubled presses.
+        /// Drive the UI with a controller (Linux/evdev). Inert when none is connected;
+        /// turn it off if something else already maps the controller to the keyboard.
         /// </summary>
         public bool GamepadNavigation { get; set; } = true;
 
         /// <summary>
-        /// Offer the DLSS Swapper project's archive as a swap download source.
+        /// Offer the DLSS Swapper archive as a download source.
         ///
-        /// On by default, because for several files it is the only source that exists —
-        /// AMD does not publish the FidelityFX runtimes loose and Nvidia keeps no old
-        /// DLSS builds available — and because the alternative is a user who cannot
-        /// swap anything they do not already own. It remains a third-party mirror,
-        /// which is why it has a switch of its own: turning it off removes the section
-        /// from every picker, and nothing else changes.
+        /// why: on by default because for several files it is the only source there is,
+        /// and off it leaves a user unable to install anything they do not already own.
+        /// It is still a third-party mirror, which is why it has a switch.
         /// </summary>
         public bool SwapRepositoryDownloads { get; set; } = true;
 
@@ -138,38 +132,38 @@ namespace UpscalerManager.Core.Models
         public double WindowLeft { get; set; } = double.NaN;
         public double WindowTop { get; set; } = double.NaN;
         /// <summary>
-        /// The default FSR 4 INT8 extras version to pre-select in ManageGameWindow.
-        /// Null or "none" means "do not inject".
+        /// The FSR 4 INT8 extras version the install screen pre-selects. Null or "none"
+        /// means do not inject one.
         /// </summary>
         public string? DefaultExtrasVersion { get; set; } = null;
         /// <summary>
-        /// The default OptiScaler version to pre-select in ManageGameWindow / Quick Install.
+        /// The default OptiScaler version to pre-select in the install screen.
         /// Null or "auto" means let the app choose the recommended/latest version automatically.
         /// </summary>
         public string? DefaultOptiScalerVersion { get; set; } = null;
         /// <summary>
-        /// The default OptiPatcher version to pre-select in ManageGameWindow / Quick Install.
+        /// The default OptiPatcher version to pre-select in the install screen.
         /// Null or "none" means "do not install".
         /// </summary>
         public string? DefaultOptiPatcherVersion { get; set; } = null;
         /// <summary>
-        /// The default Fakenvapi version to pre-select in ManageGameWindow / Quick Install.
+        /// The default Fakenvapi version to pre-select in the install screen.
         /// Null or "none" means "do not install".
         /// </summary>
         public string? DefaultFakenvapiVersion { get; set; } = null;
         /// <summary>
-        /// The default NukemFG version to pre-select in ManageGameWindow / Quick Install.
+        /// The default NukemFG version to pre-select in the install screen.
         /// Null or "none" means "do not install".
         /// </summary>
         public string? DefaultNukemFGVersion { get; set; } = null;
         /// <summary>
-        /// The default custom FSR 4.x amdxcffx64.dll version to pre-select in ManageGameWindow.
+        /// The default custom FSR 4.x amdxcffx64.dll version to pre-select on the install screen.
         /// Null or "none" means "do not install".
         /// </summary>
         public string? DefaultCustomFsr4DllVersion { get; set; } = null;
         /// <summary>
         /// The default custom FSR SDK (amd_fidelityfx_upscaler_dx12.dll) version to
-        /// pre-select in ManageGameWindow. Null or "none" means "do not install".
+        /// pre-select on the install screen. Null or "none" means "do not install".
         /// </summary>
         public string? DefaultCustomFsrSdkVersion { get; set; } = null;
         public ScanSourcesConfig ScanSources { get; set; } = new();
@@ -231,9 +225,7 @@ namespace UpscalerManager.Core.Models
     /// Updated on each successful API call and merged with existing entries.
     /// </summary>
     /// <summary>
-    /// The release caches all have the same shape — a timestamp and a list of releases —
-    /// and are loaded and saved by the same pair of helpers. This is what those helpers
-    /// need to know about them.
+    /// What the shared load/save helpers need of a release cache: a timestamp and a list.
     /// </summary>
     public interface IReleasesCacheFile
     {
@@ -253,9 +245,8 @@ namespace UpscalerManager.Core.Models
     /// A single OptiScaler Extras (FSR4 INT8 mod) release entry stored in the local cache.
     /// </summary>
     /// <summary>
-    /// One release of a component that ships a single versioned artifact (extras,
-    /// OptiPatcher, fakenvapi). OptiScaler itself is not one of these: it splits its
-    /// releases into stable and beta streams and is summarised separately.
+    /// One release of a component shipping a single versioned artifact (extras,
+    /// OptiPatcher, fakenvapi). OptiScaler is summarised separately: it has two streams.
     /// </summary>
     public interface IReleaseEntry
     {
@@ -341,11 +332,8 @@ namespace UpscalerManager.Core.Models
     }
 
     /// <summary>
-    /// Metadata for a user-imported custom FSR DLL or DLL package
-    /// (amdxcffx64.dll, or an FSR SDK set anchored by amd_fidelityfx_upscaler_dx12.dll).
-    /// Stored as dll_info.json next to the DLL(s) in the cache folder.
-    /// The DLLs are never downloaded or bundled by this app — the user
-    /// must supply files they already possess ("bring your own DLL").
+    /// A user-imported FSR DLL or DLL set, recorded as dll_info.json beside it in the
+    /// cache. Never downloaded or bundled: these are files the user already has.
     /// </summary>
     public class CustomFsr4DllInfo
     {

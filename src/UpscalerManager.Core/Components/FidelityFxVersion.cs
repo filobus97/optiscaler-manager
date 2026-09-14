@@ -9,43 +9,18 @@ namespace UpscalerManager.Core.Components;
 /// <summary>
 /// The FSR version a FidelityFX runtime library actually provides.
 ///
-/// <para><b>Why this is needed.</b> For every other swappable DLL the version resource
-/// is the version a player recognises: <c>nvngx_dlss.dll</c> reporting 310.9.1.0 means
-/// DLSS 310.9.1. The FidelityFX runtimes do not work that way. AMD stamps them with an
-/// SDK build number, so the library providing <b>FSR 3.1.2</b> reports itself as
-/// <c>1.0.1.38338</c> — a number that appears nowhere in AMD's documentation, cannot be
-/// compared against anything a player has read, and looks alarmingly like a
-/// <em>downgrade</em> next to a game's FSR 3 library.</para>
-///
-/// <para>DLSS Swapper solves it by loading the DLL and calling its <c>ffxQuery</c>
-/// entry point for the provider version table. That is not available here: these are
-/// Windows PEs and this app's primary platform is Linux, so there is nothing to load
-/// them into.</para>
-///
-/// <para>Two routes work without executing anything:</para>
-///
-/// <list type="number">
-/// <item>
-/// The DLSS Swapper index records the FSR version for every build it archives, keyed
-/// by MD5. That is authoritative — it is AMD's own label — and it is what
-/// <see cref="Services.DllRepositoryService"/> supplies.
-/// </item>
-/// <item>
-/// Failing that, the provider version table is a run of plain NUL-terminated ASCII
-/// strings in the binary's data, and can simply be read out. See
-/// <see cref="FromProviderTable"/> for why that is safer than it sounds.
-/// </item>
-/// </list>
+/// why: AMD stamps these with an SDK build number, so the library providing FSR 3.1.2
+/// reports itself as 1.0.1.38338 — which reads as a downgrade next to a game's FSR 3.
+/// The real version is read out of the binary's provider table rather than by calling
+/// into it, because these are Windows PEs and this app runs on Linux. See
+/// docs/fidelityfx.md.
 /// </summary>
 public static class FidelityFxVersion
 {
     /// <summary>
-    /// The files whose version resource needs translating.
-    ///
-    /// Only these two, and only because both were checked against every build the
-    /// archive holds — nine DX12 and seven Vulkan, all sixteen resolved exactly. The
-    /// DX12 loader is deliberately absent: it plausibly carries the same table, but
-    /// "plausibly" is not a basis for showing a player a version number.
+    /// The files whose version resource needs translating: these two, verified against
+    /// all sixteen builds the archive holds. The SDK 2 loader is deliberately absent —
+    /// it may carry the same table, and "may" is not a basis for a version number.
     /// </summary>
     private static readonly HashSet<string> Translated = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -98,19 +73,13 @@ public static class FidelityFxVersion
     }
 
     /// <summary>
-    /// The FSR version out of a FidelityFX binary's provider version table.
-    ///
-    /// The table is a sequence of pointer blocks each followed by a NUL-terminated
-    /// version string, so the parse is: find every standalone ASCII
-    /// <c>major.minor.patch</c> C string, and take the highest at or above
+    /// The FSR version out of a FidelityFX binary's provider table: every standalone
+    /// ASCII major.minor.patch C string, highest first, at or above
     /// <see cref="LowestRealFsrMajor"/>.
     ///
-    /// <para>That sounds fragile and is not, for a specific reason: requiring a NUL on
-    /// <em>both</em> sides makes the pattern match only whole short strings, and across
+    /// why: requiring a NUL on both sides matches only whole short strings, and across
     /// all sixteen archived builds the complete set of matches was exactly the three
-    /// provider versions — no other string in a 6.5 MB binary qualified. It is still a
-    /// fallback rather than the primary route, and it declines to answer rather than
-    /// guess when nothing is in FSR's range.</para>
+    /// provider versions — nothing else in a 6.5 MB binary qualified.
     /// </summary>
     internal static string? FromProviderTable(ReadOnlySpan<byte> bytes) =>
         AllFromProviderTable(bytes).FirstOrDefault(v => MajorOf(v) >= LowestRealFsrMajor);
@@ -119,20 +88,13 @@ public static class FidelityFxVersion
         int.TryParse(version.Split('.')[0], out var major) ? major : 0;
 
     /// <summary>
-    /// Every provider version in the binary's table, <b>newest first</b>.
+    /// Every provider version in the binary's table, newest first — the order
+    /// [FSR] UpscalerIndex indexes into. See docs/fidelityfx.md.
     ///
-    /// The order matters and is not arbitrary. AMD sorts the list it reports at runtime
-    /// — <c>GetProviderVersions</c> in the SDK ends with an insertion sort whose comment
-    /// reads "Sort the returned versions by version ids so newest version is at
-    /// beginning of array" — so newest-first is the order
-    /// <c>[FSR] UpscalerIndex</c> indexes into, and the order used here.
-    ///
-    /// Unlike <see cref="FromProviderTable"/> this applies no floor, because every
-    /// entry is a real choice — OptiScaler's overlay lists them all as "FSR &lt;name&gt;"
-    /// and a game that misbehaves on FSR 4 can be pinned to the FSR 3.1 provider in the
-    /// same module. The floor exists only for <em>labelling</em> a file, where reporting
-    /// an SDK-era 2.3.x as though it were an FSR version would invent something that
-    /// does not exist.
+    /// why: no floor here, unlike <see cref="FromProviderTable"/>. Every entry is a real
+    /// choice, and a game that misbehaves on FSR 4 can be pinned to the FSR 3.1 provider
+    /// in the same module. The floor is only for labelling a file, where an SDK-era 2.3.x
+    /// shown as an FSR version would invent something that does not exist.
     /// </summary>
     internal static IReadOnlyList<string> AllFromProviderTable(ReadOnlySpan<byte> bytes)
     {

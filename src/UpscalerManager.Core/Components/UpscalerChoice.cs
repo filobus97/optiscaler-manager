@@ -28,27 +28,17 @@ public sealed record UpscalerCodes(string? Dx12, string? Dx11, string? Vulkan)
 }
 
 /// <summary>
-/// Which upscaler OptiScaler should actually run, for the install screen to offer.
+/// Which upscaler OptiScaler should actually run, for the install screen to offer. The
+/// choice lives in [Upscalers] Dx12Upscaler, Dx11Upscaler and VulkanUpscaler, one key
+/// per API.
 ///
-/// <para>OptiScaler's job is to decouple the upscaler a game <em>asks</em> for from the
-/// one it <em>gets</em>: a game calling DLSS can be served FSR, XeSS, or DLSS itself.
-/// That choice lives in <c>[Upscalers] Dx12Upscaler</c>, <c>Dx11Upscaler</c> and
-/// <c>VulkanUpscaler</c>, one key per API, and until now this app only ever wrote one
-/// combination of them — the FSR one — behind a "pre-enable FSR 4" switch. Everything
-/// else was left to the in-game overlay.</para>
+/// why: the lists below are OptiScaler's own, read from MenuCommon::AddDx12Backends,
+/// AddDx11Backends and AddVulkanBackends — the same source that populates its overlay
+/// picker — so this app cannot offer a combination OptiScaler would reject. That is
+/// also why dlssd is absent: it is a denoiser path, and appears in none of the three.
 ///
-/// <para><b>The lists below are OptiScaler's own.</b> Taken from
-/// <c>MenuCommon::AddDx12Backends</c>, <c>AddDx11Backends</c> and
-/// <c>AddVulkanBackends</c>, which is what populates the overlay's own picker — so this
-/// app offers exactly what the overlay does and cannot invent a combination OptiScaler
-/// would reject. Note what is <em>not</em> there: <c>dlssd</c> is a
-/// denoiser path rather than an upscaler backend and appears in none of the three
-/// lists, so it is not offered here either.</para>
-///
-/// <para><b>Versions are a separate question.</b> A backend code selects a family, not a
-/// release: <c>ffx</c> covers FSR 2.3, 3.1 and 4.x alike, and which of those actually
-/// runs is decided by the upscaler module present and by
-/// <c>[FSR] UpscalerIndex</c> — see <see cref="FfxProviderChoice"/>.</para>
+/// A code selects a family rather than a release: ffx covers FSR 2.3, 3.1 and 4.x
+/// alike, and which one runs is decided by <see cref="FfxProviderChoice"/>.
 /// </summary>
 public static class UpscalerChoice
 {

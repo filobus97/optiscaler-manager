@@ -77,38 +77,13 @@ public sealed record SwapSlot(
 /// Replaces a game's own upscaler DLL with a different build of the same DLL, and puts
 /// the original back on request.
 ///
-/// The swap route exists because OptiScaler is overkill for a great many games: if a
-/// game already ships DLSS, dropping a newer <c>nvngx_dlss.dll</c> beside its
-/// executable upgrades it with nothing hooked, nothing injected, and nothing to
-/// configure.
+/// Every copy of the file in the game is written, never only the first: which one the
+/// game loads is its own business. The original goes to this app's external per-game
+/// backup store, so it survives the game verifying or reinstalling itself.
 ///
-/// Three things this does differently from DLSS Swapper:
-///
-/// <list type="bullet">
-/// <item>
-/// The original goes into the app's external backup store, not a sibling
-/// <c>.dlsss</c> file in the game folder. A game verifying its files removes a stray
-/// sibling; the store survives that, and survives the game being reinstalled.
-/// </item>
-/// <item>
-/// Filenames match case-insensitively. DLSS Swapper compares exact case and relies
-/// on NTFS to paper over it — on ext4 a game shipping <c>NvNgx_Dlss.dll</c> would
-/// simply never be offered.
-/// </item>
-/// <item>
-/// A swap is refused outright where OptiScaler owns the same file, rather than
-/// letting the two silently overwrite each other.
-/// </item>
-/// </list>
-///
-/// And one thing taken from it, because it was simply right: a swap writes to
-/// <em>every</em> copy of the DLL in the game, not the first one found. Its
-/// <c>UpdateDllAsync</c> loops over all assets of a type; this originally did not, and
-/// on a game carrying two copies the swap was a coin toss.
-///
-/// Scope is DLSS and XeSS — see <see cref="SwappableDlls"/> for why AMD's FidelityFX
-/// files are no longer swapped, and how an existing swap of one is still undone.
-///
+/// See docs/swapping.md for what this takes from DLSS Swapper and where it differs, and
+/// docs/fidelityfx.md for the generation guard.
+/// </summary>
 public sealed class DllSwapService
 {
     private const string SwapManifestFileName = "swaps.json";

@@ -691,21 +691,13 @@ public class GameAnalyzerService
     }
 
     /// <summary>
-    /// What the cached analysis is expected to contain.
+    /// What the cached analysis is expected to contain: 1 was component detection, 2
+    /// added DetectedComponent.FsrVersion.
     ///
-    /// Bumped whenever a scan starts producing something it did not before, because the
-    /// cache is keyed on the game folder's write stamp and nothing else — so a folder
-    /// that has not changed keeps serving an answer computed by an older build of this
-    /// app, indefinitely. That is not hypothetical: adding the FSR version to
-    /// <see cref="DetectedComponent"/> changed nothing on screen for anyone with an
-    /// existing cache, because their entries had been written before the field existed
-    /// and were still considered fresh.
-    ///
-    /// <list type="bullet">
-    /// <item>1 — component detection, the original shape.</item>
-    /// <item>2 — DetectedComponent.FsrVersion, so a FidelityFX runtime can be labelled
-    /// with the FSR version it actually provides rather than an SDK build number.</item>
-    /// </list>
+    /// why: bump this whenever a scan starts producing something it did not before. The
+    /// cache is keyed on the game folder's write stamp and nothing else, so an unchanged
+    /// folder serves an answer from an older build of this app indefinitely — which is
+    /// how adding FsrVersion changed nothing on screen for anyone with an existing cache.
     /// </summary>
     private const int AnalysisSchemaVersion = 2;
 

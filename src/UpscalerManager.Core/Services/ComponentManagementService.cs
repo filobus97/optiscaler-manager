@@ -1112,16 +1112,15 @@ namespace UpscalerManager.Core.Services
         /// Fetches one OptiScaler-Extras release and extracts every swappable DLL it
         /// carries into the per-version cache, returning that directory.
         ///
-        /// Every swappable DLL, not just the INT8 upscaler: these releases are drops of
-        /// a whole matched FidelityFX set, so a release that carries a patched upscaler
-        /// usually carries the runtime built alongside it too. Taking only the one file
-        /// meant the swap route could never offer any of the others no matter how many
-        /// releases had been downloaded — the archive held them and the cache threw them
-        /// away.
+        /// why: every swappable DLL rather than only the INT8 upscaler. Whatever else a
+        /// release happens to carry is already downloaded, and keeping it costs nothing
+        /// while throwing it away made those builds unreachable. Most of these releases
+        /// do ship the upscaler alone — assuming otherwise is what broke the 4.1.1b
+        /// install, so nothing here depends on a release carrying a matched set.
         ///
         /// Names are kept exactly as the release ships them, because the name is what
-        /// OptiScaler loads. Destinations go through <see cref="SafeDestinationPath"/>,
-        /// so an entry called <c>../../x</c> cannot write outside the cache.
+        /// OptiScaler loads, and destinations go through
+        /// <see cref="SafeDestinationPath"/> so an entry called ../../x cannot escape.
         /// </summary>
         public async Task<string> DownloadExtrasReleaseAsync(string version, IProgress<double>? progress = null)
         {

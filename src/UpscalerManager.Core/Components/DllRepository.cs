@@ -6,38 +6,27 @@ using System.Linq;
 namespace UpscalerManager.Core.Components;
 
 /// <summary>
-/// The DLSS Swapper project's archive of vendor upscaler DLLs, used as a download
-/// source for the swap route.
+/// The DLSS Swapper project's archive of vendor upscaler DLLs, as a download source.
 ///
-/// This is the one part of DLSS Swapper that cannot be reimplemented, only used: the
-/// value is not in its code but in some 229 archived builds — every DLSS release back
-/// to 1.0.0.0 in 2018, the FidelityFX DX12 and Vulkan runtimes, and Intel's XeSS
-/// family — scraped out of shipped games and vendor SDK zips over years. Nothing else
-/// holds that history, and no amount of local scanning reconstructs a build the user
-/// never owned.
+/// The one part of DLSS Swapper that cannot be reimplemented, only used: the value is
+/// not its code but some 229 archived builds — every DLSS release back to 2018, the
+/// FidelityFX runtimes, and Intel's XeSS family — collected out of shipped games and
+/// vendor SDK zips over years. No amount of local scanning reconstructs a build the
+/// user never owned.
 ///
-/// <para><b>Provenance, stated plainly because it matters.</b> These files are hosted
-/// by one volunteer (<c>dlss-swapper-downloads.beeradmoore.com</c>), indexed by a
-/// manifest on GitHub Pages, and the manifest's own <c>dll_source</c> field records
-/// where each came from — game installs, often via TechPowerUp, and vendor SDK
-/// archives. Nvidia's licence, which DLSS Swapper itself ships verbatim, says the SDK
-/// "may not be distributed or sublicensed as a stand-alone product". This app
-/// therefore <em>links</em> to that archive and never mirrors it: the bytes come from
-/// their host on an explicit press, exactly as the OptiScaler-Extras route works, and
-/// the whole source can be switched off in Settings.</para>
+/// why: this app links to that archive and never mirrors it. The files are hosted by
+/// one volunteer, and Nvidia's licence — which DLSS Swapper itself ships verbatim —
+/// says the SDK "may not be distributed or sublicensed as a stand-alone product". So
+/// the bytes come from their host on an explicit press, and the whole source has a
+/// switch. See the README's download policy.
 ///
-/// <para>The manifest covers nine files, and only nine. There is no FSR 4 in it — no
-/// <c>amd_fidelityfx_upscaler_dx12.dll</c> and no <c>amdxcffx64.dll</c> — so it does
-/// not replace the OptiScaler route. Its <c>fsr_31_dx12</c> and <c>fsr_31_vk</c>
-/// sections are the FidelityFX runtime libraries, all SDK 1 builds, which AMD does not
-/// publish loose: without them the only FSR 3.1.x versions available are whatever the
-/// user's other games happen to ship.</para>
+/// There is no FSR 4 in the manifest, so this does not replace the OptiScaler route.
 /// </summary>
 public static class DllRepository
 {
     /// <summary>
-    /// The index. A small JSON file on GitHub Pages — around half a megabyte — listing
-    /// every archived build with its download URL and hashes.
+    /// The index: a half-megabyte JSON file on GitHub Pages listing every archived
+    /// build with its download URL and hashes.
     /// </summary>
     public const string ManifestUrl = "https://beeradmoore.github.io/dlss-swapper/manifest.json";
 

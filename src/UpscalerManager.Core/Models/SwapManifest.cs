@@ -20,12 +20,10 @@ public class LibraryEntryMeta
 /// <summary>
 /// One place a swapped DLL was written, and what it takes to put that one back.
 ///
-/// A game can ship the same upscaler library in several directories — an Unreal title
-/// commonly carries <c>nvngx_dlss.dll</c> both beside its executable and under
-/// <c>Engine/Binaries/ThirdParty/…</c>. Which one the game loads is the game's
-/// business, so a swap that replaced only the first was a coin toss: half the time it
-/// appeared to do nothing at all. Every copy is therefore recorded separately, because
-/// each has its own original to restore and its own hash to check.
+/// why: a game can ship the same library in several directories — an Unreal title
+/// commonly carries nvngx_dlss.dll beside its executable and under
+/// Engine/Binaries/ThirdParty. Which one it loads is its own business, so each copy is
+/// recorded separately with its own original and hash.
 /// </summary>
 public class SwappedCopy
 {
@@ -48,9 +46,9 @@ public class SwappedCopy
     public bool ExistedBefore { get; set; } = true;
 
     /// <summary>
-    /// Where this copy's original sits inside the per-game backup store, relative to
-    /// its files directory. Distinct per copy: two directories holding the same
-    /// filename would otherwise back up over each other and lose one original for good.
+    /// Where this copy's original sits in the per-game backup store, relative to its
+    /// files directory. Distinct per copy, or two directories holding the same filename
+    /// would back up over each other.
     /// </summary>
     public string BackupRelative { get; set; } = string.Empty;
 }

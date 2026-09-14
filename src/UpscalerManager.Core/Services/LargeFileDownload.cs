@@ -8,22 +8,13 @@ using System.Threading.Tasks;
 namespace UpscalerManager.Core.Services;
 
 /// <summary>
-/// Streams one large file to disk, for the download routes that fetch whole DLLs.
+/// Streams one large file to disk, for the routes that fetch whole DLLs.
 ///
-/// Shared by the vendor route and the DLSS Swapper archive route because the two
-/// mistakes worth avoiding are the same in both:
-///
-/// <list type="bullet">
-/// <item><see cref="System.Net.Http.HttpClient.Timeout"/> is a deadline on the entire
-/// operation, so the app's usual 30-second client cannot fetch a 60 MB file at all.
-/// The large-file client has no such deadline, which means something else has to end
-/// a dead transfer — hence the idle timeout below, restarted every time bytes
-/// arrive.</item>
-/// <item>A transfer cut off part way leaves a file that still begins with a valid PE
-/// header, so every check downstream passes and a truncated DLL gets installed into a
-/// game. Comparing the bytes written against <c>Content-Length</c> is what catches
-/// it.</item>
-/// </list>
+/// why: HttpClient.Timeout is a deadline on the whole operation, so the app's usual
+/// 30-second client cannot fetch a 60 MB file at all — hence a client with no deadline
+/// and the idle timeout below, restarted whenever bytes arrive. And a transfer cut off
+/// part way still begins with a valid PE header, so every check downstream passes;
+/// comparing the bytes written against Content-Length is what catches that.
 /// </summary>
 internal static class LargeFileDownload
 {

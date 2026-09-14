@@ -48,20 +48,12 @@ public sealed record HarvestableDll(
 /// <summary>
 /// The collection of swappable DLL builds this app can install into a game.
 ///
-/// Two ways in, deliberately, and no third:
+/// Two ways in and no third: harvested from the user's own installed games, or imported
+/// from a file they supply. Nothing is downloaded into it directly — an archived build
+/// is fetched by <see cref="DllRepositoryService"/> and then imported here.
 ///
-/// <list type="bullet">
-/// <item>harvested from the user's own installed games, and</item>
-/// <item>imported from a file the user supplies.</item>
-/// </list>
-///
-/// Nothing is downloaded. DLSS Swapper solves the same problem by self-hosting some
-/// 229 archives on one volunteer's CDN, and its own metadata shows those were scraped
-/// out of shipped games — while the Nvidia licence it redistributes verbatim says the
-/// SDK "may not be distributed or sublicensed as a stand-alone product". Harvesting
-/// sidesteps both the legal question and the single point of failure: a user's own
-/// game files are theirs, are already on the disk, and do not stop existing when
-/// somebody's hosting bill goes unpaid.
+/// why: a user's own game files are theirs, are already on the disk, and do not stop
+/// existing when somebody's hosting bill goes unpaid. See docs/swapping.md.
 /// </summary>
 public sealed class DllLibraryService
 {
