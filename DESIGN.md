@@ -79,6 +79,10 @@ Padding inside a component is listed with the component below.
 - **badge-live** — `accent` text on `surface-2`, radius pill. For "installed" state only.
 - **focus ring** — 1px `accent`, radius matching the control, inset 2px. Replaces
   Avalonia's default adorner, which draws outside the control and cannot be restyled.
+  One exception, and it is the theme's: a focused `ComboBox` is *filled* with the accent.
+  Fluent sets that as a local value on a border inside its own template, which beats
+  every style selector and is not read from any resource key — short of shipping a
+  replacement template, it stays.
 
 ## Writing
 

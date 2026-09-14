@@ -149,6 +149,36 @@
             <Setter Property="Padding"      Value="12,10"/>
         </Style>
 
+        <!-- A disclosure header whose content stays built. An Expander does not realise
+             its content until it is first opened, which is right for a list nobody has
+             asked for and wrong for controls whose state the screen has to read. -->
+        <Style Selector="ToggleButton.Disclosure">
+            <Setter Property="Background"      Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius"    Value="{StaticResource RadiusControl}"/>
+            <Setter Property="Padding"         Value="2,6"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="FontFamily"      Value="{StaticResource FontPrimary}"/>
+            <Setter Property="Foreground"      Value="{StaticResource BrTextPrimary}"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="FocusAdorner">
+                <FocusAdornerTemplate>
+                    <Border BorderBrush="{StaticResource BrAccent}" BorderThickness="1"
+                            CornerRadius="6" Margin="-2"/>
+                </FocusAdornerTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="ToggleButton.Disclosure /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.Disclosure:checked /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.Disclosure:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource BrBgCard}"/>
+        </Style>
+
         <!-- A disclosure, for what only some people want to see. Fluent gives it a
              heavier chrome than a card; this makes it read as one. -->
         <Style Selector="Expander">
@@ -180,7 +210,12 @@
         </Style>
         <Style Selector="ComboBox">
             <Setter Property="CornerRadius" Value="{StaticResource RadiusControl}"/>
+            <Setter Property="Background"  Value="{StaticResource BrBgElevated}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrBorderDefault}"/>
         </Style>
+        <!-- why: a focused ComboBox is filled with the accent rather than ringed with
+             it. Fluent's template sets that fill as a local value on its own highlight
+             border, which no selector or resource override reaches — see DESIGN.md. -->
 
         <Style Selector="TextBox">
             <Setter Property="FontFamily"      Value="{StaticResource FontPrimary}"/>

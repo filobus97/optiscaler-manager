@@ -18,6 +18,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 
 namespace UpscalerManager.Core.Components;
@@ -35,18 +36,6 @@ public static class ComponentRegistry
 {
     /// <summary>Default OptiScaler injection DLL (matches the installer default).</summary>
     public const string DefaultInjectionDll = "dxgi.dll";
-
-    /// <summary>
-    /// The OptiScaler.ini keys that "engage FSR 4" on non-RDNA4 GPUs, applied by
-    /// the Manager's one-click flow exactly as the ported installer does
-    /// (<c>[FSR] UpscalerIndex = 0</c> on current builds, <c>Fsr4Update = true</c>
-    /// on older 0.7.x builds; unknown keys are ignored by OptiScaler's parser).
-    /// </summary>
-    public static readonly IReadOnlyList<IniKeyChange> Fsr4EnableKeys = new[]
-    {
-        new IniKeyChange("FSR", "Fsr4Update", "true"),
-        new IniKeyChange("Upscalers", "Dx12Upscaler", "ffx / fsr31 (to match this release)"),
-    };
 
     private static readonly IReadOnlyList<ComponentDefinition> _definitions = BuildDefinitions();
 
@@ -149,11 +138,11 @@ public static class ComponentRegistry
     /// flow, under the decoupled model:
     /// <list type="bullet">
     /// <item>Files come from the chosen backend component(s).</item>
-    /// <item>The Manager writes ONLY the keys it is responsible for — <c>[FSR] Fsr4Update</c>
-    /// (always, to make FSR 4 available), <c>[FSR] UpscalerIndex</c> (<c>0</c> when the user
-    /// asks the Manager to select FSR 4, else <c>auto</c> to select it in-game), and
-    /// <c>[Menu] ShortcutKey</c> when a menu key is configured. Every other key comes from
-    /// the chosen OptiScaler.ini (default or custom) and is left untouched.</item>
+    /// <item>The Manager writes ONLY the keys it is responsible for — <c>[Upscalers]</c> for
+    /// each API, <c>[FSR] UpscalerIndex</c> when the FidelityFX family is chosen,
+    /// <c>[Menu] ShortcutKey</c> when a menu key is configured, and the add-on keys each
+    /// selected add-on needs. Every other key comes from the chosen OptiScaler.ini
+    /// (default or custom) and is left untouched.</item>
     /// </list>
     /// </summary>
     /// <param name="backend">The backend/DLL set to install.</param>
@@ -193,11 +182,18 @@ public static class ComponentRegistry
             : modern;
     }
 
+    /// <param name="legacyFsr4UpdateKey">
+    /// True when the release being installed still documents <c>[FSR] Fsr4Update</c>.
+    /// Current OptiScaler does not have the key at all, and the install only writes it
+    /// where the release's own ini has it — so previewing it unconditionally promised a
+    /// line that would not be written.
+    /// </param>
     public static InstallPreview BuildInstallPreview(
         Fsr4Backend backend, UpscalerSelection selection, string? injectionDll = null, string? menuKeyVk = null,
         IReadOnlyList<string>? customDlls = null,
         bool addFakenvapi = false, bool addNukemFg = false,
-        SpoofMethod? spoofMethod = null, bool forceInt8 = false, bool fsr4Watermark = false)
+        SpoofMethod? spoofMethod = null, bool forceInt8 = false, bool fsr4Watermark = false,
+        bool legacyFsr4UpdateKey = false)
     {
         var ids = new List<string> { ComponentIds.OptiScaler };
         ids.AddRange(ComponentIdsFor(backend));
@@ -226,17 +222,24 @@ public static class ComponentRegistry
             preview = preview with { Files = files };
         }
 
-        // The forced keys are the ONLY ini keys the Manager writes.
-        var iniKeys = new List<IniKeyChange>
-        {
-            new IniKeyChange("FSR", "Fsr4Update", "true"),
-            // The exact code depends on the OptiScaler release (newer ones renamed
-            // "fsr31" to "ffx"), so it is read from the ini that ships with it.
-            new IniKeyChange("Upscalers", "Dx12Upscaler", DescribeCode(selection, UpscalerApi.Dx12)),
-            new IniKeyChange("Upscalers", "Dx11Upscaler", DescribeCode(selection, UpscalerApi.Dx11)),
-            new IniKeyChange("Upscalers", "VulkanUpscaler", DescribeCode(selection, UpscalerApi.Vulkan)),
-            new IniKeyChange("FSR", "UpscalerIndex", "auto"),
-        };
+        // The forced keys are the ONLY ini keys the Manager writes, and this list has to
+        // match what the install really does — the screen's whole claim is that nothing
+        // happens until you confirm and that this is what will happen.
+        var iniKeys = new List<IniKeyChange>();
+        if (legacyFsr4UpdateKey) iniKeys.Add(new IniKeyChange("FSR", "Fsr4Update", "true"));
+
+        // The exact code depends on the OptiScaler release (newer ones renamed "fsr31"
+        // to "ffx"), so it is read from the ini that ships with it.
+        iniKeys.Add(new IniKeyChange("Upscalers", "Dx12Upscaler", DescribeCode(selection, UpscalerApi.Dx12)));
+        iniKeys.Add(new IniKeyChange("Upscalers", "Dx11Upscaler", DescribeCode(selection, UpscalerApi.Dx11)));
+        iniKeys.Add(new IniKeyChange("Upscalers", "VulkanUpscaler", DescribeCode(selection, UpscalerApi.Vulkan)));
+
+        // Only the FidelityFX family has providers to index, and that is the only case
+        // the install writes it in.
+        if (selection.IsFidelityFx && selection.FfxProviderIndex is { } index and >= 0)
+            iniKeys.Add(new IniKeyChange("FSR", "UpscalerIndex",
+                index == 0 ? "0  (the newest the module offers)" : index.ToString(CultureInfo.InvariantCulture)));
+
         if (forceInt8)
             iniKeys.Add(new IniKeyChange("FSR", "Fsr4ForceEnableInt8", "true"));
         if (fsr4Watermark)
@@ -278,7 +281,6 @@ public static class ComponentRegistry
             TargetFiles = Fsr4Int8Build.KnownDllNames,
             IniKeys = new[]
             {
-                new IniKeyChange("FSR", "Fsr4Update", "true"),
                 new IniKeyChange("Upscalers", "Dx12Upscaler", "ffx / fsr31 (to match this release)"),
             },
             Requires = new[] { ComponentIds.OptiScaler },
@@ -301,7 +303,6 @@ public static class ComponentRegistry
             },
             IniKeys = new[]
             {
-                new IniKeyChange("FSR", "Fsr4Update", "true"),
                 new IniKeyChange("Upscalers", "Dx12Upscaler", "ffx / fsr31 (to match this release)"),
             },
             Requires = new[] { ComponentIds.OptiScaler },

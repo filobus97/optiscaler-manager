@@ -180,7 +180,8 @@ public sealed class ManagerService
     /// FSR 4 INT8 build has no FSR 4 in it yet, so the picker offered 3.1.2 and older
     /// and FSR 4 looked unavailable at exactly the moment it was being installed.
     /// </summary>
-    public FfxVersionOptions FidelityFxVersionOptions(Game game, Fsr4Backend backend, string? int8Version)
+    public FfxVersionOptions FidelityFxVersionOptions(
+        Game game, Fsr4Backend backend, string? int8Version, string? optiscalerVersion = null)
     {
         var fromGame = FidelityFxProviderScanner.FromDirectory(game.InstallPath);
         FfxProviders? fromInstall = null;
@@ -210,8 +211,7 @@ public sealed class ManagerService
                 break;
 
             default:
-                fromInstall = FidelityFxProviderScanner.FromDirectory(
-                    _components.GetOptiScalerCachePath(_components.OptiScalerVersion ?? "latest"));
+                fromInstall = FidelityFxProviderScanner.FromDirectory(ReleaseCache(optiscalerVersion));
                 label = "the OptiScaler release being installed";
                 break;
         }
@@ -481,10 +481,24 @@ public sealed class ManagerService
     /// </summary>
     public InstallPreview BuildInstallPreview(Game game, Fsr4Backend backend, UpscalerSelection selection,
         bool addFakenvapi = false, bool addNukemFg = false,
-        SpoofMethod? spoofMethod = null, bool forceInt8 = false, bool fsr4Watermark = false)
+        SpoofMethod? spoofMethod = null, bool forceInt8 = false, bool fsr4Watermark = false,
+        string? optiscalerVersion = null)
         => ComponentRegistry.BuildInstallPreview(backend, selection, ComponentRegistry.DefaultInjectionDll, MenuShortcutKey,
             backend == Fsr4Backend.CustomMerged ? _components.GetCustomDlls().Select(d => d.Name).ToList() : null,
-            addFakenvapi, addNukemFg, spoofMethod, forceInt8, fsr4Watermark);
+            addFakenvapi, addNukemFg, spoofMethod, forceInt8, fsr4Watermark,
+            legacyFsr4UpdateKey: GameInstallationService.IniDocumentsKey(
+                ReleaseCache(optiscalerVersion), "FSR", "Fsr4Update"));
+
+    /// <summary>
+    /// The downloaded release a preview should read: the version the user picked, or
+    /// whatever would be installed if they picked nothing.
+    /// </summary>
+    private string ReleaseCache(string? optiscalerVersion) =>
+        _components.GetOptiScalerCachePath(
+            optiscalerVersion
+            ?? _components.LatestStableVersion
+            ?? _components.OptiScalerVersion
+            ?? "latest");
 
     // ── OptiScaler version list ─────────────────────────────────────────────
     /// <summary>

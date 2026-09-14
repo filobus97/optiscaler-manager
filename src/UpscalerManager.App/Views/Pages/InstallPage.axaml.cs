@@ -3,6 +3,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -57,9 +58,9 @@ public partial class InstallPage : UserControl, IHostedPage
     public string TitleFor { get; set; } = string.Empty;
     public Action<bool>? RequestClose { get; set; }
 
-    /// <summary>Starts on the recommended backend.</summary>
+    /// <summary>Starts on the first of the two decisions this screen really asks.</summary>
     public void FocusFirst() =>
-        this.FindControl<RadioButton>("RbDefault")?.Focus(NavigationMethod.Directional);
+        this.FindControl<ComboBox>("OptiScalerVersionCombo")?.Focus(NavigationMethod.Directional);
 
     public InstallPage(ManagerService manager, Game game) : this()
     {
@@ -80,6 +81,15 @@ public partial class InstallPage : UserControl, IHostedPage
             OnInt8CheckedChanged(this, new RoutedEventArgs());
     }
 
+    /// <summary>Shows or hides the advanced options, and turns the chevron over.</summary>
+    private void OnAdvancedToggled(object? sender, RoutedEventArgs e)
+    {
+        var open = this.FindControl<ToggleButton>("AdvancedToggle")?.IsChecked == true;
+        if (this.FindControl<Border>("AdvancedPanel") is { } panel) panel.IsVisible = open;
+        if (this.FindControl<TextBlock>("AdvancedChevron") is { } chevron)
+            chevron.Text = open ? "\u2303" : "\u2304";
+    }
+
     private void SetupBackendOptions()
     {
         var int8 = this.FindControl<RadioButton>("RbInt8")!;
@@ -89,8 +99,8 @@ public partial class InstallPage : UserControl, IHostedPage
         customMerged.IsEnabled = _manager.HasCustomDlls;
         if (!customMerged.IsEnabled) customMerged.Content = "Custom DLLs — none imported (Settings)";
 
-        // Pre-select Default: OptiScaler's own release already bundles a working
-        // FSR 4.x upscaler, so the zero-decision path delivers FSR 4 out of the box.
+        // Pre-selected, and under Advanced: OptiScaler's own release already bundles a
+        // working FSR 4.x upscaler, so the zero-decision path delivers FSR 4 as it is.
         def.IsChecked = true;
 
         int8.IsCheckedChanged += OnInt8CheckedChanged;
@@ -295,12 +305,13 @@ public partial class InstallPage : UserControl, IHostedPage
     {
         var backend = CurrentBackend();
         var int8 = CurrentInt8Version();
-        var signature = $"{backend}|{int8}";
+        var release = CurrentOptiScalerVersion();
+        var signature = $"{backend}|{int8}|{release}";
         if (signature == _ffxVersionSource) return;
         _ffxVersionSource = signature;
 
         var combo = this.FindControl<ComboBox>("FfxVersionCombo")!;
-        var options = _manager.FidelityFxVersionOptions(_game, backend, int8);
+        var options = _manager.FidelityFxVersionOptions(_game, backend, int8, release);
 
         combo.Items.Clear();
 
@@ -323,9 +334,8 @@ public partial class InstallPage : UserControl, IHostedPage
 
         var note = this.FindControl<TextBlock>("FfxVersionNoteText")!;
         note.Text = options.Versions.Count > 1
-            ? $"{options.Explanation} Anything other than \u201cnewest\u201d is a request, not a "
-              + "guarantee: AMD builds that list at run time and drops providers your GPU cannot "
-              + "run, so a specific version can move. OptiScaler's overlay shows what is in use."
+            ? $"{options.Explanation} Anything but \u201cnewest\u201d is a request: AMD builds the "
+              + "list at run time and drops providers your GPU cannot run."
             : options.Explanation;
     }
 
@@ -336,7 +346,8 @@ public partial class InstallPage : UserControl, IHostedPage
         var choice = selection.Choice;
 
         RefreshFfxVersionPicker();
-        this.FindControl<StackPanel>("FfxVersionRow")!.IsVisible = selection.IsFidelityFx;
+        this.FindControl<TextBlock>("FfxVersionLabel")!.IsVisible = selection.IsFidelityFx;
+        this.FindControl<ComboBox>("FfxVersionCombo")!.IsVisible = selection.IsFidelityFx;
         this.FindControl<TextBlock>("FfxVersionNoteText")!.IsVisible = selection.IsFidelityFx;
         this.FindControl<TextBlock>("UpscalerNoteText")!.Text = choice.Note;
     }
@@ -366,7 +377,8 @@ public partial class InstallPage : UserControl, IHostedPage
         var preview = _manager.BuildInstallPreview(_game, CurrentBackend(), CurrentUpscaler(),
             addFakenvapi: IsChecked("ChkFakenvapi"), addNukemFg: IsChecked("ChkNukemFg"),
             spoofMethod: CurrentSpoofMethod(), forceInt8: IsChecked("ChkForceInt8"),
-            fsr4Watermark: IsChecked("ChkWatermark"));
+            fsr4Watermark: IsChecked("ChkWatermark"),
+            optiscalerVersion: CurrentOptiScalerVersion());
 
         var files = this.FindControl<StackPanel>("FilesList")!;
         var ini = this.FindControl<StackPanel>("IniList")!;

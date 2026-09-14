@@ -44,7 +44,6 @@ namespace UpscalerManager.Core.Tests
             Assert.DoesNotContain("{injection}", preview.Files);
 
             Assert.Contains(preview.IniKeys, k => k.Section == "Upscalers" && k.Key == "Dx12Upscaler");
-            Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "Fsr4Update" && k.Value == "true");
             Assert.Empty(preview.Conflicts);
         }
 
@@ -97,8 +96,8 @@ namespace UpscalerManager.Core.Tests
             Assert.Contains("dxgi.dll", preview.Files);
             Assert.DoesNotContain("amd_fidelityfx_upscaler_dx12.dll", preview.Files);
             Assert.DoesNotContain("amdxcffx64.dll", preview.Files);
-            // Availability flags are forced regardless of backend.
-            Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "Fsr4Update" && k.Value == "true");
+            // The upscaler is selected regardless of backend — without it the DX12
+            // default is XeSS and none of the FSR keys are read.
             Assert.Contains(preview.IniKeys, k => k.Section == "Upscalers" && k.Key == "Dx12Upscaler");
         }
 
@@ -118,12 +117,20 @@ namespace UpscalerManager.Core.Tests
         }
 
         [Fact]
-        public void InstallPreview_Fsr4UpdateAlwaysForced()
+        public void InstallPreview_OnlyPromisesTheLegacyKeyWhereTheReleaseHasIt()
         {
+            // [FSR] Fsr4Update is gone from current OptiScaler — no reference anywhere in
+            // its source — and the install only writes it where the release's own ini
+            // documents it. Previewing it regardless promised a line that would never be
+            // written, on a screen whose whole claim is that it shows exactly what will.
             foreach (var b in new[] { Fsr4Backend.Default, Fsr4Backend.Int8Community, Fsr4Backend.CustomMerged })
             {
-                var p = ComponentRegistry.BuildInstallPreview(b, selection: UpscalerSelection.Auto);
-                Assert.Contains(p.IniKeys, k => k.Section == "FSR" && k.Key == "Fsr4Update" && k.Value == "true");
+                var current = ComponentRegistry.BuildInstallPreview(b, selection: UpscalerSelection.Auto);
+                Assert.DoesNotContain(current.IniKeys, k => k.Key == "Fsr4Update");
+
+                var older = ComponentRegistry.BuildInstallPreview(
+                    b, selection: UpscalerSelection.Auto, legacyFsr4UpdateKey: true);
+                Assert.Contains(older.IniKeys, k => k.Section == "FSR" && k.Key == "Fsr4Update" && k.Value == "true");
             }
         }
 
@@ -141,11 +148,20 @@ namespace UpscalerManager.Core.Tests
             var dx12 = Assert.Single(preview.IniKeys, k => k.Section == "Upscalers" && k.Key == "Dx12Upscaler");
 
             if (select)
+            {
                 Assert.DoesNotContain("auto", dx12.Value);
+                // The index is what picks the FSR provider, and 0 is the newest the
+                // module offers. The preview shows the number that will be written.
+                var index = Assert.Single(preview.IniKeys, k => k.Section == "FSR" && k.Key == "UpscalerIndex");
+                Assert.StartsWith("0", index.Value);
+            }
             else
+            {
                 Assert.Equal("auto", dx12.Value);
-
-            Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "UpscalerIndex" && k.Value == "auto");
+                // Nothing to index: the install writes UpscalerIndex for the FidelityFX
+                // family and for nothing else, so neither does the preview.
+                Assert.DoesNotContain(preview.IniKeys, k => k.Key == "UpscalerIndex");
+            }
         }
 
         [Fact]
