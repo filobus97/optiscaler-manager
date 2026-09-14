@@ -86,9 +86,6 @@ public sealed class MainViewModel : ViewModelBase
     }
     public bool IsIdle => !_isBusy;
 
-    private string _importSummary = "No custom FSR components imported yet.";
-    public string ImportSummary { get => _importSummary; set => SetField(ref _importSummary, value); }
-
     private bool _hasNoGames;
     public bool HasNoGames { get => _hasNoGames; set => SetField(ref _hasNoGames, value); }
 }

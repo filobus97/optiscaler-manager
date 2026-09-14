@@ -144,7 +144,7 @@ public class StorageInventoryTests
             i => i.Group == "Cover images");
 
         Assert.Equal(StorageTier.Downloaded, item.Tier);
-        Assert.Equal("2 cover(s)", item.Label);
+        Assert.Equal("2 covers", item.Label);
         Assert.Equal(75000, item.Bytes);
         Assert.True(item.CanDelete);
     }

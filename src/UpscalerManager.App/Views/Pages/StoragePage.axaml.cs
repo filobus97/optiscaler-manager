@@ -61,13 +61,13 @@ public partial class StoragePage : UserControl, IHostedPage
     private static readonly (StorageTier Tier, string Heading, string Blurb)[] Sections =
     {
         (StorageTier.SpentBackup, "Backups no longer in use",
-            "The games these belong to have been reverted or are no longer on this machine. Nothing depends on them."),
+            "Nothing depends on these: their games have been reverted, or are gone."),
         (StorageTier.Downloaded, "Downloaded components",
-            "Fetched automatically and normally downloadable again — but releases do get withdrawn upstream, especially betas and nightlies, so a version removed here may not come back."),
+            "Normally downloadable again — though a withdrawn release, especially a beta, may not come back."),
         (StorageTier.UserImport, "Files you imported",
-            "These came from you, and this is the only copy. Removing one is permanent unless you have your own backup of it elsewhere."),
+            "These came from you, and this is the only copy."),
         (StorageTier.LiveBackup, "Backups in use",
-            "The original files of games that still have OptiScaler installed. Revert restores from here and has nowhere else to look, so these cannot be removed — revert the game first and it will move to the section above."),
+            "Revert restores from here and has nowhere else to look. Revert a game and its backup moves up a section."),
     };
 
     private void Refresh()

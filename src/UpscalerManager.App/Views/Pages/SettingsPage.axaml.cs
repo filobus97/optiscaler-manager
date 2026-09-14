@@ -3,6 +3,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -33,6 +34,7 @@ public partial class SettingsPage : UserControl, IHostedPage
     {
         if (ShowPage is null) return;
         await ShowPage(new StoragePage(_manager, RevertGame));
+        RefreshStorageTotal();
     }
 
     /// <summary>
@@ -78,25 +80,10 @@ public partial class SettingsPage : UserControl, IHostedPage
         }
     }
 
-    /// <summary>Raised when a setting changes that the game grid has to react to.</summary>
-    public Action? GameListSettingChanged { get; set; }
-
-    private void WireGameListSettings()
-    {
-        if (this.FindControl<CheckBox>("ChkHideNoUpscaler") is not { } hide) return;
-
-        hide.IsChecked = _manager.HideGamesWithoutUpscaler;
-        hide.IsCheckedChanged += (_, _) =>
-        {
-            _manager.HideGamesWithoutUpscaler = hide.IsChecked == true;
-            GameListSettingChanged?.Invoke();
-        };
-    }
-
     /// <summary>
-    /// The two swap download sources that are not the vendor's own path. Both default
-    /// on; the point of the switches is that a user who would rather only install files
-    /// already on their own disk can have exactly that.
+    /// The one download source that is not already on the user's disk. On by default;
+    /// the point of the switch is that someone who would rather install only files they
+    /// already have can have exactly that.
     /// </summary>
     private void SetupSwapSourcesCard()
     {
@@ -165,13 +152,44 @@ public partial class SettingsPage : UserControl, IHostedPage
         _manager = manager;
         SetupMenuKey();
         SetupGamepadCard();
-        WireGameListSettings();
         SetupSwapSourcesCard();
         SetupAboutCard();
         RefreshNukemStatus();
         if (_manager.IsNukemFgCached) RefreshNukemUpdateStatusAsync(); // async: flag a newer Nukem release
         RefreshInventory();
         RefreshIniProfiles();
+        RefreshStorageTotal();
+    }
+
+    /// <summary>Shows or hides the import section, and turns the chevron over.</summary>
+    private void OnOwnFilesToggled(object? sender, RoutedEventArgs e)
+    {
+        var open = this.FindControl<ToggleButton>("OwnFilesToggle")?.IsChecked == true;
+        if (this.FindControl<Border>("OwnFilesPanel") is { } panel) panel.IsVisible = open;
+        if (this.FindControl<TextBlock>("OwnFilesChevron") is { } chevron)
+            chevron.Text = open ? "\u2303" : "\u2304";
+    }
+
+    /// <summary>
+    /// How much is on disk, as one line. The page behind the button breaks it down; the
+    /// number is what decides whether anybody wants to look.
+    /// </summary>
+    private void RefreshStorageTotal()
+    {
+        if (this.FindControl<TextBlock>("StorageTotalText") is not { } line) return;
+
+        try
+        {
+            var bytes = _manager.ScanStorage().Sum(i => i.Bytes);
+            line.Text = bytes > 0
+                ? $"{UpscalerManager.Core.Services.StorageInventoryService.FormatSize(bytes)} kept"
+                : "Nothing kept yet";
+        }
+        catch (Exception ex)
+        {
+            line.Text = "Could not be read";
+            UpscalerManager.Core.Logging.Log.Write($"[Storage] Could not total the store: {ex.Message}");
+        }
     }
 
     private void SetupGamepadCard()
@@ -281,6 +299,7 @@ public partial class SettingsPage : UserControl, IHostedPage
     {
         var result = this.FindControl<TextBlock>("AppUpdateResultText");
         if (result is null) return;
+        result.IsVisible = true;
         result.Text = "Checking…";
         var check = await _manager.CheckForAppUpdateAsync();
         result.Text = check.LatestVersion is null
@@ -298,7 +317,9 @@ public partial class SettingsPage : UserControl, IHostedPage
         => await SelfUpdateLauncher.StartAsync(_manager, msg =>
         {
             var result = this.FindControl<TextBlock>("AppUpdateResultText");
-            if (result is not null) result.Text = msg;
+            if (result is null) return;
+            result.IsVisible = true;
+            result.Text = msg;
         });
 
     private void SetupMenuKey()

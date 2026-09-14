@@ -128,7 +128,7 @@ public sealed class StorageInventoryService
 
         // One row for the lot: individual covers are meaningless to pick between.
         yield return new StorageItem(StorageTier.Downloaded, "Cover images",
-            $"{files.Length} cover(s)", dir, bytes,
+            files.Length == 1 ? "1 cover" : $"{files.Length} covers", dir, bytes,
             "Re-downloaded automatically when a game is next scanned.");
     }
 

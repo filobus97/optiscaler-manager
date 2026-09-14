@@ -44,10 +44,17 @@ public partial class MainWindow : Window
         Opened += async (_, _) => await InitializeAsync();
     }
 
+    /// <summary>False until the saved state is on the controls, so applying it does not read as a change.</summary>
+    private bool _ready;
+
     private async Task InitializeAsync()
     {
         DetectGpu();
-        RefreshImportSummary();
+
+        if (this.FindControl<CheckBox>("ChkHideNoUpscaler") is { } hide)
+            hide.IsChecked = _manager.HideGamesWithoutUpscaler;
+        _ready = true;
+
         if (!Program.RelaunchedAfterUpdate)
             _ = CheckForAppUpdateAsync(); // fire-and-forget; silent unless a newer release exists
         await RescanAsync();
@@ -122,21 +129,20 @@ public partial class MainWindow : Window
         };
     }
 
+    /// <summary>The filter on the library toolbar. Saved as it is toggled.</summary>
+    private void OnHideNoUpscalerChanged(object? sender, RoutedEventArgs e)
+    {
+        if (!_ready || sender is not CheckBox box) return;
+
+        _manager.HideGamesWithoutUpscaler = box.IsChecked == true;
+        _vm.HideGamesWithoutUpscaler = box.IsChecked == true;
+        _vm.RefreshVisibleGames();
+    }
+
     private static string Count(int games) => games == 1 ? "1 game" : $"{games} games";
 
     private static IBrush Brush(string key) =>
         Application.Current?.FindResource(key) as IBrush ?? Brushes.Gray;
-
-    private void RefreshImportSummary()
-    {
-        var parts = new System.Collections.Generic.List<string>();
-        var customs = _manager.GetCustomDlls();
-        parts.Add(customs.Count > 0 ? $"Custom DLLs: {customs.Count}" : "Custom DLLs: none");
-        var iniCount = _manager.GetIniProfiles().Count(p => !p.IsBuiltIn);
-        parts.Add(iniCount > 0 ? $"OptiScaler.ini profiles: {iniCount}" : "OptiScaler.ini profiles: none");
-        parts.Add(_manager.IsNukemFgCached ? "Nukem FG: imported" : "Nukem FG: not imported");
-        _vm.ImportSummary = "Imported — " + string.Join("  •  ", parts) + ".";
-    }
 
     private async Task RescanAsync()
     {
@@ -194,15 +200,7 @@ public partial class MainWindow : Window
         {
             ShowPage = ShowPageAsync,
             RevertGame = RevertGameAtAsync,
-            // Applied while Settings is still open, so the grid is already right when
-            // the user comes back rather than needing another scan.
-            GameListSettingChanged = () =>
-            {
-                _vm.HideGamesWithoutUpscaler = _manager.HideGamesWithoutUpscaler;
-                _vm.RefreshVisibleGames();
-            },
         });
-        RefreshImportSummary();
     }
 
     private async void OnDetailsClick(object? sender, RoutedEventArgs e)

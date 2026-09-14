@@ -6,10 +6,11 @@
   <Grid RowDefinitions="Auto,*,Auto">
 
     <StackPanel Grid.Row="0" Spacing="4">
-      <TextBlock TextWrapping="Wrap" Foreground="{StaticResource BrTextSecondary}"
- Text="Everything this app has written to disk. Nothing here is removed automatically — every version you have ever installed is kept — so this is where you reclaim the space."/>
       <TextBlock Name="TotalText" FontWeight="SemiBold"
  Foreground="{StaticResource BrTextPrimary}"/>
+      <TextBlock Text="Nothing here is removed automatically."
+ FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
     </StackPanel>
 
     <ScrollViewer Grid.Row="1" Margin="0,14,0,0">
