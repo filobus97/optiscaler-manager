@@ -265,8 +265,9 @@ public partial class InstallPage : UserControl, IHostedPage
             SpoofMethod.Auto =>
                 "Writes Dxgi=auto. " + DefaultSpoofReads(),
             SpoofMethod.OptiPatcher =>
-                "Patches the game's vendor checks in memory instead, and leaves Dxgi at "
-                + "auto — OptiScaler turns spoofing off itself once the patch lands.",
+                "Patches the game's vendor checks in memory and leaves Dxgi at auto, which "
+                + "OptiScaler turns off itself once the patch lands. Only games on "
+                + "OptiPatcher's list can be patched — the overlay title shows (OP) when it worked.",
             _ => "Writes Dxgi=false. Turn it on only if this game's DLSS option is hidden "
                 + "— a game that offers FSR or XeSS needs no lie, and some crash with one.",
         };

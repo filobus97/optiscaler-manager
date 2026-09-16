@@ -555,17 +555,63 @@ namespace UpscalerManager.Core.Services
         /// Validates that an archive entry path stays inside <paramref name="destinationDir"/>
         /// (path traversal prevention). Returns the safe full destination path.
         /// </summary>
-        private static string SafeDestinationPath(string destinationDir, string entryPath)
+        internal static string SafeDestinationPath(string destinationDir, string entryPath)
         {
             if (string.IsNullOrEmpty(entryPath))
                 throw new InvalidOperationException("Archive entry has an empty path.");
-            var fullDest = Path.GetFullPath(Path.Combine(destinationDir, entryPath));
+
+            // why: these archives are built on Windows, and SharpCompress hands back the
+            // separator the archive stored. On Linux a backslash is an ordinary filename
+            // character, so "OptiScaler\OptiScaler.dll" extracted as ONE top-level file
+            // with a backslash in its name instead of a nested folder — which is why the
+            // first release to ship an OptiScaler subfolder would not install at all.
+            // Leading separators go too: Path.Combine discards the destination when the
+            // second part is rooted.
+            var relative = entryPath.Replace('\\', '/').TrimStart('/');
+            if (relative.Length == 0)
+                throw new InvalidOperationException($"Archive entry '{entryPath}' has no file name.");
+
+            var fullDest = Path.GetFullPath(Path.Combine(destinationDir, relative));
             var root = Path.GetFullPath(destinationDir);
             if (!fullDest.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(fullDest, root, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException(
                     $"Archive entry '{entryPath}' would extract outside destination directory.");
             return fullDest;
+        }
+
+        /// <summary>
+        /// An archive entry's own file name, without the folders above it.
+        /// </summary>
+        /// <remarks>
+        /// why: entry keys keep the separator the archive was built with, and these
+        /// archives are built on Windows. Path.GetFileName leaves a backslash alone on
+        /// Linux, so "Kits/FidelityFX\amd_fidelityfx_dx12.dll" came back whole and every
+        /// name test against it failed — silently, as "nothing in the archive matched".
+        /// </remarks>
+        internal static string ArchiveEntryName(string? key)
+            => Path.GetFileName((key ?? string.Empty).Replace('\\', '/'));
+
+        /// <summary>
+        /// Unpacks every file in an archive under <paramref name="destination"/>, keeping
+        /// the folders inside it, and returns how many files were written.
+        /// </summary>
+        internal static int ExtractArchive(string archivePath, string destination)
+        {
+            var written = 0;
+            using var archive = ArchiveFactory.Open(archivePath);
+            foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
+            {
+                var destPath = SafeDestinationPath(destination, entry.Key ?? string.Empty);
+                var destDir = Path.GetDirectoryName(destPath);
+                if (destDir != null && !Directory.Exists(destDir))
+                    Directory.CreateDirectory(destDir);
+                using var entryStream = entry.OpenEntryStream();
+                using var fileStream = File.Create(destPath);
+                entryStream.CopyTo(fileStream, 81920);
+                written++;
+            }
+            return written;
         }
 
         /// <summary>
@@ -1158,7 +1204,7 @@ namespace UpscalerManager.Core.Services
                     using var archive = SharpCompress.Archives.ArchiveFactory.Open(tempZip);
                     foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
                     {
-                        var name = Path.GetFileName(entry.Key ?? "");
+                        var name = ArchiveEntryName(entry.Key);
                         if (!Components.SwappableDlls.IsSwappable(name)) continue;
 
                         var dest = SafeDestinationPath(extractDir, name);
@@ -1395,20 +1441,7 @@ namespace UpscalerManager.Core.Services
                     Directory.Delete(cacheDir, true);
                 Directory.CreateDirectory(cacheDir);
 
-                await Task.Run(() =>
-                {
-                    using var archive = ArchiveFactory.Open(tempFile);
-                    foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
-                    {
-                        var destPath = SafeDestinationPath(cacheDir, entry.Key ?? string.Empty);
-                        var destDir = Path.GetDirectoryName(destPath);
-                        if (destDir != null && !Directory.Exists(destDir))
-                            Directory.CreateDirectory(destDir);
-                        using var entryStream = entry.OpenEntryStream();
-                        using var fileStream = File.Create(destPath);
-                        entryStream.CopyTo(fileStream, 81920);
-                    }
-                });
+                await Task.Run(() => ExtractArchive(tempFile, cacheDir));
 
                 Log.Write($"[FakenvapiDownload] Extracted v{version} to {cacheDir}");
             }
@@ -1556,7 +1589,13 @@ namespace UpscalerManager.Core.Services
             var cacheDir = GetOptiPatcherCachePath(version);
             var asiPath  = Path.Combine(cacheDir, "OptiPatcher.asi");
 
-            if (File.Exists(asiPath))
+            // A version tag names one immutable build, so the cache stands. "rolling" is
+            // the one tag OptiPatcher rebuilds in place on every push — and its patches
+            // are cut against current game builds, so serving a months-old copy from the
+            // cache would silently patch nothing.
+            var mutableTag = version.Equals("rolling", StringComparison.OrdinalIgnoreCase);
+
+            if (File.Exists(asiPath) && !mutableTag)
             {
                 Log.Write($"[OptiPatcherDownload] OptiPatcher v{version} already cached at {asiPath}");
                 return asiPath;
@@ -1597,10 +1636,21 @@ namespace UpscalerManager.Core.Services
                 throw new Exception("Version cannot be empty");
 
             var extractPath = GetOptiScalerCachePath(version);
-            if (Directory.Exists(extractPath) && Directory.GetFiles(extractPath).Length > 0)
+            if (Directory.Exists(extractPath))
             {
-                Log.Write($"[Download] OptiScaler v{version} already cached at {extractPath}");
-                return extractPath; // Already downloaded
+                // The same test the callers use, so the two cannot disagree. They did:
+                // "any file at the top level" counted as cached here while the caller
+                // still saw no OptiScaler.dll, so a bad cache was neither used nor
+                // replaced and every install failed until it was cleared by hand.
+                if (OptiScalerCacheHasMainDll(extractPath))
+                {
+                    Log.Write($"[Download] OptiScaler v{version} already cached at {extractPath}");
+                    return extractPath;
+                }
+
+                Log.Write($"[Download] Cached OptiScaler v{version} has no main DLL — discarding it and downloading again");
+                try { Directory.Delete(extractPath, true); }
+                catch (Exception ex) { Log.Write($"[Download] Could not clear the bad cache: {ex.Message}"); }
             }
 
             lock (_downloadLock)
@@ -1740,22 +1790,7 @@ namespace UpscalerManager.Core.Services
                     var extractStartTime = DateTime.Now;
                     var fileCount = 0;
 
-                    await Task.Run(() =>
-                    {
-                        using var archive = ArchiveFactory.Open(tempZip);
-                        var entries = archive.Entries.Where(e => !e.IsDirectory).ToList();
-                        foreach (var entry in entries)
-                        {
-                            var destPath = SafeDestinationPath(extractPath, entry.Key ?? string.Empty);
-                            var destDir = Path.GetDirectoryName(destPath);
-                            if (destDir != null && !Directory.Exists(destDir))
-                                Directory.CreateDirectory(destDir);
-                            using var entryStream = entry.OpenEntryStream();
-                            using var fileStream = File.Create(destPath);
-                            entryStream.CopyTo(fileStream, 81920);
-                            fileCount++;
-                        }
-                    });
+                    fileCount = await Task.Run(() => ExtractArchive(tempZip, extractPath));
 
                     var extractDuration = DateTime.Now - extractStartTime;
                     Log.Write($"[Extract] Extraction completed: {fileCount} files in {extractDuration.TotalSeconds:F1}s");
@@ -2088,7 +2123,8 @@ namespace UpscalerManager.Core.Services
                             foreach (var entry in archive.Entries.Where(e => !e.IsDirectory
                                 && (e.Key ?? "").EndsWith(".dll", StringComparison.OrdinalIgnoreCase)))
                             {
-                                var name = Path.GetFileName(entry.Key ?? $"entry{i}.dll");
+                                var name = ArchiveEntryName(entry.Key);
+                                if (name.Length == 0) name = $"entry{i}.dll";
                                 // Index-prefixed on disk to avoid staging collisions; the
                                 // candidate is keyed by the clean dll name.
                                 var stagePath = Path.Combine(staging, $"{i++}_{name}");
@@ -2293,7 +2329,7 @@ namespace UpscalerManager.Core.Services
                     {
                         foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
                         {
-                            var entryName = Path.GetFileName(entry.Key ?? "");
+                            var entryName = ArchiveEntryName(entry.Key);
                             if (!FsrSdkDllNames.Contains(entryName, StringComparer.OrdinalIgnoreCase)) continue;
 
                             // Preserve the entry's relative path (flattened safely) so

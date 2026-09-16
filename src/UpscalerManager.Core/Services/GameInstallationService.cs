@@ -38,7 +38,7 @@ namespace UpscalerManager.Core.Services
             // OptiScaler core
             "OptiScaler.ini", "OptiScaler.log", "OptiScaler.dll",
             "setup_linux.sh", "setup_windows.bat",
-            @"D3D12_Optiscaler\", @"Licences\",
+            Path.Combine("D3D12_Optiscaler", ""), Path.Combine("Licenses", ""),
             "!! README_EXTRACT ALL FILES TO GAME FOLDER !!.txt",
             // "dxgi.dll", "winmm.dll", "d3d12.dll", "dbghelp.dll",
             // "version.dll", "wininet.dll", "winhttp.dll",
@@ -51,8 +51,13 @@ namespace UpscalerManager.Core.Services
             "amd_fidelityfx_upscaler_dx12.dll",
             // Custom FSR 4.x driver DLL (user-supplied; installed next to the game exe)
             "amdxcffx64.dll",
-            // OptiPatcher
-            @"plugins\OptiPatcher.asi"
+            // OptiPatcher — both places OptiScaler has looked for plugins, so the one a
+            // previous version of this app wrote is cleaned up too. Built with
+            // Path.Combine because a literal backslash is part of the *name* on Linux,
+            // and these entries are combined with the game folder and tested with
+            // File.Exists: as written by hand they never matched on the main platform.
+            Path.Combine("plugins", "OptiPatcher.asi"),
+            Path.Combine("OptiScaler", "plugins", "OptiPatcher.asi")
         };
 
         private static readonly string[] KnownOptiscalerDirectories =
@@ -2004,6 +2009,80 @@ namespace UpscalerManager.Core.Services
 
             ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4Update", "true");
             Log.Write("[Upscaler] Set the legacy [FSR] Fsr4Update=true for this older release.");
+        }
+
+        /// <summary>
+        /// The folder OptiScaler loads <c>*.asi</c> plugins from, resolved the way
+        /// OptiScaler resolves it: <c>[Plugins] Path</c> if it is set and exists, else
+        /// <c>[Libraries] OptiDllPath</c> + <c>plugins</c>, else the <c>OptiScaler</c>
+        /// subfolder a release lays down + <c>plugins</c>, else the game folder.
+        /// </summary>
+        /// <remarks>
+        /// why: the default moved. Up to 0.9.4 it was the game folder, so everything put
+        /// OptiPatcher.asi in &lt;game&gt;/plugins; from the release that ships an
+        /// OptiScaler subfolder, OptiDllPath defaults to that subfolder and the old place
+        /// is never read. A plugin in the wrong folder fails silently — OptiScaler logs
+        /// one debug line and returns — so this follows its rules instead of picking one.
+        /// </remarks>
+        public static string OptiScalerPluginsDirectory(string gameDir)
+        {
+            if (ReadIniValue(gameDir, "Plugins", "Path") is { } configured
+                && ResolveAgainst(gameDir, configured) is { } pluginPath
+                && Directory.Exists(pluginPath))
+                return pluginPath;
+
+            if (ReadIniValue(gameDir, "Libraries", "OptiDllPath") is { } dllPath
+                && ResolveAgainst(gameDir, dllPath) is { } optiDir
+                && Directory.Exists(optiDir))
+                return Path.Combine(optiDir, "plugins");
+
+            var subfolder = Path.Combine(gameDir, "OptiScaler");
+            return Path.Combine(Directory.Exists(subfolder) ? subfolder : gameDir, "plugins");
+        }
+
+        /// <summary>A path from the ini, made absolute against the game folder as OptiScaler does.</summary>
+        private static string? ResolveAgainst(string gameDir, string value)
+            => Path.IsPathRooted(value) ? value : Path.Combine(gameDir, value.Replace('\\', '/'));
+
+        /// <summary>
+        /// One setting's value from the installed OptiScaler.ini, or null when it is
+        /// absent, commented out or left at "auto" — "auto" means "you decide", so a
+        /// caller must not read it as a path.
+        /// </summary>
+        public static string? ReadIniValue(string gameDir, string section, string key)
+        {
+            var iniPath = Path.Combine(gameDir, "OptiScaler.ini");
+            if (!File.Exists(iniPath)) return null;
+
+            try
+            {
+                var inSection = false;
+                foreach (var raw in File.ReadAllLines(iniPath))
+                {
+                    var line = raw.Trim();
+                    if (line.StartsWith(";") || line.StartsWith("#")) continue;
+                    if (line.StartsWith("["))
+                    {
+                        inSection = line.Equals($"[{section}]", StringComparison.OrdinalIgnoreCase);
+                        continue;
+                    }
+                    if (!inSection) continue;
+
+                    var split = line.IndexOf('=');
+                    if (split <= 0) continue;
+                    if (!line.Substring(0, split).Trim().Equals(key, StringComparison.OrdinalIgnoreCase)) continue;
+
+                    var value = line.Substring(split + 1).Trim();
+                    return value.Length == 0 || value.Equals("auto", StringComparison.OrdinalIgnoreCase)
+                        ? null : value;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Write($"[Install] Could not read OptiScaler.ini: {ex.Message}");
+            }
+
+            return null;
         }
 
         /// <summary>

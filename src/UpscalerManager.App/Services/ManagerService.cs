@@ -626,9 +626,17 @@ public sealed class ManagerService
         status?.Report("Done.");
     }
 
+    /// <summary>Two directory paths naming the same place, trailing separator aside.</summary>
+    private static bool PathsEqual(string? a, string? b)
+        => a is not null && b is not null
+           && string.Equals(Path.GetFullPath(a).TrimEnd('/', '\\'),
+                            Path.GetFullPath(b).TrimEnd('/', '\\'),
+                            StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
     /// Downloads the latest OptiPatcher.asi (cached fallback offline) and places it in
-    /// the game's plugins folder. LoadAsiPlugins=true is forced by ApplyForcedIniKeys.
+    /// the folder this OptiScaler install reads plugins from.
+    /// <c>[Plugins] LoadAsiPlugins=true</c> is forced by ApplyForcedIniKeys.
     /// </summary>
     private async Task InstallOptiPatcherAsync(string gameDir, IProgress<string>? status)
     {
@@ -655,10 +663,27 @@ public sealed class ManagerService
             status?.Report($"Using cached OptiPatcher {cached} (offline).");
         }
 
-        var pluginsDir = Path.Combine(gameDir, "plugins");
+        // Where this OptiScaler install actually looks, which is not always the game
+        // folder any more. A plugin in the wrong folder is not reported by anything.
+        var pluginsDir = GameInstallationService.OptiScalerPluginsDirectory(gameDir);
         Directory.CreateDirectory(pluginsDir);
         File.Copy(asiPath, Path.Combine(pluginsDir, "OptiPatcher.asi"), overwrite: true);
-        status?.Report("Installed OptiPatcher plugin.");
+        Log.Write($"[OptiPatcher] Installed into {pluginsDir}");
+
+        // An earlier version of this app always wrote <game>/plugins. Left behind it is
+        // a second, older copy in a folder the current release may still read.
+        var stale = Path.Combine(gameDir, "plugins", "OptiPatcher.asi");
+        if (!PathsEqual(Path.GetDirectoryName(stale), pluginsDir) && File.Exists(stale))
+        {
+            try
+            {
+                File.Delete(stale);
+                Log.Write("[OptiPatcher] Removed the copy an older install left in the game folder.");
+            }
+            catch (Exception ex) { Log.Write($"[OptiPatcher] Could not remove the old copy: {ex.Message}"); }
+        }
+
+        status?.Report("Installed OptiPatcher. OptiScaler's overlay shows (OP) when the patch lands.");
     }
 
     /// <summary>

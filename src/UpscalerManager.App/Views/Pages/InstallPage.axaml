@@ -98,7 +98,7 @@
  Foreground="{StaticResource BrTextSecondary}"/>
           <StackPanel Spacing="6">
             <ComboBox Name="SpoofCombo" HorizontalAlignment="Stretch"
-                      ToolTip.Tip="Whether this game is told it has an Nvidia GPU, which is what unlocks a DLSS option on AMD and Intel. OptiScaler decides this per game by default, and some games crash when the adapter lies — forcing it either way turns those decisions off."/>
+                      ToolTip.Tip="Whether this game is told it has an Nvidia GPU, which is what unlocks a DLSS option on AMD and Intel. Off unless a game hides its DLSS option: nothing else needs it, and some games crash when the adapter lies. OptiPatcher is the alternative — it patches the game's own vendor check instead of lying, for the games it supports."/>
             <TextBlock Name="SpoofNoteText" TextWrapping="Wrap"
  FontSize="{StaticResource SizeCaption}"
  Foreground="{StaticResource BrTextSecondary}"/>
