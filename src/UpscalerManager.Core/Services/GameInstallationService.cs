@@ -23,6 +23,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Text.Json;
+using UpscalerManager.Core.Components;
 using UpscalerManager.Core.Models;
 
 namespace UpscalerManager.Core.Services
@@ -57,7 +58,9 @@ namespace UpscalerManager.Core.Services
             // and these entries are combined with the game folder and tested with
             // File.Exists: as written by hand they never matched on the main platform.
             Path.Combine("plugins", "OptiPatcher.asi"),
-            Path.Combine("OptiScaler", "plugins", "OptiPatcher.asi")
+            Path.Combine("OptiScaler", "plugins", "OptiPatcher.asi"),
+            // Nukem's, where a release with an OptiScaler subfolder reads it from.
+            Path.Combine("OptiScaler", "dlssg_to_fsr3_amd_is_better.dll")
         };
 
         private static readonly string[] KnownOptiscalerDirectories =
@@ -475,7 +478,11 @@ namespace UpscalerManager.Core.Services
                     // DO NOT copy nvngx.dll (200kb) - it will break the mod!
                     if (fileName.Equals("dlssg_to_fsr3_amd_is_better.dll", StringComparison.OrdinalIgnoreCase))
                     {
-                        var destPath = Path.Combine(gameDir, fileName);
+                        // Where OptiScaler looks for it first. A newer release reads its
+                        // OptiScaler subfolder, and its menu calls the mod missing when the
+                        // file is anywhere else, even where Windows would still load it.
+                        var destPath = Path.Combine(OptiScalerLibraryDirectory(gameDir), fileName);
+                        fileName = Path.GetRelativePath(gameDir, destPath);
                         var existedBefore = File.Exists(destPath);
 
                         // Backup if exists (into external store).
@@ -502,15 +509,12 @@ namespace UpscalerManager.Core.Services
                         nukemFileCount++;
                         Log.Write($"[Install] Installed NukemFG file: {fileName}");
 
-                        // Select Nukem's mod as the FG input. OptiScaler 0.9.x reads
-                        // [FrameGen] FGInput; the legacy sectionless FGType key is dead.
-                        // Enabled is required as well: OptiScaler defaults it to false,
-                        // so setting only the input deploys the DLL but never actually
-                        // turns frame generation on. FGOutput follows FGInput=nukems
-                        // automatically inside OptiScaler.
-                        ModifyOptiScalerIniKey(gameDir, "FrameGen", "Enabled", "true");
-                        ModifyOptiScalerIniKey(gameDir, "FrameGen", "FGInput", "nukems");
-                        Log.Write($"[Install] Set [FrameGen] Enabled=true, FGInput=nukems for NukemFG");
+                        // Enabled is needed too: OptiScaler defaults it to false, so the
+                        // input alone deploys the DLL and never turns frame generation on.
+                        foreach (var key in NukemFrameGenerationKeys(gameDir))
+                            ModifyOptiScalerIniKey(gameDir, key.Section, key.Key, key.Value);
+                        Log.Write("[Install] Frame generation set to Nukem's: "
+                                  + string.Join(", ", NukemFrameGenerationKeys(gameDir)));
                     }
                 }
 
@@ -518,7 +522,8 @@ namespace UpscalerManager.Core.Services
                 if (nukemFileCount > 0)
                 {
                     manifest.IncludesNukemFG = true;
-                    manifest.ExpectedFinalMarkers.Add("dlssg_to_fsr3_amd_is_better.dll");
+                    manifest.ExpectedFinalMarkers.Add(
+                        Path.GetRelativePath(gameDir, Path.Combine(OptiScalerLibraryDirectory(gameDir), "dlssg_to_fsr3_amd_is_better.dll")));
                 }
                 else
                 {
@@ -2031,14 +2036,50 @@ namespace UpscalerManager.Core.Services
                 && Directory.Exists(pluginPath))
                 return pluginPath;
 
+            return Path.Combine(OptiScalerLibraryDirectory(gameDir), "plugins");
+        }
+
+        /// <summary>
+        /// The folder OptiScaler loads its own libraries from first — its bundled FSR and
+        /// XeSS DLLs, Nukem's frame generation: <c>[Libraries] OptiDllPath</c> if it is set
+        /// and exists, else the <c>OptiScaler</c> subfolder a release lays down, else the
+        /// game folder. The same move as the plugins folder, for the same reason.
+        /// </summary>
+        public static string OptiScalerLibraryDirectory(string gameDir)
+        {
             if (ReadIniValue(gameDir, "Libraries", "OptiDllPath") is { } dllPath
                 && ResolveAgainst(gameDir, dllPath) is { } optiDir
                 && Directory.Exists(optiDir))
-                return Path.Combine(optiDir, "plugins");
+                return optiDir;
 
             var subfolder = Path.Combine(gameDir, "OptiScaler");
-            return Path.Combine(Directory.Exists(subfolder) ? subfolder : gameDir, "plugins");
+            return Directory.Exists(subfolder) ? subfolder : gameDir;
         }
+
+        /// <summary>
+        /// The ini keys that turn on Nukem's frame generation for the release in
+        /// <paramref name="dir"/> (a game folder or a release's cache).
+        /// </summary>
+        /// <remarks>
+        /// why: the release after 0.9.4 renamed the input. "nukems" became "nvngxfg", and
+        /// which mod serves it moved to [FrameGen] FGNvngxReplacement. OptiScaler maps a
+        /// value it does not know to "no frame generation", so writing the old word to a
+        /// new release turned frame generation off without a single error. Which form
+        /// to write is read from the release's own ini, not from its version number.
+        /// </remarks>
+        public static IReadOnlyList<IniKeyChange> NukemFrameGenerationKeys(string dir)
+            => IniDocumentsKey(dir, "FrameGen", "FGNvngxReplacement")
+                ? new[]
+                {
+                    new IniKeyChange("FrameGen", "Enabled", "true"),
+                    new IniKeyChange("FrameGen", "FGInput", "nvngxfg"),
+                    new IniKeyChange("FrameGen", "FGNvngxReplacement", "Nukems"),
+                }
+                : new[]
+                {
+                    new IniKeyChange("FrameGen", "Enabled", "true"),
+                    new IniKeyChange("FrameGen", "FGInput", "nukems"),
+                };
 
         /// <summary>A path from the ini, made absolute against the game folder as OptiScaler does.</summary>
         private static string? ResolveAgainst(string gameDir, string value)

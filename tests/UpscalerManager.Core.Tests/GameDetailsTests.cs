@@ -235,6 +235,25 @@ namespace UpscalerManager.Core.Tests
         }
 
         [Fact]
+        public void ReadsTheNewerFrameGenerationFormToo()
+        {
+            // From the release after 0.9.4 the input is "nvngxfg" and the mod behind it is a
+            // separate key whose default is Nukem's.
+            WriteIni("[FrameGen]\nFGInput=nvngxfg\nFGNvngxReplacement=auto\n");
+            Assert.Contains("Nukem", ValueOf("Frame generation"));
+
+            WriteIni("[FrameGen]\nFGInput=nvngxfg\nFGNvngxReplacement=Arturs\n");
+            Assert.Contains("DLSS Enabler", ValueOf("Frame generation"));
+        }
+
+        [Fact]
+        public void SaysWhatDx12AutoActuallyPicks()
+        {
+            WriteIni("[Upscalers]\nDx12Upscaler=auto\n");
+            Assert.Contains("FSR 4", ValueOf("Upscaler in use"));
+        }
+
+        [Fact]
         public void ReportsNvidiaOverrideAndOverlayKey()
         {
             WriteIni("[Spoofing]\nDxgi=true\n\n[Menu]\nShortcutKey=0x78\n");

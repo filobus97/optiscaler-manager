@@ -177,13 +177,14 @@ namespace UpscalerManager.Core.Tests
         [Fact]
         public void InstallPreview_Addons_ListFilesAndFgInputKey()
         {
+            var keys = new[] { new IniKeyChange("FrameGen", "FGInput", "nukems") };
             var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selection: UpscalerSelection.NewestFsr,
-                addFakenvapi: true, addNukemFg: true);
+                addFakenvapi: true, addNukemFg: true, nukemKeys: keys);
 
             Assert.Contains("nvapi64.dll", preview.Files);
             Assert.Contains("fakenvapi.ini", preview.Files);
             Assert.Contains("dlssg_to_fsr3_amd_is_better.dll", preview.Files);
-            // OptiScaler 0.9.x reads [FrameGen] FGInput (legacy FGType is dead).
+            // The keys come from the release being installed, and are shown as given.
             Assert.Contains(preview.IniKeys, k => k.Section == "FrameGen" && k.Key == "FGInput" && k.Value == "nukems");
         }
 
@@ -305,16 +306,31 @@ namespace UpscalerManager.Core.Tests
                 ComponentIds.CustomMerged, ComponentIds.Fsr4Extras));
         }
 
-        [Fact]
-        public void NukemFrameGen_IsActuallyTurnedOn()
+        [Theory]
+        [InlineData(false, "nukems")]
+        [InlineData(true, "nvngxfg")]
+        public void NukemFrameGen_IsActuallyTurnedOn_InTheFormTheReleaseReads(bool newRelease, string input)
         {
             // OptiScaler defaults [FrameGen] Enabled to false, so setting only the input
-            // deployed the DLL and left frame generation off.
-            var preview = ComponentRegistry.BuildInstallPreview(
-                Fsr4Backend.Default, selection: UpscalerSelection.NewestFsr, addNukemFg: true);
+            // deployed the DLL and left frame generation off. And the release after
+            // 0.9.4 reads "nukems" as an unknown value, which means no frame generation.
+            var dir = Path.Combine(Path.GetTempPath(), "osm_nukem_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                File.WriteAllText(Path.Combine(dir, "OptiScaler.ini"), newRelease
+                    ? "[FrameGen]\n; None, Nukems, Arturs, FFX, Combo - Default (auto) is Nukems\nFGNvngxReplacement=auto\n"
+                    : "[FrameGen]\n; nofg, dlssg, nukems, fsrfg, upscaler, fsrfg30 - Default (auto) is nofg\nFGInput=auto\n");
 
-            Assert.Contains(preview.IniKeys, k => k.Section == "FrameGen" && k.Key == "Enabled" && k.Value == "true");
-            Assert.Contains(preview.IniKeys, k => k.Section == "FrameGen" && k.Key == "FGInput" && k.Value == "nukems");
+                var preview = ComponentRegistry.BuildInstallPreview(
+                    Fsr4Backend.Default, selection: UpscalerSelection.NewestFsr, addNukemFg: true,
+                    nukemKeys: GameInstallationService.NukemFrameGenerationKeys(dir));
+
+                Assert.Contains(preview.IniKeys, k => k.Section == "FrameGen" && k.Key == "Enabled" && k.Value == "true");
+                Assert.Contains(preview.IniKeys, k => k.Section == "FrameGen" && k.Key == "FGInput" && k.Value == input);
+                Assert.Equal(newRelease, preview.IniKeys.Any(k => k.Key == "FGNvngxReplacement" && k.Value == "Nukems"));
+            }
+            finally { Directory.Delete(dir, true); }
         }
 
         [Fact]

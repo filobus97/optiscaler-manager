@@ -44,7 +44,7 @@ public static class OptiScalerConfigReader
             new("Force FSR 4 on unsupported GPUs", OnOffAuto(Get("FSR", "Fsr4ForceEnableInt8"),
                     on: "Yes (INT8 mode)", off: "No", auto: "No"),
                 "[FSR] Fsr4ForceEnableInt8"),
-            new("Frame generation", DescribeFrameGen(Get("FrameGen", "FGInput")),
+            new("Frame generation", DescribeFrameGen(Get("FrameGen", "FGInput"), Get("FrameGen", "FGNvngxReplacement")),
                 "[FrameGen] FGInput"),
             new("Nvidia override", DescribeSpoof(Get("Spoofing", "Dxgi"), Get("Plugins", "LoadAsiPlugins")),
                 "[Spoofing] Dxgi / [Plugins] LoadAsiPlugins"),
@@ -71,7 +71,7 @@ public static class OptiScalerConfigReader
 
     private static string DescribeUpscaler(string value) => value.ToLowerInvariant() switch
     {
-        "auto" => "Chosen by OptiScaler — on DX12 that means XeSS unless the release picks otherwise",
+        "auto" => "Chosen by OptiScaler — on DX12, DLSS or FSR 4 where the GPU runs them, XeSS otherwise",
         // Both spellings mean the FidelityFX path; the name changed between releases.
         "ffx" or "fsr31" => "FSR (this is the one that can be FSR 4)",
         "ffx_12" or "fsr31_12" => "FSR, through a DX12 compatibility layer",
@@ -82,10 +82,24 @@ public static class OptiScalerConfigReader
         _ => value,
     };
 
-    private static string DescribeFrameGen(string value) => value.ToLowerInvariant() switch
+    /// <summary>
+    /// What <c>[FrameGen] FGInput</c> selects. From the release after 0.9.4, "nvngxfg"
+    /// replaces "nukems" and the mod serving it is <c>FGNvngxReplacement</c>, whose
+    /// default is Nukem's.
+    /// </summary>
+    private static string DescribeFrameGen(string value, string replacement) => value.ToLowerInvariant() switch
     {
         "auto" or "nofg" => "Off",
         "nukems" => "Nukem's DLSSG-to-FSR3 mod",
+        "nvngxfg" => replacement.ToLowerInvariant() switch
+        {
+            "auto" or "nukems" => "Nukem's DLSSG-to-FSR3 mod",
+            "arturs" => "DLSS Enabler (multi-frame)",
+            "ffx" => "AMD FSR frame generation, behind the game's DLSS frame generation",
+            "combo" => "FSR frame generation and DLSS Enabler combined",
+            "none" => "Off — no replacement for DLSS frame generation is set",
+            _ => replacement,
+        },
         "fsrfg" or "fsrfg30" => "AMD FSR frame generation",
         "dlssg" => "Nvidia DLSS frame generation",
         "upscaler" => "Driven by the upscaler",

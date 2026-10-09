@@ -100,5 +100,16 @@ namespace UpscalerManager.Core.Tests
 
             Assert.Null(GameInstallationService.ReadIniValue(_game, "Libraries", "OptiDllPath"));
         }
+
+        [Fact]
+        public void TheLibraryFolderFollowsTheSameMove()
+        {
+            // Nukem's DLL and OptiScaler's bundled upscalers live here, so a file meant to
+            // sit beside them has to land in the same place OptiScaler loads them from.
+            Assert.Equal(_game, GameInstallationService.OptiScalerLibraryDirectory(_game));
+
+            Directory.CreateDirectory(Path.Combine(_game, "OptiScaler"));
+            Assert.Equal(Path.Combine(_game, "OptiScaler"), GameInstallationService.OptiScalerLibraryDirectory(_game));
+        }
     }
 }

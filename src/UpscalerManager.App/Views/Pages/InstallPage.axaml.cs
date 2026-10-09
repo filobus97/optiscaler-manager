@@ -35,7 +35,7 @@ public partial class InstallPage : UserControl, IHostedPage
     /// <summary>Install the fakenvapi add-on (nvapi64.dll + fakenvapi.ini).</summary>
     public bool AddFakenvapi { get; private set; }
 
-    /// <summary>Install Nukem's DLSSG-to-FSR3 mod (imported DLL + FGInput=nukems).</summary>
+    /// <summary>Install Nukem's DLSSG-to-FSR3 mod (the imported DLL, and the keys that turn it on).</summary>
     public bool AddNukemFg { get; private set; }
 
     /// <summary>What the user chose for the Nvidia override.</summary>

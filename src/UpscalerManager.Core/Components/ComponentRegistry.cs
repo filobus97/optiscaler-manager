@@ -155,7 +155,8 @@ public static class ComponentRegistry
     /// file, "added" otherwise.
     /// </param>
     /// <param name="addFakenvapi">Include the fakenvapi add-on (nvapi64.dll + fakenvapi.ini).</param>
-    /// <param name="addNukemFg">Include Nukem's DLSSG-to-FSR3 mod (adds [FrameGen] FGInput=nukems).</param>
+    /// <param name="addNukemFg">Include Nukem's DLSSG-to-FSR3 mod.</param>
+    /// <param name="nukemKeys">The keys that turn Nukem's on for the release being installed.</param>
     /// <param name="spoofMethod">
     /// What to write for the Nvidia override: Default leaves [Spoofing] Dxgi=auto,
     /// ForceDxgi/ForceOff write true/false, OptiPatcher adds plugins/OptiPatcher.asi and
@@ -193,7 +194,7 @@ public static class ComponentRegistry
         IReadOnlyList<string>? customDlls = null,
         bool addFakenvapi = false, bool addNukemFg = false,
         SpoofMethod spoofMethod = SpoofMethod.Off, bool forceInt8 = false, bool fsr4Watermark = false,
-        bool legacyFsr4UpdateKey = false)
+        bool legacyFsr4UpdateKey = false, IReadOnlyList<IniKeyChange>? nukemKeys = null)
     {
         var ids = new List<string> { ComponentIds.OptiScaler };
         ids.AddRange(ComponentIdsFor(backend));
@@ -245,12 +246,7 @@ public static class ComponentRegistry
         if (fsr4Watermark)
             iniKeys.Add(new IniKeyChange("FSR", "Fsr4EnableWatermark", "true"));
         if (addNukemFg)
-        {
-            // Enabled too: OptiScaler defaults it to false, so setting only the input
-            // deploys the DLL and leaves frame generation switched off.
-            iniKeys.Add(new IniKeyChange("FrameGen", "Enabled", "true"));
-            iniKeys.Add(new IniKeyChange("FrameGen", "FGInput", "nukems"));
-        }
+            iniKeys.AddRange(nukemKeys ?? Array.Empty<IniKeyChange>());
         // Always written, so a reinstall can undo a force the last one applied. "auto"
         // is not a no-op line: it is what hands the decision back to OptiScaler.
         iniKeys.Add(new IniKeyChange("Spoofing", "Dxgi", spoofMethod switch
@@ -330,13 +326,8 @@ public static class ComponentRegistry
             DisplayName = "Nukem DLSSG-to-FSR3 (frame gen)",
             Description = "Optional frame-generation mod for games with DLSS-G. Cannot be downloaded automatically — you supply the DLL from a local file (Nexus Mods).",
             TargetFiles = new[] { "dlssg_to_fsr3_amd_is_better.dll" },
-            // OptiScaler 0.9.x selects Nukem's mod via [FrameGen] FGInput (the legacy
-            // sectionless FGType key is no longer read).
-            IniKeys = new[]
-            {
-                new IniKeyChange("FrameGen", "Enabled", "true"),
-                new IniKeyChange("FrameGen", "FGInput", "nukems"),
-            },
+            // No keys here: which ones turn it on depends on the release, so the install
+            // preview takes them from GameInstallationService.NukemFrameGenerationKeys.
             Requires = new[] { ComponentIds.OptiScaler },
             IsBringYourOwn = true,
         },

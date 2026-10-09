@@ -512,7 +512,8 @@ public sealed class ManagerService
             backend == Fsr4Backend.CustomMerged ? _components.GetCustomDlls().Select(d => d.Name).ToList() : null,
             addFakenvapi, addNukemFg, spoofMethod, forceInt8, fsr4Watermark,
             legacyFsr4UpdateKey: GameInstallationService.IniDocumentsKey(
-                ReleaseCache(optiscalerVersion), "FSR", "Fsr4Update"));
+                ReleaseCache(optiscalerVersion), "FSR", "Fsr4Update"),
+            nukemKeys: GameInstallationService.NukemFrameGenerationKeys(ReleaseCache(optiscalerVersion)));
 
     /// <summary>
     /// The downloaded release a preview should read: the version the user picked, or

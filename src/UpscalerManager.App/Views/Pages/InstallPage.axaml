@@ -89,7 +89,7 @@
             <CheckBox Name="ChkFakenvapi" Content="fakenvapi — Reflex to Anti-Lag 2 or LatencyFlex"
                       ToolTip.Tip="Installs nvapi64.dll and fakenvapi.ini from the optiscaler/fakenvapi releases. Translates Nvidia Reflex calls, and is required for Nukem's frame generation on AMD and Intel."/>
             <CheckBox Name="ChkNukemFg" Content="Nukem DLSSG-to-FSR3 frame generation"
-                      ToolTip.Tip="Installs your imported dlssg_to_fsr3_amd_is_better.dll and turns frame generation on ([FrameGen] Enabled, FGInput=nukems). Needs fakenvapi on AMD and Intel, so it selects that too."/>
+                      ToolTip.Tip="Installs your imported dlssg_to_fsr3_amd_is_better.dll and turns frame generation on, with the keys this OptiScaler release reads. Needs fakenvapi on AMD and Intel, so it selects that too."/>
           </StackPanel>
 
           <Border Height="1" Background="{StaticResource BrBorderSubtle}" Margin="0,2"/>
