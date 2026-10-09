@@ -94,3 +94,37 @@ FSR 4 lives in `amd_fidelityfx_upscaler_dx12.dll`. Games older than SDK 2 do not
 that file, and a swap can only replace a file a game already has. The archive holds no
 FSR 4 either. OptiScaler brings its own upscaler instead, which is why FSR 4 is the
 install route's job and the swapper does not pretend to compete.
+
+## The faster FSR 4.1.1 builds
+
+[`zgauthier2000/fsr4-shader-performance-overrides`](https://github.com/zgauthier2000/fsr4-shader-performance-overrides)
+takes AMD's own `amd_fidelityfx_upscaler_dx12.dll` 4.1.1.2740 — the build OptiScaler
+installs — and swaps its slowest compute shaders for rewritten ones. The **exact**
+build's output is AMD's byte for byte. The **lossy** build skips the model on alternate
+frames and reuses the last result. The install route offers them in place of
+OptiScaler's own copy. Four rules shape that, and each would look arbitrary without the
+reason:
+
+- **Only over 4.1.1.2740.** The rewritten shaders are matched to that build's shaders;
+  any other version has different ones. The version is read from the release being
+  installed before anything is written, and again from the file actually replaced.
+- **Never on RX 9000.** AMD's DLL offers this FSR 4 model only to desktop RDNA 3, and
+  every override build lifts that check so it runs on RX 6000, integrated GPUs and the
+  Steam Deck. RX 9000 runs a different (FP8) model, and with the check gone it would
+  report support for this one too. So the app reads the GPU's generation — PCI device ID
+  first, name second — and refuses the option on RX 9000, or wherever the generation
+  cannot be read.
+- **The build for the card, not one build for all.** RX 7000, RX 6000, the Steam Deck
+  (a compact RDNA 2 variant) and RDNA 3 integrated graphics each get their own, exact or
+  lossy.
+- **Where OptiScaler loads it.** `[Libraries] FfxDx12SRPath` if set, else OptiScaler's
+  library folder, which is the `OptiScaler` subfolder from the release that introduced
+  it. The game folder is not read by those releases, so a copy put there would leave
+  AMD's build running without a word.
+
+On Linux the project's author recommends a launch option instead
+(`VKD3D_SHADER_OVERRIDE`, which swaps the shaders inside vkd3d-proton and leaves the DLL
+alone). It is slightly faster than the DLL. It is not offered here: its prebuilt shader
+files are matched to one Proton translation on RX 7000, and gave an RX 6000 tester a
+wrong image. Checking that fit takes a shader dump, which an installer cannot do for
+the player.

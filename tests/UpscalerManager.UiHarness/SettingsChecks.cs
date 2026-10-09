@@ -8,7 +8,7 @@ namespace UpscalerManager.UiHarness;
 
 internal sealed partial class Harness
 {
-    /// <summary>Settings: the Sources list, what switching one off does, and the Storage page.</summary>
+    /// <summary>Settings: the Sources list, what switching one off does, and that Storage opens.</summary>
     private async Task SettingsAsync()
     {
         Console.WriteLine("--- Settings ---");
@@ -42,11 +42,13 @@ internal sealed partial class Harness
         await BackAsync();
         await BackAsync();
 
+        // Storage is opened, not photographed: docs/screenshots/storage.png was made
+        // against a fuller sample cache than this library has.
         await OpenSettingsAsync();
         Click(Named<Button>("StorageButton"));
         await Until(() => Page is not SettingsPage, "the storage page");
         await Settle(600);
-        Shoot("storage.png");
+        Check("Storage opens from Settings", Page is not SettingsPage && Page is not null);
         await BackAsync();
         await BackAsync();
     }

@@ -2,7 +2,6 @@
 // Licensed under GPL-3.0-or-later (see repository LICENSE).
 
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.VisualTree;
 using UpscalerManager.App.Views.Pages;
 
@@ -31,13 +30,6 @@ internal sealed partial class Harness
         await Settle(600);
         Check("an ordinary game shows no anti-cheat warning", !Shown(Named<Border>("AntiCheatBox")));
         Shoot("install.png");
-
-        var advanced = Named<ToggleButton>("AdvancedToggle");
-        advanced.IsChecked = true;
-        await Settle();
-        Shoot("install-advanced.png");
-        advanced.IsChecked = false;
-        await Settle();
 
         await BackAsync();
         await BackAsync();

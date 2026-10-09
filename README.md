@@ -36,8 +36,9 @@ Gaming Mode.
 ## What it does
 
 **Your games, as cards.** Cover art from Steam, the technologies each game already
-carries with their versions, and whether OptiScaler is installed. A card has one
-action: open the game.
+carries, and whether OptiScaler is installed. A game that ships Easy Anti-Cheat,
+BattlEye or Denuvo Anti-Cheat is tagged, and the toolbar can hide those games, or games
+with no upscaler at all. A card has one action: open the game.
 
 **One page per game**, with one primary action.
 
@@ -66,7 +67,21 @@ is why it stays OptiScaler's job.
 has a default and lives under *Advanced*. The preview lists the exact files that will be
 placed and the exact `OptiScaler.ini` keys that will change, and updates as you change
 the options. Whatever is already there is backed up to a per-game store first, so
-**Remove** puts it back.
+**Remove** puts it back. A game with anti-cheat gets a warning before anything else.
+
+**Faster FSR 4.1.1, if you want it.** Under *Advanced → Files to install*, the
+[FSR 4 shader overrides](https://github.com/zgauthier2000/fsr4-shader-performance-overrides)
+replace OptiScaler's FSR 4.1.1 upscaler with AMD's own DLL, its slowest shaders
+rewritten:
+- **exact** keeps AMD's image byte for byte, about 25–30% cheaper at 4K on RX 7000;
+- **lossy** is about twice as fast, softer, with frame times that alternate.
+
+The build for your card is picked for you (RX 7000, RX 6000, Steam Deck, RDNA 3
+integrated graphics). It is refused on RX 9000, which runs a different FSR 4 model. Turn
+the source on under *Settings → Sources* first; OptiScaler's overlay then names the
+upscaler `4.1.1-r3-cyboman` when it is the one running.
+
+![The faster FSR 4.1.1 option on an RX 7000](docs/screenshots/install-faster-fsr4.png)
 
 **Reachable by D-pad throughout**, including the updater. It is meant to be used from a
 Steam Deck in Gaming Mode: add it as a non-Steam game.
@@ -82,22 +97,29 @@ linked. AMD's FSR 4 driver runtime is the example: it ships inside the Adrenalin
 package, so it is strictly bring-your-own — imported from a file, folder or archive you
 already have.
 
-Two third-party sources are used only when you pick them, and neither is mirrored here:
+Three third-party sources are listed by name under **Settings → Sources**, each with
+its own switch. None is mirrored here, and each is used only when you pick one of its
+builds:
 
-- the FSR 4 INT8 builds from
+- **DLSS Swapper archive** (on by default) — a mirror rather than the publisher, so it
+  is labelled as one on every row and checked against the hashes its index publishes.
+- **OptiScaler Client extras** (on by default) — the FSR 4 INT8 builds from
   [`Agustinm28/OptiScaler-Extras`](https://github.com/Agustinm28/OptiScaler-Extras),
   for hardware whose driver provides no FSR 4. Recent ones ship under the same filename
   as AMD's runtime (`amdxcffx64.dll`) — a community replacement in the same slot, not
   AMD's binary.
-- the [DLSS Swapper](https://github.com/beeradmoore/dlss-swapper) archive: a mirror
-  rather than the publisher, so it is labelled as one on every row, checked against the
-  hashes its index publishes, and switchable off in Settings.
+- **FSR 4 shader overrides** (off by default) — AMD's FSR 4.1.1 DLL, which AMD's SDK
+  licenses under MIT, modified by
+  [`zgauthier2000/fsr4-shader-performance-overrides`](https://github.com/zgauthier2000/fsr4-shader-performance-overrides)
+  under the GPL. Checked against the SHA-256 GitHub publishes, and as AMD's 4.1.1.2740,
+  before it replaces anything.
 
 ## Build and test
 
 ```bash
 dotnet build                                    # 0 warnings expected
 dotnet test tests/UpscalerManager.Core.Tests    # the pure logic
+tests/UpscalerManager.UiHarness/run.sh          # drives the real window, writes docs/screenshots
 dotnet publish src/UpscalerManager.App -c Release -r linux-x64 --self-contained
 ```
 
@@ -110,11 +132,13 @@ message.
 | `src/UpscalerManager.Core` | UI-agnostic services: scanning, PE inspection, install, backup, swap. No Avalonia dependency. |
 | `src/UpscalerManager.App` | The Avalonia UI. |
 | `tests/UpscalerManager.Core.Tests` | xUnit tests for the logic that must not be wrong. |
+| `tests/UpscalerManager.UiHarness` | Renders the real window headlessly against a sample Steam library in a throwaway HOME, checks what the screens show, and writes the screenshots. |
 
 [`DESIGN.md`](DESIGN.md) is the design contract — palette, four type sizes, geometry,
 and the rules for writing both UI text and code comments. If a screen disagrees with
 it, the screen is wrong. Two decisions that need more than a comment are written up in
-[`docs/fidelityfx.md`](docs/fidelityfx.md) (AMD's SDK split and the generation guard)
+[`docs/fidelityfx.md`](docs/fidelityfx.md) (AMD's SDK split, the generation guard, and
+the faster FSR 4.1.1 builds)
 and [`docs/swapping.md`](docs/swapping.md) (what this takes from DLSS Swapper, and
 where it differs).
 
