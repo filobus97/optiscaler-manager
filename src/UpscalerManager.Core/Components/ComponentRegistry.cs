@@ -20,6 +20,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using UpscalerManager.Core.Services;
 
 namespace UpscalerManager.Core.Components;
 
@@ -130,6 +131,7 @@ public static class ComponentRegistry
     {
         Fsr4Backend.Int8Community => new[] { ComponentIds.Fsr4Extras },
         Fsr4Backend.CustomMerged => new[] { ComponentIds.CustomMerged },
+        Fsr4Backend.FasterShaders => new[] { ComponentIds.Fsr4ShaderOverrides },
         _ => Array.Empty<string>(),
     };
 
@@ -194,7 +196,8 @@ public static class ComponentRegistry
         IReadOnlyList<string>? customDlls = null,
         bool addFakenvapi = false, bool addNukemFg = false,
         SpoofMethod spoofMethod = SpoofMethod.Off, bool forceInt8 = false, bool fsr4Watermark = false,
-        bool legacyFsr4UpdateKey = false, IReadOnlyList<IniKeyChange>? nukemKeys = null)
+        bool legacyFsr4UpdateKey = false, IReadOnlyList<IniKeyChange>? nukemKeys = null,
+        FasterFsr4Kind fasterKind = FasterFsr4Kind.Exact)
     {
         var ids = new List<string> { ComponentIds.OptiScaler };
         ids.AddRange(ComponentIdsFor(backend));
@@ -220,6 +223,18 @@ public static class ComponentRegistry
                     ? $"{dll}  (your DLL — swaps OptiScaler's in place)"
                     : $"{dll}  (your DLL — added)");
             }
+            preview = preview with { Files = files };
+        }
+
+        // Say which build replaces OptiScaler's upscaler, not just the file name both share.
+        if (backend == Fsr4Backend.FasterShaders)
+        {
+            var files = preview.Files
+                .Where(f => !f.Equals(Fsr4ShaderOverrides.DllName, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            files.Add(fasterKind == FasterFsr4Kind.Lossy
+                ? $"{Fsr4ShaderOverrides.DllName}  (faster FSR 4.1.1, lossy — replaces OptiScaler's)"
+                : $"{Fsr4ShaderOverrides.DllName}  (faster FSR 4.1.1, exact — replaces OptiScaler's)");
             preview = preview with { Files = files };
         }
 
@@ -272,6 +287,14 @@ public static class ComponentRegistry
             Description = "The OptiScaler upscaler shim itself: the injection DLL, OptiScaler.dll and the OptiScaler.ini config file.",
             // "{injection}" is substituted with the chosen injection DLL (default dxgi.dll).
             TargetFiles = new[] { "{injection}", "OptiScaler.dll", "OptiScaler.ini" },
+        },
+        new ComponentDefinition
+        {
+            Id = ComponentIds.Fsr4ShaderOverrides,
+            DisplayName = "Faster FSR 4.1.1 (shader overrides)",
+            Description = "AMD's FSR 4.1.1 upscaler with its slowest shaders rewritten, from github.com/zgauthier2000/fsr4-shader-performance-overrides (third-party). Replaces the copy OptiScaler installs; exact keeps AMD's image, lossy trades some of it for speed.",
+            TargetFiles = new[] { Fsr4ShaderOverrides.DllName },
+            Requires = new[] { ComponentIds.OptiScaler },
         },
         new ComponentDefinition
         {

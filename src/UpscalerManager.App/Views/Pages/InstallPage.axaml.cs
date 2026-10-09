@@ -26,6 +26,9 @@ public partial class InstallPage : UserControl, IHostedPage
     /// <summary>Which upscaler the user chose for OptiScaler to run, and which FSR provider.</summary>
     public UpscalerSelection SelectedUpscaler { get; private set; } = UpscalerSelection.NewestFsr;
 
+    /// <summary>Which faster FSR 4.1.1 build the user confirmed (read only when that option is chosen).</summary>
+    public FasterFsr4Kind SelectedFasterKind { get; private set; } = FasterFsr4Kind.Exact;
+
     /// <summary>The INT8 community build version the user confirmed (null unless INT8 chosen).</summary>
     public string? SelectedInt8Version { get; private set; }
 
@@ -111,6 +114,7 @@ public partial class InstallPage : UserControl, IHostedPage
         // A source switched off in Settings is not offered at all, rather than offered
         // and refused.
         int8.IsVisible = _manager.OptiScalerExtrasEnabled;
+        SetupFasterOption();
 
         // Pre-selected, and under Advanced: OptiScaler's own release already bundles a
         // working FSR 4.x upscaler, so the zero-decision path delivers FSR 4 as it is.
@@ -294,8 +298,59 @@ public partial class InstallPage : UserControl, IHostedPage
         _ => "On for AMD and Intel, off for Nvidia, minus the games OptiScaler knows it breaks.",
     };
 
+    /// <summary>
+    /// The faster FSR 4.1.1 builds: shown only when their source is on, and refused —
+    /// in place, with the reason — on a GPU no build is made for.
+    /// </summary>
+    private void SetupFasterOption()
+    {
+        var faster = this.FindControl<RadioButton>("RbFaster")!;
+        faster.IsVisible = _manager.Fsr4ShaderOverridesEnabled;
+
+        if (_manager.FasterFsr4Refusal() is { } refused)
+        {
+            faster.IsEnabled = false;
+            faster.Content = _manager.GpuGeneration == RadeonGeneration.Rdna4
+                ? "Faster FSR 4.1.1 — not for RX 9000"
+                : "Faster FSR 4.1.1 — not for this GPU";
+            ToolTip.SetTip(faster, refused);
+        }
+
+        var kind = this.FindControl<ComboBox>("FasterKindCombo")!;
+        kind.ItemsSource = new[]
+        {
+            "Exact — the same image as AMD's",
+            "Lossy — about twice as fast, softer",
+        };
+        kind.SelectedIndex = 0;
+        kind.SelectionChanged += (s, e) => { UpdateFasterNote(); OnOptionChanged(s, e); };
+        faster.IsCheckedChanged += (s, e) =>
+        {
+            this.FindControl<StackPanel>("FasterPanel")!.IsVisible = faster.IsChecked == true;
+            UpdateFasterNote();
+            OnOptionChanged(s, e);
+        };
+    }
+
+    private FasterFsr4Kind CurrentFasterKind() =>
+        this.FindControl<ComboBox>("FasterKindCombo")!.SelectedIndex == 1 ? FasterFsr4Kind.Lossy : FasterFsr4Kind.Exact;
+
+    /// <summary>What the chosen build is for this GPU, and how to see that it is the one running.</summary>
+    private void UpdateFasterNote()
+    {
+        if (this.FindControl<TextBlock>("FasterNoteText") is not { } note) return;
+        var generation = _manager.GpuGeneration;
+        var label = Fsr4ShaderOverrides.OverlayLabel(generation, CurrentFasterKind());
+        note.Text = CurrentFasterKind() == FasterFsr4Kind.Lossy
+            ? $"The build for {RadeonGenerations.Describe(generation)}. Changes the image: softer, and frame "
+              + $"times alternate between short and long. OptiScaler's overlay names it {label} when it is the one running."
+            : $"The build for {RadeonGenerations.Describe(generation)}, with AMD's image unchanged. "
+              + $"OptiScaler's overlay names it {label} when it is the one running.";
+    }
+
     private Fsr4Backend CurrentBackend()
     {
+        if (this.FindControl<RadioButton>("RbFaster")!.IsChecked == true) return Fsr4Backend.FasterShaders;
         if (this.FindControl<RadioButton>("RbInt8")!.IsChecked == true) return Fsr4Backend.Int8Community;
         if (this.FindControl<RadioButton>("RbCustomMerged")!.IsChecked == true) return Fsr4Backend.CustomMerged;
         return Fsr4Backend.Default;
@@ -429,7 +484,7 @@ public partial class InstallPage : UserControl, IHostedPage
             addFakenvapi: IsChecked("ChkFakenvapi"), addNukemFg: IsChecked("ChkNukemFg"),
             spoofMethod: CurrentSpoofMethod(), forceInt8: IsChecked("ChkForceInt8"),
             fsr4Watermark: IsChecked("ChkWatermark"),
-            optiscalerVersion: CurrentOptiScalerVersion());
+            optiscalerVersion: CurrentOptiScalerVersion(), fasterKind: CurrentFasterKind());
 
         var files = this.FindControl<StackPanel>("FilesList")!;
         var ini = this.FindControl<StackPanel>("IniList")!;
@@ -480,6 +535,7 @@ public partial class InstallPage : UserControl, IHostedPage
         ForceInt8 = IsChecked("ChkForceInt8");
         Fsr4Watermark = IsChecked("ChkWatermark");
         SelectedOptiScalerVersion = CurrentOptiScalerVersion();
+        SelectedFasterKind = CurrentFasterKind();
         RequestClose?.Invoke(true);
     }
 

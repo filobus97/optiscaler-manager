@@ -78,6 +78,15 @@
               <ComboBox Name="Int8VersionCombo" MinWidth="200"
                         ToolTip.Tip="Every release that repo publishes, newest first. Entries marked pre-release are builds its author has not declared stable."/>
             </StackPanel>
+            <RadioButton Name="RbFaster" GroupName="Fsr4" Content="Faster FSR 4.1.1 (shader overrides)"
+                         ToolTip.Tip="AMD's FSR 4.1.1 with its slowest shaders rewritten, from github.com/zgauthier2000/fsr4-shader-performance-overrides — a third-party project. It replaces the FSR 4.1.1 upscaler OptiScaler installs, with the build made for your GPU. Turn it on under Settings → Sources."/>
+            <StackPanel Name="FasterPanel" Spacing="4" Margin="26,0,0,0" IsVisible="False">
+              <ComboBox Name="FasterKindCombo" MinWidth="260"
+                        ToolTip.Tip="Exact keeps AMD's image byte for byte. Lossy is about twice as fast as AMD's, at the cost of a softer image and frame times that alternate between short and long."/>
+              <TextBlock Name="FasterNoteText" TextWrapping="Wrap"
+ FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
+            </StackPanel>
           </StackPanel>
 
           <Border Height="1" Background="{StaticResource BrBorderSubtle}" Margin="0,2"/>

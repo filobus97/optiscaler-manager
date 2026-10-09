@@ -31,6 +31,8 @@ public static class ComponentIds
     public const string Fsr4Extras = "fsr4-extras";
     /// <summary>User-supplied custom DLLs overlaid on top of the OptiScaler install.</summary>
     public const string CustomMerged = "custom-merged";
+    /// <summary>Faster FSR 4.1.1 builds from the FSR 4 shader overrides project.</summary>
+    public const string Fsr4ShaderOverrides = "fsr4-shader-overrides";
 }
 
 /// <summary>

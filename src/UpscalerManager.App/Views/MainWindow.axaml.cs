@@ -411,7 +411,7 @@ public partial class MainWindow : Window
             await _manager.InstallAsync(row.Game, dialog.SelectedBackend, dialog.SelectedInt8Version, dialog.SelectedUpscaler, dialog.SelectedProfile, progress,
                 addFakenvapi: dialog.AddFakenvapi, addNukemFg: dialog.AddNukemFg,
                 spoofMethod: dialog.SelectedSpoofMethod, forceInt8: dialog.ForceInt8, fsr4Watermark: dialog.Fsr4Watermark,
-                optiscalerVersion: dialog.SelectedOptiScalerVersion);
+                optiscalerVersion: dialog.SelectedOptiScalerVersion, fasterKind: dialog.SelectedFasterKind);
             row.Game.IsOptiscalerInstalled = true;
             row.RefreshFromGame();
             _vm.StatusText = $"OptiScaler installed for {row.Game.Name}.";

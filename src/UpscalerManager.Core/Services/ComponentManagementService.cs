@@ -32,7 +32,7 @@ namespace UpscalerManager.Core.Services
     /// <summary>
     /// Manages OptiScaler, Fakenvapi, and NukemFG components
     /// </summary>
-    public class ComponentManagementService
+    public partial class ComponentManagementService
     {
         private static readonly object _downloadLock = new();
         private static readonly System.Collections.Generic.HashSet<string> _activeOptiDownloads = new(StringComparer.OrdinalIgnoreCase);

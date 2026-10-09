@@ -72,9 +72,17 @@ namespace UpscalerManager.UiHarness
             await Until(() => Cards().Count(c => c.GetVisualDescendants().OfType<Avalonia.Controls.Image>()
                 .Any(i => i.IsEffectivelyVisible)) >= 4, "cover art", timeoutMs: 20000, optional: true);
 
+            // A second pass on an RX 9000 checks only what differs there.
+            if (Environment.GetEnvironmentVariable("UM_HARNESS_GPU") == "rdna4")
+            {
+                await Rdna4Async();
+                return;
+            }
+
             await LibraryAsync();
             await InstallPageAsync();
             await SettingsAsync();
+            await FasterFsr4Async();
         }
 
         // ── Checks ───────────────────────────────────────────────────────────────

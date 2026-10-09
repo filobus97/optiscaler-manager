@@ -2057,6 +2057,23 @@ namespace UpscalerManager.Core.Services
         }
 
         /// <summary>
+        /// The <c>amd_fidelityfx_upscaler_dx12.dll</c> OptiScaler loads: the file or folder
+        /// <c>[Libraries] FfxDx12SRPath</c> names if it exists, else the copy in its library
+        /// folder — the same order OptiScaler tries them in.
+        /// </summary>
+        public static string OptiScalerUpscalerPath(string gameDir)
+        {
+            const string name = "amd_fidelityfx_upscaler_dx12.dll";
+            if (ReadIniValue(gameDir, "Libraries", "FfxDx12SRPath") is { } configured
+                && ResolveAgainst(gameDir, configured) is { } path)
+            {
+                if (Directory.Exists(path)) return Path.Combine(path, name);
+                if (File.Exists(path)) return path;
+            }
+            return Path.Combine(OptiScalerLibraryDirectory(gameDir), name);
+        }
+
+        /// <summary>
         /// The ini keys that turn on Nukem's frame generation for the release in
         /// <paramref name="dir"/> (a game folder or a release's cache).
         /// </summary>

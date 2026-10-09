@@ -360,6 +360,7 @@ public sealed class ManagerService
     {
         Fsr4Backend.CustomMerged => HasCustomDlls,
         Fsr4Backend.Int8Community => OptiScalerExtrasEnabled,
+        Fsr4Backend.FasterShaders => Fsr4ShaderOverridesEnabled && FasterFsr4Refusal() is null,
         _ => true, // Default needs nothing
     };
 
@@ -396,6 +397,12 @@ public sealed class ManagerService
         get => _components.Config.SourceOptiScalerExtras;
         set { _components.Config.SourceOptiScalerExtras = value; _components.SaveConfiguration(); }
     }
+
+    /// <summary>Which Radeon generation this machine's GPU is, for anything cut per generation.</summary>
+    public RadeonGeneration GpuGeneration => RadeonGenerations.Of(DetectPrimaryGpu());
+
+    /// <summary>Why this GPU gets no faster FSR 4 build, or null when it gets both.</summary>
+    public string? FasterFsr4Refusal() => Fsr4ShaderOverrides.RefusalFor(GpuGeneration);
 
     /// <summary>Whether the faster FSR 4.1.1 builds are offered. See <see cref="AppConfiguration.SourceFsr4ShaderOverrides"/>.</summary>
     public bool Fsr4ShaderOverridesEnabled
@@ -535,13 +542,14 @@ public sealed class ManagerService
     public InstallPreview BuildInstallPreview(Game game, Fsr4Backend backend, UpscalerSelection selection,
         bool addFakenvapi = false, bool addNukemFg = false,
         SpoofMethod spoofMethod = SpoofMethod.Off, bool forceInt8 = false, bool fsr4Watermark = false,
-        string? optiscalerVersion = null)
+        string? optiscalerVersion = null, FasterFsr4Kind fasterKind = FasterFsr4Kind.Exact)
         => ComponentRegistry.BuildInstallPreview(backend, selection, ComponentRegistry.DefaultInjectionDll, MenuShortcutKey,
             backend == Fsr4Backend.CustomMerged ? _components.GetCustomDlls().Select(d => d.Name).ToList() : null,
             addFakenvapi, addNukemFg, spoofMethod, forceInt8, fsr4Watermark,
             legacyFsr4UpdateKey: GameInstallationService.IniDocumentsKey(
                 ReleaseCache(optiscalerVersion), "FSR", "Fsr4Update"),
-            nukemKeys: GameInstallationService.NukemFrameGenerationKeys(ReleaseCache(optiscalerVersion)));
+            nukemKeys: GameInstallationService.NukemFrameGenerationKeys(ReleaseCache(optiscalerVersion)),
+            fasterKind: fasterKind);
 
     /// <summary>
     /// The downloaded release a preview should read: the version the user picked, or
@@ -579,8 +587,10 @@ public sealed class ManagerService
         OptiScalerProfile? iniProfile, IProgress<string>? status = null,
         bool addFakenvapi = false, bool addNukemFg = false,
         SpoofMethod spoofMethod = SpoofMethod.Off, bool forceInt8 = false, bool fsr4Watermark = false,
-        string? optiscalerVersion = null)
+        string? optiscalerVersion = null, FasterFsr4Kind fasterKind = FasterFsr4Kind.Exact)
     {
+        if (backend == Fsr4Backend.FasterShaders && FasterFsr4Refusal() is { } refused)
+            throw new InvalidOperationException(refused);
         if (!IsBackendAvailable(backend))
             throw new InvalidOperationException($"The selected FSR 4 backend ({backend}) is not available. Import it in Settings first.");
         if (addNukemFg && !IsNukemFgCached)
@@ -608,7 +618,12 @@ public sealed class ManagerService
         }
 
         // Resolve add-on caches up front so the single InstallOptiScaler call places
-        // everything under one manifest (Revert then removes add-ons too).
+        // everything under one manifest (Revert then removes add-ons too). The faster FSR 4
+        // build too: anything that can refuse or fail to download does it before a single
+        // file is written, not after OptiScaler is half in place.
+        var fasterDll = backend == Fsr4Backend.FasterShaders
+            ? await PrepareFasterFsr4Async(cachePath, fasterKind, status)
+            : null;
         var fakenvapiCache = addFakenvapi ? await EnsureFakenvapiCacheAsync(status) : "";
         var nukemCache = addNukemFg ? _components.GetNukemFGCachePath() : "";
 
@@ -634,6 +649,11 @@ public sealed class ManagerService
             case Fsr4Backend.Int8Community:
             {
                 await InstallInt8CommunityAsync(game, gameDir, int8Version, status);
+                break;
+            }
+            case Fsr4Backend.FasterShaders:
+            {
+                PlaceFasterFsr4(game, gameDir, fasterDll!, status);
                 break;
             }
             case Fsr4Backend.Default:
@@ -875,6 +895,59 @@ public sealed class ManagerService
             },
             logTag: "Fsr4Int8");
         game.Fsr4ExtraVersion = version;
+    }
+
+    /// <summary>
+    /// Everything about the faster FSR 4.1.1 build that can say no, before the install
+    /// writes anything: the GPU, the FSR version the release being installed ships, the
+    /// listing, the download and its checks. Returns the checked DLL.
+    /// </summary>
+    private async Task<string> PrepareFasterFsr4Async(string releaseCache, FasterFsr4Kind kind, IProgress<string>? status)
+    {
+        var generation = GpuGeneration;
+        if (Fsr4ShaderOverrides.RefusalFor(generation) is { } refused)
+            throw new InvalidOperationException(refused);
+
+        var bundled = Directory.Exists(releaseCache)
+            ? Directory.EnumerateFiles(releaseCache, Fsr4ShaderOverrides.DllName, SearchOption.AllDirectories).FirstOrDefault()
+            : null;
+        if (Fsr4ShaderOverrides.BaseMismatch(bundled is null ? null : PeFileInspector.Inspect(bundled).FileVersion) is { } mismatch)
+            throw new InvalidOperationException(mismatch);
+
+        status?.Report("Looking up the faster FSR 4 builds…");
+        var release = await _components.LatestFsr4OverridesReleaseAsync()
+            ?? throw new InvalidOperationException(
+                "The faster FSR 4 builds could not be listed. Check the connection and try again.");
+        var assetName = Fsr4ShaderOverrides.AssetFor(generation, kind)!;
+        var asset = release.Assets.FirstOrDefault(a => a.Name.Equals(assetName, StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException(
+                $"Release {release.Tag} has no {assetName} for {RadeonGenerations.Describe(generation)}.");
+
+        status?.Report($"Downloading faster FSR 4.1.1 ({kind.ToString().ToLowerInvariant()}, {release.Tag})…");
+        var dll = await _components.DownloadFsr4OverrideAsync(release.Tag, asset);
+        Log.Write($"[FasterFsr4] {assetName} from {release.Tag} ready; OptiScaler's overlay should name it "
+                  + Fsr4ShaderOverrides.OverlayLabel(generation, kind));
+        return dll;
+    }
+
+    /// <summary>
+    /// Puts the prepared build over the FSR 4.1.1 upscaler OptiScaler just installed —
+    /// the copy OptiScaler loads, wherever this release keeps it — tracked, so Remove
+    /// takes it away with the rest.
+    /// </summary>
+    private void PlaceFasterFsr4(Game game, string gameDir, string dll, IProgress<string>? status)
+    {
+        var target = GameInstallationService.OptiScalerUpscalerPath(gameDir);
+
+        // Checked again on the file actually being replaced: a profile can point
+        // OptiScaler at a different copy than the one the release shipped.
+        var installed = File.Exists(target) ? PeFileInspector.Inspect(target).FileVersion : null;
+        if (Fsr4ShaderOverrides.BaseMismatch(installed) is { } mismatch)
+            throw new InvalidOperationException(mismatch);
+
+        status?.Report("Installing faster FSR 4.1.1…");
+        _install.InstallTrackedFile(game, dll, Path.GetRelativePath(gameDir, target), gameDir, logTag: "FasterFsr4");
+        Log.Write($"[FasterFsr4] Installed at {target}");
     }
 
     // ── Revert support ──────────────────────────────────────────────────────

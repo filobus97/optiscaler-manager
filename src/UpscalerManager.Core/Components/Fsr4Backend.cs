@@ -36,4 +36,12 @@ public enum Fsr4Backend
     /// amdxcffx64.dll) are added alongside. Maps to <see cref="ComponentIds.CustomMerged"/>.
     /// </summary>
     CustomMerged,
+
+    /// <summary>
+    /// AMD's FSR 4.1.1 upscaler with its slowest shaders rewritten, from
+    /// zgauthier2000/fsr4-shader-performance-overrides, replacing the copy OptiScaler
+    /// installed. Exact or lossy; never offered on RX 9000. Maps to
+    /// <see cref="ComponentIds.Fsr4ShaderOverrides"/>.
+    /// </summary>
+    FasterShaders,
 }
