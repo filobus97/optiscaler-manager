@@ -359,7 +359,8 @@ public sealed class ManagerService
     public bool IsBackendAvailable(Fsr4Backend backend) => backend switch
     {
         Fsr4Backend.CustomMerged => HasCustomDlls,
-        _ => true, // Default and Int8Community need no prior import
+        Fsr4Backend.Int8Community => OptiScalerExtrasEnabled,
+        _ => true, // Default needs nothing
     };
 
     // ── Menu / overlay shortcut key (global, persisted) ─────────────────────
@@ -387,6 +388,20 @@ public sealed class ManagerService
     {
         get => _components.Config.SwapRepositoryDownloads;
         set { _components.Config.SwapRepositoryDownloads = value; _components.SaveConfiguration(); }
+    }
+
+    /// <summary>Whether OptiScaler Client's FSR 4 INT8 builds are offered. See <see cref="AppConfiguration.SourceOptiScalerExtras"/>.</summary>
+    public bool OptiScalerExtrasEnabled
+    {
+        get => _components.Config.SourceOptiScalerExtras;
+        set { _components.Config.SourceOptiScalerExtras = value; _components.SaveConfiguration(); }
+    }
+
+    /// <summary>Whether the faster FSR 4.1.1 builds are offered. See <see cref="AppConfiguration.SourceFsr4ShaderOverrides"/>.</summary>
+    public bool Fsr4ShaderOverridesEnabled
+    {
+        get => _components.Config.SourceFsr4ShaderOverrides;
+        set { _components.Config.SourceFsr4ShaderOverrides = value; _components.SaveConfiguration(); }
     }
 
     /// <summary>

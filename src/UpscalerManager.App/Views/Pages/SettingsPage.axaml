@@ -29,14 +29,40 @@
           </Grid>
         </Border>
 
+        <!-- Every third-party source by name, each switchable. Builds already on your disk
+             and OptiScaler's own releases are not on the list: they need no trust decision. -->
         <Border Classes="Card">
-          <StackPanel Spacing="4">
-            <CheckBox Name="ChkRepositoryDownloads" Content="Download builds from the DLSS Swapper archive"
- IsCheckedChanged="OnSwapSourceChanged"
-                      ToolTip.Tip="A third-party mirror of shipped builds, hosted by the DLSS Swapper project — the only source for old DLSS releases and for AMD's FidelityFX runtimes. Downloads are checked against the hashes its index publishes. Builds already on your disk are always offered and need no network."/>
-            <TextBlock Name="RepositoryNoteText" TextWrapping="Wrap"
+          <StackPanel Spacing="10">
+            <TextBlock Text="Sources" FontSize="{StaticResource SizeHeading}" FontWeight="SemiBold"/>
+
+            <StackPanel Spacing="2">
+              <CheckBox Name="ChkRepositoryDownloads" Content="DLSS Swapper archive"
+ IsCheckedChanged="OnSourceChanged"
+                        ToolTip.Tip="A third-party mirror of shipped builds, hosted by the DLSS Swapper project — the only source for old DLSS releases and for AMD's FidelityFX runtimes. Downloads are checked against the hashes its index publishes. Builds already on your disk are always offered and need no network."/>
+              <TextBlock Name="RepositoryNoteText" TextWrapping="Wrap" Margin="28,0,0,0"
  FontSize="{StaticResource SizeCaption}"
  Foreground="{StaticResource BrTextSecondary}"/>
+            </StackPanel>
+
+            <StackPanel Spacing="2">
+              <CheckBox Name="ChkOptiScalerExtras" Content="OptiScaler Client extras"
+ IsCheckedChanged="OnSourceChanged"
+                        ToolTip.Tip="Agustinm28/OptiScaler-Extras, from the author of OptiScaler Client. Community FSR 4 INT8 builds, offered under Files to install for cards whose driver has no FSR 4."/>
+              <TextBlock Text="FSR 4 INT8 builds for cards without FSR 4 · Agustinm28/OptiScaler-Extras"
+ TextWrapping="Wrap" Margin="28,0,0,0"
+ FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
+            </StackPanel>
+
+            <StackPanel Spacing="2">
+              <CheckBox Name="ChkFsr4ShaderOverrides" Content="FSR 4 shader overrides"
+ IsCheckedChanged="OnSourceChanged"
+                        ToolTip.Tip="zgauthier2000/fsr4-shader-performance-overrides. AMD's FSR 4.1.1 with its slowest shaders rewritten: the exact build keeps AMD's image byte for byte and is about 25–30% cheaper at 4K on RX 7000; the lossy build is about twice as fast and softens the image. AMD's GPU check is lifted in every build, so they are never offered on RX 9000."/>
+              <TextBlock Text="Faster FSR 4.1.1 for RX 7000, RX 6000 and the Steam Deck · zgauthier2000/fsr4-shader-performance-overrides"
+ TextWrapping="Wrap" Margin="28,0,0,0"
+ FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
+            </StackPanel>
           </StackPanel>
         </Border>
 

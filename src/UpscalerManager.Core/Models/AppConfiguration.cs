@@ -128,6 +128,19 @@ namespace UpscalerManager.Core.Models
         /// </summary>
         public bool SwapRepositoryDownloads { get; set; } = true;
 
+        /// <summary>
+        /// Offer the FSR 4 INT8 builds from Agustinm28/OptiScaler-Extras (OptiScaler
+        /// Client's author) in the install screen. On by default: it always was.
+        /// </summary>
+        public bool SourceOptiScalerExtras { get; set; } = true;
+
+        /// <summary>
+        /// Offer the faster FSR 4.1.1 builds from zgauthier2000/fsr4-shader-performance-overrides.
+        /// Off by default: they are AMD's DLL modified by a third party, with AMD's GPU
+        /// check lifted, so someone has to choose them.
+        /// </summary>
+        public bool SourceFsr4ShaderOverrides { get; set; }
+
         // Window state persistence
         public double WindowWidth { get; set; } = 1200;
         public double WindowHeight { get; set; } = 720;

@@ -92,6 +92,8 @@ public partial class SettingsPage : UserControl, IHostedPage
 
         // Set before the handler can fire, so loading the page does not write config.
         repository.IsChecked = _manager.SwapRepositoryDownloadsEnabled;
+        this.FindControl<CheckBox>("ChkOptiScalerExtras")!.IsChecked = _manager.OptiScalerExtrasEnabled;
+        this.FindControl<CheckBox>("ChkFsr4ShaderOverrides")!.IsChecked = _manager.Fsr4ShaderOverridesEnabled;
         _swapSourcesReady = true;
 
         RefreshSwapSourceNote();
@@ -99,12 +101,17 @@ public partial class SettingsPage : UserControl, IHostedPage
 
     private bool _swapSourcesReady;
 
-    private void OnSwapSourceChanged(object? sender, RoutedEventArgs e)
+    private void OnSourceChanged(object? sender, RoutedEventArgs e)
     {
-        if (!_swapSourcesReady) return;
+        if (!_swapSourcesReady || sender is not CheckBox box) return;
 
-        if (this.FindControl<CheckBox>("ChkRepositoryDownloads") is { } repository)
-            _manager.SwapRepositoryDownloadsEnabled = repository.IsChecked == true;
+        var on = box.IsChecked == true;
+        switch (box.Name)
+        {
+            case "ChkRepositoryDownloads": _manager.SwapRepositoryDownloadsEnabled = on; break;
+            case "ChkOptiScalerExtras": _manager.OptiScalerExtrasEnabled = on; break;
+            case "ChkFsr4ShaderOverrides": _manager.Fsr4ShaderOverridesEnabled = on; break;
+        }
 
         RefreshSwapSourceNote();
     }
@@ -118,7 +125,7 @@ public partial class SettingsPage : UserControl, IHostedPage
         if (this.FindControl<TextBlock>("RepositoryNoteText") is not { } note) return;
 
         note.Text = _manager.SwapRepositoryDownloadsEnabled
-            ? "Nothing is downloaded until you pick a build."
+            ? "Old DLSS, FSR and XeSS builds for swapping · beeradmoore/dlss-swapper"
             : "Off: swapping still works, with builds already in your games, in releases this "
               + "app downloaded, or files you import yourself.";
     }

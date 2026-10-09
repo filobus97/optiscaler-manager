@@ -108,6 +108,10 @@ public partial class InstallPage : UserControl, IHostedPage
         customMerged.IsEnabled = _manager.HasCustomDlls;
         if (!customMerged.IsEnabled) customMerged.Content = "Custom DLLs — none imported (Settings)";
 
+        // A source switched off in Settings is not offered at all, rather than offered
+        // and refused.
+        int8.IsVisible = _manager.OptiScalerExtrasEnabled;
+
         // Pre-selected, and under Advanced: OptiScaler's own release already bundles a
         // working FSR 4.x upscaler, so the zero-decision path delivers FSR 4 as it is.
         def.IsChecked = true;
