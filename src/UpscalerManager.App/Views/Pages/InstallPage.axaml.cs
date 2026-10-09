@@ -68,6 +68,14 @@ public partial class InstallPage : UserControl, IHostedPage
         _manager = manager;
         _game = game;
 
+        if (!string.IsNullOrEmpty(game.AntiCheat))
+        {
+            this.FindControl<Border>("AntiCheatBox")!.IsVisible = true;
+            this.FindControl<TextBlock>("AntiCheatText")!.Text =
+                $"This game ships {game.AntiCheat}. OptiScaler changes what the game loads, which is "
+                + "what anti-cheat looks for — use it offline only, or the account can be banned.";
+        }
+
         SetupBackendOptions();
         SetupProfiles();
         SetupUpscalerPickers();

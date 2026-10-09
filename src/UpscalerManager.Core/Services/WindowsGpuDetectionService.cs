@@ -34,6 +34,12 @@ namespace UpscalerManager.Core.Services
                         // Get driver version
                         gpu.DriverVersion = obj["DriverVersion"]?.ToString() ?? "Unknown";
 
+                        // PCI\VEN_1002&DEV_744C&... — the device ID tells a generation apart.
+                        var pnp = obj["PNPDeviceID"]?.ToString() ?? "";
+                        var dev = System.Text.RegularExpressions.Regex.Match(pnp, "DEV_([0-9A-Fa-f]{4})");
+                        if (dev.Success)
+                            gpu.DeviceId = Convert.ToInt32(dev.Groups[1].Value, 16);
+
                         // Get video memory (in bytes) using WMI + registry fallback.
                         gpu.VideoMemoryBytes = GetBestVideoMemoryBytes(obj, gpu.Name);
 

@@ -45,7 +45,8 @@ public class LinuxGpuDetectionService : IGpuDetectionService
                     Vendor = vendor,
                     Name = GetGpuName(devicePath, vendor),
                     VideoMemoryBytes = GetVram(devicePath, vendor),
-                    DriverVersion = GetDriverVersion(vendor)
+                    DriverVersion = GetDriverVersion(vendor),
+                    DeviceId = ReadHexFile(Path.Combine(devicePath, "device"))
                 };
 
                 gpus.Add(gpu);
@@ -197,6 +198,17 @@ public class LinuxGpuDetectionService : IGpuDetectionService
             return File.ReadAllText(modulePath).Trim();
 
         return "Unknown";
+    }
+
+    private static int? ReadHexFile(string path)
+    {
+        try
+        {
+            var text = File.ReadAllText(path).Trim();
+            return int.TryParse(text.Replace("0x", ""), System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture, out var value) ? value : null;
+        }
+        catch { return null; }
     }
 
     private string? RunProcess(string fileName, string args, int timeoutMs)

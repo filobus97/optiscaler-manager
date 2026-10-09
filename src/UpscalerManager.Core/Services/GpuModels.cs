@@ -19,6 +19,9 @@ namespace UpscalerManager.Core.Services
         public string Name { get; set; } = string.Empty;
         public GpuVendor Vendor { get; set; } = GpuVendor.Unknown;
         public string DriverVersion { get; set; } = string.Empty;
+
+        /// <summary>The PCI device ID (e.g. 0x744C), when the platform reports one.</summary>
+        public int? DeviceId { get; set; }
         public ulong VideoMemoryBytes { get; set; }
 
         public string VideoMemoryGB => $"{VideoMemoryBytes / (1024.0 * 1024.0 * 1024.0):F1} GB";

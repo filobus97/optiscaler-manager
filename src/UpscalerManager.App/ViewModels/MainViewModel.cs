@@ -28,12 +28,22 @@ public sealed class MainViewModel : ViewModelBase
         set { if (SetField(ref _hideGamesWithoutUpscaler, value)) RefreshVisibleGames(); }
     }
 
-    /// <summary>Rebuilds the shown list. Call after a scan, or when the filter changes.</summary>
+    private bool _hideGamesWithAntiCheat;
+
+    /// <summary>The toolbar's second filter: games that ship a kernel-level anti-cheat.</summary>
+    public bool HideGamesWithAntiCheat
+    {
+        get => _hideGamesWithAntiCheat;
+        set { if (SetField(ref _hideGamesWithAntiCheat, value)) RefreshVisibleGames(); }
+    }
+
+    /// <summary>Rebuilds the shown list. Call after a scan, or when a filter changes.</summary>
     public void RefreshVisibleGames()
     {
-        var shown = _hideGamesWithoutUpscaler
-            ? Games.Where(g => !g.HasNoUpscaler).ToList()
-            : Games.ToList();
+        var shown = Games
+            .Where(g => !(_hideGamesWithoutUpscaler && g.HasNoUpscaler))
+            .Where(g => !(_hideGamesWithAntiCheat && g.HasAntiCheat))
+            .ToList();
 
         VisibleGames.Clear();
         foreach (var row in shown) VisibleGames.Add(row);

@@ -26,12 +26,14 @@ public sealed class ManagerService
     private readonly GameScannerService _scanner = new();
     private readonly ProfileManagementService _profiles = new();
     private readonly BackupStoreService _backupStore = new();
-    private readonly IGpuDetectionService? _gpu = PlatformServiceFactory.CreateGpuDetectionService();
+    private readonly IGpuDetectionService? _gpu;
 
-    public ManagerService(IManualComponentProvider manualProvider)
+    /// <param name="gpu">Where the GPU is read from; the platform's own detection unless given.</param>
+    public ManagerService(IManualComponentProvider manualProvider, IGpuDetectionService? gpu = null)
     {
         _components = new ComponentManagementService(manualProvider);
         _repository = new DllRepositoryService(_library);
+        _gpu = gpu ?? PlatformServiceFactory.CreateGpuDetectionService();
     }
 
     // ── GPU banner ──────────────────────────────────────────────────────────
@@ -403,6 +405,17 @@ public sealed class ManagerService
         {
             _components.Config.ScanSources.UpscalerFilter =
                 value ? UpscalerFilterMode.HideWithoutUpscaler : UpscalerFilterMode.ShowAll;
+            _components.SaveConfiguration();
+        }
+    }
+
+    /// <summary>The toolbar's anti-cheat filter, saved as it is toggled.</summary>
+    public bool HideGamesWithAntiCheat
+    {
+        get => _components.Config.ScanSources.HideAntiCheatGames;
+        set
+        {
+            _components.Config.ScanSources.HideAntiCheatGames = value;
             _components.SaveConfiguration();
         }
     }

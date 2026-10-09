@@ -61,10 +61,15 @@
         </StackPanel>
       </StackPanel>
       <!-- The filter belongs where the list is, not three screens away in Settings. -->
-      <CheckBox Grid.Column="1" Name="ChkHideNoUpscaler" Content="Hide games with no upscaler"
- VerticalAlignment="Center" Margin="0,0,12,0"
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" Margin="0,0,12,0"
+ VerticalAlignment="Center">
+        <CheckBox Name="ChkHideNoUpscaler" Content="Hide: no upscaler"
  IsCheckedChanged="OnHideNoUpscalerChanged"
-                ToolTip.Tip="Hides games with no DLSS, FSR or XeSS library, which neither route can help. They stay scanned, so turning this off brings them straight back."/>
+                  ToolTip.Tip="Hides games with no DLSS, FSR or XeSS library, which neither route can help. They stay scanned, so turning this off brings them straight back."/>
+        <CheckBox Name="ChkHideAntiCheat" Content="Hide: anti-cheat"
+ IsCheckedChanged="OnHideAntiCheatChanged"
+                  ToolTip.Tip="Hides games that ship Easy Anti-Cheat, BattlEye or Denuvo Anti-Cheat. OptiScaler and replacement DLLs change what a game loads, which is what those look for — using them online can get an account banned."/>
+      </StackPanel>
       <Button Grid.Column="2" Name="RescanButton" Content="Rescan"
  Click="OnRescanClick" Margin="0,0,8,0"
  IsEnabled="{Binding IsIdle}"
@@ -147,6 +152,16 @@
  Foreground="{StaticResource BrTextSecondary}"/>
                         <Image Source="{Binding CoverImage}" Stretch="UniformToFill"
  IsVisible="{Binding HasCoverImage}"/>
+                        <!-- On the art rather than among the chips: the chips say what a
+                             game has, this says what not to do to it. -->
+                        <Border Name="AntiCheatTag" IsVisible="{Binding HasAntiCheat}"
+ VerticalAlignment="Top" HorizontalAlignment="Left" Margin="8"
+ Background="{StaticResource BrBgDeep}" Opacity="0.92"
+ CornerRadius="{StaticResource RadiusChip}" Padding="6,2"
+                                ToolTip.Tip="{Binding AntiCheatTip}">
+                          <TextBlock Text="Anti-cheat" FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrWarning}"/>
+                        </Border>
                       </Grid>
                     </Border>
 
@@ -164,9 +179,10 @@
                     </StackPanel>
 
                     <Panel Grid.Row="2" Margin="0,8,0,0">
-                      <!-- What the game already has, with versions: "FSR" alone says
-                           nothing, "FSR 4.1.1" answers the question. Chips wrap onto
-                           three reserved rows, each tinted by vendor. -->
+                      <!-- What the game already has, presence only: a card cannot say
+                           which of several copies the game loads, so versions live on its
+                           page (see TechChip). Chips wrap onto three reserved rows, each
+                           tinted by vendor. -->
                       <ItemsControl Name="TechChipArea" ItemsSource="{Binding TechBadges}"
  Height="64" ClipToBounds="True"
  IsVisible="{Binding HasTechBadges}">

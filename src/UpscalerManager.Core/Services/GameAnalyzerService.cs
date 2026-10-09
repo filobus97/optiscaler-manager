@@ -60,6 +60,7 @@ public class GameAnalyzerService
         foreach (var n in _dlssFrameGenNames) _allTargetFileNames.Add(n);
         foreach (var n in _fsrNames) _allTargetFileNames.Add(n);
         foreach (var n in _xessNames) _allTargetFileNames.Add(n);
+        foreach (var n in AntiCheat.MarkerFiles) _allTargetFileNames.Add(n);
         // Everything the details view can describe — add-ons and runtimes included,
         // not just the four technologies the game list summarises.
         foreach (var n in Components.UpscalerCatalog.FileNames) _allTargetFileNames.Add(n);
@@ -118,6 +119,7 @@ public class GameAnalyzerService
         game.IsOptiscalerInstalled = false;
         game.OptiscalerVersion = null; // Will be repopulated from manifest or log
         game.DetectedComponents = new List<DetectedComponent>();
+        game.AntiCheat = null;
 
         // Two sets that happen to hold the same paths but answer different questions, and
         // must stay apart: ignoredFiles is version-detection hygiene (skip our own copies
@@ -133,6 +135,10 @@ public class GameAnalyzerService
             // ── Single-pass file collection ──────────────────────────────────────────
             // Traverse the game directory once and classify all relevant files by name.
             var collectedFiles = CollectRelevantFiles(game.InstallPath);
+
+            // Collected in the same pass as the upscalers rather than a second walk.
+            game.AntiCheat = AntiCheat.FromFiles(collectedFiles.Keys)
+                             ?? AntiCheat.FromSteamInstallScripts(game.InstallPath);
 
             // ── Detect OptiScaler ──────────────────────────────────────────────────
             // Do this first so we can ignore its installed files when looking for native DLLs
@@ -699,7 +705,7 @@ public class GameAnalyzerService
     /// folder serves an answer from an older build of this app indefinitely — which is
     /// how adding FsrVersion changed nothing on screen for anyone with an existing cache.
     /// </summary>
-    private const int AnalysisSchemaVersion = 2;
+    private const int AnalysisSchemaVersion = 3;
 
     private sealed class AnalysisCacheEntry
     {
@@ -722,6 +728,7 @@ public class GameAnalyzerService
         public bool IsOptiscalerInstalled { get; set; }
         public string? OptiscalerVersion { get; set; }
         public List<DetectedComponent>? DetectedComponents { get; set; }
+        public string? AntiCheat { get; set; }
 
         public static AnalysisCacheEntry FromGame(Game game, DateTime directoryWriteStampUtc)
         {
@@ -739,7 +746,8 @@ public class GameAnalyzerService
                 XessPath = game.XessPath,
                 IsOptiscalerInstalled = game.IsOptiscalerInstalled,
                 OptiscalerVersion = game.OptiscalerVersion,
-                DetectedComponents = game.DetectedComponents
+                DetectedComponents = game.DetectedComponents,
+                AntiCheat = game.AntiCheat
             };
         }
 
@@ -756,6 +764,7 @@ public class GameAnalyzerService
             game.IsOptiscalerInstalled = IsOptiscalerInstalled;
             game.OptiscalerVersion = OptiscalerVersion;
             game.DetectedComponents = DetectedComponents ?? new List<DetectedComponent>();
+            game.AntiCheat = AntiCheat;
         }
     }
 }

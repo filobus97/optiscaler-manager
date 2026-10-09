@@ -53,6 +53,8 @@ public partial class MainWindow : Window
 
         if (this.FindControl<CheckBox>("ChkHideNoUpscaler") is { } hide)
             hide.IsChecked = _manager.HideGamesWithoutUpscaler;
+        if (this.FindControl<CheckBox>("ChkHideAntiCheat") is { } hideAntiCheat)
+            hideAntiCheat.IsChecked = _manager.HideGamesWithAntiCheat;
         _ready = true;
 
         if (!Program.RelaunchedAfterUpdate)
@@ -119,7 +121,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        _vm.GpuText = $"{gpu.Name}  •  {gpu.Vendor}  •  {gpu.VideoMemoryGB}";
+        // The generation, where it can be read, instead of repeating the vendor: it is
+        // what decides which FSR 4 builds this machine is offered.
+        var generation = RadeonGenerations.Of(gpu);
+        var kind = generation is RadeonGeneration.NotRadeon or RadeonGeneration.Unknown
+            ? gpu.Vendor.ToString()
+            : RadeonGenerations.Describe(generation);
+        _vm.GpuText = $"{gpu.Name}  •  {kind}  •  {gpu.VideoMemoryGB}";
         _vm.GpuBrush = gpu.Vendor switch
         {
             GpuVendor.AMD => Brush("BrTechAmd"),
@@ -137,6 +145,15 @@ public partial class MainWindow : Window
         _manager.HideGamesWithoutUpscaler = box.IsChecked == true;
         _vm.HideGamesWithoutUpscaler = box.IsChecked == true;
         _vm.RefreshVisibleGames();
+    }
+
+    /// <summary>The anti-cheat filter on the library toolbar. Saved as it is toggled.</summary>
+    private void OnHideAntiCheatChanged(object? sender, RoutedEventArgs e)
+    {
+        if (!_ready || sender is not CheckBox box) return;
+
+        _manager.HideGamesWithAntiCheat = box.IsChecked == true;
+        _vm.HideGamesWithAntiCheat = box.IsChecked == true;
     }
 
     private static string Count(int games) => games == 1 ? "1 game" : $"{games} games";
@@ -159,6 +176,7 @@ public partial class MainWindow : Window
                 _vm.Games.Add(row);
             }
             _vm.HideGamesWithoutUpscaler = _manager.HideGamesWithoutUpscaler;
+            _vm.HideGamesWithAntiCheat = _manager.HideGamesWithAntiCheat;
             _vm.RefreshVisibleGames();
             _vm.StatusText = $"{Count(_vm.Games.Count)}.";
 

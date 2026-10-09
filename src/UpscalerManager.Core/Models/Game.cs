@@ -57,6 +57,9 @@ public class Game
 
     public bool IsOptiscalerInstalled { get; set; }
     public string? OptiscalerVersion { get; set; }
+
+    /// <summary>The kernel-level anti-cheat the game ships ("Easy Anti-Cheat", "BattlEye"…), or null.</summary>
+    public string? AntiCheat { get; set; }
     public string? Fsr4ExtraVersion { get; set; }
     /// <summary>
     /// Version label of the user-imported custom amdxcffx64.dll (FSR 4.x INT8)

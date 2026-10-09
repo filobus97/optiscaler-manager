@@ -79,6 +79,9 @@ namespace UpscalerManager.Core.Models
         public bool ScanUbisoft { get; set; } = true;
         public List<string> CustomFolders { get; set; } = new();
         public UpscalerFilterMode UpscalerFilter { get; set; } = UpscalerFilterMode.ShowAll;
+
+        /// <summary>Hide games that ship a kernel-level anti-cheat. Off by default.</summary>
+        public bool HideAntiCheatGames { get; set; }
     }
 
     /// <summary>

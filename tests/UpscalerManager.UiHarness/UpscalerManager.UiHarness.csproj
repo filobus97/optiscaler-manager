@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Drives the real window headlessly: builds a sample library in a scratch HOME, walks
+       the screens a change touches, checks what they show, and renders the README
+       screenshots. Not a unit test project — run it with run.sh, never against a real HOME. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <!-- The app publishes self-contained; referencing it here is only for its types. -->
+    <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/UpscalerManager.App/UpscalerManager.App.csproj" />
+    <PackageReference Include="Avalonia.Headless" Version="12.1.0" />
+    <!-- The same minimal-PE builder the core tests use, so sample DLLs carry real versions. -->
+    <Compile Include="../UpscalerManager.Core.Tests/PeTestData.cs" Link="PeTestData.cs" />
+  </ItemGroup>
+
+</Project>

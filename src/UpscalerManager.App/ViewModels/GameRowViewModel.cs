@@ -174,6 +174,8 @@ public sealed class GameRowViewModel : ViewModelBase
                         .Append(new TechBadge($"+{_allBadges.Count - (MaxCardChips - 1)}", TechVendor.Other))
                         .ToList();
         OnPropertyChanged(nameof(HasNoUpscaler));
+        OnPropertyChanged(nameof(HasAntiCheat));
+        OnPropertyChanged(nameof(AntiCheatTip));
         OnPropertyChanged(nameof(CardTip));
     }
 
@@ -185,5 +187,13 @@ public sealed class GameRowViewModel : ViewModelBase
     /// saying on the card so the absence does not read as a bug.
     /// </summary>
     public bool HasNoUpscaler => TechBadges.Count == 0 && !Game.IsOptiscalerInstalled;
+
+    /// <summary>True when the game ships a kernel-level anti-cheat.</summary>
+    public bool HasAntiCheat => !string.IsNullOrEmpty(Game.AntiCheat);
+
+    /// <summary>The card tag's tooltip: which anti-cheat, and why it matters here.</summary>
+    public string AntiCheatTip => HasAntiCheat
+        ? $"This game ships {Game.AntiCheat}. OptiScaler and replacement DLLs change what the game loads, which is what anti-cheat looks for: playing online with them can get the account banned."
+        : "";
 
 }

@@ -8,6 +8,16 @@
     <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
     <StackPanel Spacing="12" Margin="0,0,8,4">
 
+      <!-- Above everything else, because it can cost the player more than a broken
+           install: a banned account. -->
+      <Border Name="AntiCheatBox" IsVisible="False" Padding="12,10"
+ CornerRadius="{StaticResource RadiusControl}"
+ Background="{StaticResource BrBgElevated}"
+ BorderBrush="{StaticResource BrWarning}" BorderThickness="1">
+        <TextBlock Name="AntiCheatText" TextWrapping="Wrap"
+ Foreground="{StaticResource BrTextPrimary}"/>
+      </Border>
+
       <!-- The primary path: which release, and which upscaler it should run. Everything
            else has a defensible default and lives under Advanced. -->
       <Border Classes="Card">
