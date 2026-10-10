@@ -61,6 +61,7 @@ std::vector<Module> gModules;
 std::vector<Offered> gOffered;
 std::unordered_map<ffxContext, size_t> gContexts;
 std::deque<std::string> gNames; // names handed out must outlive the call
+std::string gLastListing;       // the version list as last logged
 
 FILE* gLog = nullptr;
 
@@ -329,9 +330,18 @@ ffxReturnCode_t AnswerVersions(ffxQueryDescGetVersions* request)
     }
     *request->outputCount = n;
 
+    // OptiScaler asks for the list dozens of times while it starts, so it is logged only
+    // when it changes.
+    std::string listing;
     for (uint64_t i = 0; i < n; ++i)
-        Log("  offers 0x%016llx '%s' from '%s'", (unsigned long long) listed[i].id, listed[i].name,
-            gModules[Resolve(listed[i].id).module].label.c_str());
+        listing += std::to_string(listed[i].id) + listed[i].name + '\n';
+    if (listing != gLastListing)
+    {
+        gLastListing = listing;
+        for (uint64_t i = 0; i < n; ++i)
+            Log("  offers 0x%016llx '%s' from '%s'", (unsigned long long) listed[i].id, listed[i].name,
+                gModules[Resolve(listed[i].id).module].label.c_str());
+    }
     return FFX_API_RETURN_OK;
 }
 

@@ -84,6 +84,17 @@ graphics, with `lossy` in the name for the lossy build) when it is the one runni
 
 ![The faster FSR 4.1.1 option on an RX 7000](docs/screenshots/install-faster-fsr4.png)
 
+**Several FSR builds, switchable in-game.** Under *Advanced → Files to install*, tick
+any number of builds from every source that is on: OptiScaler's own, the faster 4.1.1
+builds, each OptiScaler Client extras release, the DLLs you imported. The
+[omniloader](native/omniloader/README.md) takes the place of OptiScaler's FSR upscaler,
+loads them all, and lists every version they offer in OptiScaler's overlay under
+*FFX Upscaler*, so you can compare them without restarting the game. The first build
+ticked is the one the game starts on. OptiScaler's FSR 4 model override does not reach
+builds behind it yet.
+
+![Several FSR builds behind the omniloader](docs/screenshots/install-omniloader.png)
+
 **Reachable by D-pad throughout**, including the updater. It is meant to be used from a
 Steam Deck in Gaming Mode: add it as a non-Steam game.
 
@@ -106,9 +117,9 @@ builds:
   is labelled as one on every row and checked against the hashes its index publishes.
 - **OptiScaler Client extras** (on by default) — the FSR 4 INT8 builds from
   [`Agustinm28/OptiScaler-Extras`](https://github.com/Agustinm28/OptiScaler-Extras),
-  for hardware whose driver provides no FSR 4. Recent ones ship under the same filename
-  as AMD's runtime (`amdxcffx64.dll`) — a community replacement in the same slot, not
-  AMD's binary.
+  for hardware whose driver provides no FSR 4. They ship as
+  `amd_fidelityfx_upscaler_dx12.dll`; any that ship as `amdxcffx64.dll` take the name of
+  AMD's runtime, as a community replacement in the same slot, not AMD's binary.
 - **FSR 4 shader overrides** (off by default) — AMD's FSR 4.1.1 DLL, which AMD's SDK
   licenses under MIT, modified by
   [`zgauthier2000/fsr4-shader-performance-overrides`](https://github.com/zgauthier2000/fsr4-shader-performance-overrides)
@@ -120,11 +131,13 @@ builds:
 ```bash
 dotnet build                                    # 0 warnings expected
 dotnet test tests/UpscalerManager.Core.Tests    # the pure logic
+native/omniloader/build.sh test                 # the omniloader (MinGW-w64), tested under Wine
 tests/UpscalerManager.UiHarness/run.sh          # drives the real window, writes docs/screenshots
 dotnet publish src/UpscalerManager.App -c Release -r linux-x64 --self-contained
 ```
 
-CI builds and tests `linux-x64` and `win-x64` on every push to `main`. A release is cut
+CI builds and tests `linux-x64` and `win-x64`, and the omniloader, on every push to
+`main`; releases carry the omniloader inside the app. A release is cut
 by pushing a `v<version>` tag, or by pushing to `main` with `[release]` in the commit
 message.
 

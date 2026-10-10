@@ -27,14 +27,45 @@ permissions:
   contents: write
 
 jobs:
-  publish:
-    name: Publish (${{ matrix.rid }})
-    # A branch push only releases when explicitly marked; tags and manual
-    # dispatches always release.
+  # The omniloader is a Windows DLL the app carries inside it, built with MinGW-w64 and
+  # tested under Wine. Every platform's app gets the same one, so it is built once.
+  omniloader:
+    name: Omniloader DLL
     if: >
       github.event_name == 'workflow_dispatch' ||
       startsWith(github.ref, 'refs/tags/') ||
       contains(github.event.head_commit.message, '[release]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install MinGW-w64 and Wine
+        timeout-minutes: 15
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends g++-mingw-w64-x86-64-posix binutils-mingw-w64-x86-64 wine64 zip
+
+      # A release whose loader fails its own tests is not shipped.
+      - name: Build and test under Wine
+        timeout-minutes: 10
+        env:
+          WINEDLLOVERRIDES: "mscoree,mshtml="
+        run: native/omniloader/build.sh test
+
+      - name: Upload DLL
+        uses: actions/upload-artifact@v6
+        with:
+          name: omniloader-dll
+          path: native/omniloader/out/omniloader.dll
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Publish (${{ matrix.rid }})
+    needs: omniloader
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -52,6 +83,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+
+      # Without it the app still builds, and silently drops the "several FSR builds" option.
+      - name: Fetch the omniloader
+        uses: actions/download-artifact@v7
+        with:
+          name: omniloader-dll
+          path: native/omniloader/out
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v5

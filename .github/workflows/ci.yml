@@ -12,6 +12,27 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
+  omniloader:
+    name: Omniloader (MinGW, tests under Wine)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install MinGW-w64 and Wine
+        timeout-minutes: 15
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends g++-mingw-w64-x86-64-posix binutils-mingw-w64-x86-64 wine64
+
+      - name: Build and test under Wine
+        timeout-minutes: 10
+        env:
+          WINEDLLOVERRIDES: "mscoree,mshtml="
+        run: native/omniloader/build.sh test
+
   build:
     name: Build (${{ matrix.rid }})
     runs-on: ${{ matrix.os }}

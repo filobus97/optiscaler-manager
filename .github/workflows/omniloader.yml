@@ -1,11 +1,13 @@
 name: Omniloader
 
-# Builds the experimental omniloader, runs its tests under Wine, and builds the app with the
-# omniloader inside it, for testers. Only the omniloader branch builds it; main does not
-# ship it yet.
+# Test builds of a branch: the omniloader, its tests under Wine, its test kit, and the app
+# with it inside, for testers. Main is covered by CI, and releases build their own.
 on:
   push:
-    branches: [omniloader]
+    branches-ignore: [main]
+    paths:
+      - "native/omniloader/**"
+      - ".github/workflows/omniloader.yml"
   workflow_dispatch:
 
 concurrency:

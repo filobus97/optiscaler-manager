@@ -1,4 +1,4 @@
-# omniloader (experimental)
+# omniloader
 
 One FidelityFX DLL that holds several others. OptiScaler loads it in place of
 `amd_fidelityfx_upscaler_dx12.dll`, and the omniloader loads every build you list. Their
@@ -80,9 +80,10 @@ every later call for that upscaler to the same build.
 - **OptiScaler's FSR 4 preset fixes** find their place in the upscaler by scanning the DLL
   it loaded. Behind the omniloader they scan the omniloader instead, find nothing, and do
   nothing. The upscalers still run with their own defaults.
-- **Not yet run on a GPU.** The routing is tested under Wine with stand-in builds
-  (`./build.sh test`). Real builds are not, and one that looks itself up by its file name
-  could behave differently.
+- **Tested in one game so far.** Star Wars Outlaws on Linux (Proton), with eight builds
+  behind it: OptiScaler's own, both faster 4.1.1 builds, and five OptiScaler Client
+  extras releases. Each switch in the overlay landed on the build picked, as FSR 4's
+  watermark showed, and frame rates matched the same build installed alone.
 
 ## Still to do
 
