@@ -1,8 +1,8 @@
 name: Omniloader
 
-# Builds the experimental omniloader, runs its tests under Wine, and uploads the test kit
-# testers unpack beside OptiScaler. Only the omniloader branch builds it; main does not
-# ship it yet.
+# Builds the experimental omniloader, uploads the test kit testers unpack beside
+# OptiScaler, then runs its tests under Wine. Only the omniloader branch builds it; main
+# does not ship it yet.
 on:
   push:
     branches: [omniloader]
@@ -11,25 +11,30 @@ on:
       - ".github/workflows/omniloader.yml"
   workflow_dispatch:
 
+concurrency:
+  group: omniloader-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DEBIAN_FRONTEND: noninteractive
+
 jobs:
   build:
     name: Build and test
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install MinGW-w64 and Wine
+      - name: Install MinGW-w64
+        timeout-minutes: 10
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends g++-mingw-w64-x86-64-posix binutils-mingw-w64-x86-64 wine64 zip
+          sudo apt-get install -y --no-install-recommends g++-mingw-w64-x86-64-posix binutils-mingw-w64-x86-64 zip
 
-      # Wine would otherwise offer to install Mono and Gecko on first start.
-      - name: Test under Wine
-        env:
-          WINEDLLOVERRIDES: "mscoree,mshtml="
-        run: native/omniloader/build.sh test
-
-      - name: Pack test kit
+      # The kit is uploaded before Wine is installed, so a slow Wine install or a failing
+      # test still leaves a DLL to try. A failed test fails the run all the same.
+      - name: Build test kit
         run: native/omniloader/build.sh kit
 
       - name: Upload test kit
@@ -38,3 +43,14 @@ jobs:
           name: omniloader-test-kit-${{ github.sha }}
           path: native/omniloader/out/kit/
           if-no-files-found: error
+
+      - name: Install Wine
+        timeout-minutes: 15
+        run: sudo apt-get install -y --no-install-recommends wine64
+
+      # Wine would otherwise offer to install Mono and Gecko on first start.
+      - name: Test under Wine
+        timeout-minutes: 10
+        env:
+          WINEDLLOVERRIDES: "mscoree,mshtml="
+        run: native/omniloader/build.sh test
