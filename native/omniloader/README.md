@@ -70,6 +70,15 @@ every later call for that upscaler to the same build.
   (`./build.sh test`). Real builds are not, and one that looks itself up by its file name
   could behave differently.
 
+## Still to do
+
+- **FSR 4 model override.** OptiScaler's FSR 4 model override (forcing a model, or
+  correcting the preset a game sends) does not apply behind the omniloader, because it
+  scans only the DLL OptiScaler loaded. Fixing it means OptiScaler also scanning the
+  builds the omniloader loaded. Planned for a future release.
+- **App integration.** Picking several builds on the install screen, with the app
+  writing the folder and the ini.
+
 ## Build
 
 Needs MinGW-w64. Wine is needed for the tests.
@@ -77,6 +86,7 @@ Needs MinGW-w64. Wine is needed for the tests.
 ```sh
 ./build.sh        # out/omniloader.dll
 ./build.sh test   # also builds the stand-in builds and runs the tests under Wine
+./build.sh kit    # also packs out/omniloader-test-kit.zip
 ```
 
 `third_party/ffx_api.h` is AMD's FidelityFX API header (MIT), from FidelityFX SDK 2.3.0.

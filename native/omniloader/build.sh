@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Builds omniloader.dll with MinGW-w64. With "test", also builds mock FidelityFX builds and
-# a test program, lays them out the way an install would, and runs them under Wine.
+# a test program, lays them out the way an install would, and runs them under Wine. With
+# "kit", also packs the zip testers unpack beside OptiScaler.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 out="$here/out"
@@ -12,6 +13,27 @@ mkdir -p "$out"
 "$WINDRES" "$here/version.rc" -O coff -o "$out/version.o"
 "$CXX" "${FLAGS[@]}" -shared -o "$out/omniloader.dll" "$here/omniloader.cpp" "$out/version.o"
 echo "built $out/omniloader.dll"
+
+if [[ "${1:-}" == "kit" ]]; then
+  # The zip testers unpack into OptiScaler's folder: the stand-in under the upscaler's
+  # name, an example list to edit, and the README.
+  k="$out/kit"
+  rm -rf "$k" "$out/omniloader-test-kit.zip"
+  mkdir -p "$k/omni/upscaler"
+  cp "$out/omniloader.dll" "$k/amd_fidelityfx_upscaler_dx12.dll"
+  cp "$here/README.md" "$k/"
+  printf '%s\r\n' \
+    '; One line per build, in order. The first answers whenever nothing picks a version.' \
+    '; Put the builds in omni\upscaler and change these names to match.' \
+    '[Modules]' \
+    'omni\upscaler\fsr-official.dll = Official' \
+    'omni\upscaler\fsr-4.1.1b.dll = 4.1.1b' \
+    'omni\upscaler\fsr-shader-overrides.dll = Shader overrides' \
+    > "$k/amd_fidelityfx_upscaler_dx12.omni.ini"
+  (cd "$k" && zip -qr "$out/omniloader-test-kit.zip" .)
+  echo "built $out/omniloader-test-kit.zip"
+  exit 0
+fi
 
 [[ "${1:-}" == "test" ]] || exit 0
 

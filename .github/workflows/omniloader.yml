@@ -1,0 +1,40 @@
+name: Omniloader
+
+# Builds the experimental omniloader, runs its tests under Wine, and uploads the test kit
+# testers unpack beside OptiScaler. Only the omniloader branch builds it; main does not
+# ship it yet.
+on:
+  push:
+    branches: [omniloader]
+    paths:
+      - "native/omniloader/**"
+      - ".github/workflows/omniloader.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install MinGW-w64 and Wine
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends g++-mingw-w64-x86-64-posix binutils-mingw-w64-x86-64 wine64 zip
+
+      # Wine would otherwise offer to install Mono and Gecko on first start.
+      - name: Test under Wine
+        env:
+          WINEDLLOVERRIDES: "mscoree,mshtml="
+        run: native/omniloader/build.sh test
+
+      - name: Pack test kit
+        run: native/omniloader/build.sh kit
+
+      - name: Upload test kit
+        uses: actions/upload-artifact@v6
+        with:
+          name: omniloader-test-kit-${{ github.sha }}
+          path: native/omniloader/out/kit/
+          if-no-files-found: error
