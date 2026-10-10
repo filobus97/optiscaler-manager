@@ -24,11 +24,11 @@ if [[ "${1:-}" == "kit" ]]; then
   cp "$here/README.md" "$k/"
   printf '%s\r\n' \
     '; One line per build, in order. The first answers whenever nothing picks a version.' \
-    '; Put the builds in omni\upscaler and change these names to match.' \
+    '; Put the builds in omni\upscaler and change these names to match. Keep every name' \
+    '; starting with amd_fidelityfx_upscaler_dx12_ (the README says why).' \
     '[Modules]' \
-    'omni\upscaler\fsr-official.dll = Official' \
-    'omni\upscaler\fsr-4.1.1b.dll = 4.1.1b' \
-    'omni\upscaler\fsr-shader-overrides.dll = Shader overrides' \
+    'omni\upscaler\amd_fidelityfx_upscaler_dx12_official.dll = Official' \
+    'omni\upscaler\amd_fidelityfx_upscaler_dx12_shader-overrides.dll = Shader overrides' \
     > "$k/amd_fidelityfx_upscaler_dx12.omni.ini"
   (cd "$k" && zip -qr "$out/omniloader-test-kit.zip" .)
   echo "built $out/omniloader-test-kit.zip"
@@ -41,7 +41,7 @@ t="$out/test"
 rm -rf "$t"
 mkdir -p "$t/omni/upscaler"
 for v in 1 2 3 4; do
-  "$CXX" "${FLAGS[@]}" -shared -DMOCK_VARIANT=$v -o "$t/omni/upscaler/build-$v.dll" "$here/tests/mock_module.cpp"
+  "$CXX" "${FLAGS[@]}" -shared -DMOCK_VARIANT=$v -o "$t/omni/upscaler/amd_fidelityfx_upscaler_dx12_build-$v.dll" "$here/tests/mock_module.cpp"
 done
 "$CXX" "${FLAGS[@]}" -shared -o "$t/omni/upscaler/amdxcffx64.dll" "$here/tests/driver_style.cpp"
 "$CXX" "${FLAGS[@]}" -o "$t/test_omniloader.exe" "$here/tests/test_omniloader.cpp"
@@ -52,16 +52,16 @@ cp "$out/omniloader.dll" "$t/amd_fidelityfx_framegeneration_dx12.dll"
 cat > "$t/amd_fidelityfx_upscaler_dx12.omni.ini" <<'INI'
 ; first build answers when nothing picks a version
 [Modules]
-omni\upscaler\build-1.dll = Build A
-omni\upscaler\build-2.dll = Build B
+omni\upscaler\amd_fidelityfx_upscaler_dx12_build-1.dll = Build A
+omni\upscaler\amd_fidelityfx_upscaler_dx12_build-2.dll = Build B
 omni\upscaler\amdxcffx64.dll = Driver-style
 omni\upscaler\missing.dll = Missing
-omni\upscaler\build-3.dll = Build C
-omni\upscaler\build-4.dll = Build D
+omni\upscaler\amd_fidelityfx_upscaler_dx12_build-3.dll = Build C
+omni\upscaler\amd_fidelityfx_upscaler_dx12_build-4.dll = Build D
 INI
 cat > "$t/amd_fidelityfx_framegeneration_dx12.omni.ini" <<'INI'
 [Modules]
-omni\upscaler\build-2.dll = Build B
+omni\upscaler\amd_fidelityfx_upscaler_dx12_build-2.dll = Build B
 INI
 
 export WINEDEBUG=-all WINEPREFIX="${WINEPREFIX:-$out/wineprefix}"

@@ -186,6 +186,20 @@ void LoadModules()
         }
 
         Log("Loaded %s as '%s'", Narrow(m.path).c_str(), m.label.c_str());
+
+        // OptiScaler treats DLLs by file name. On Linux it answers FSR 4's GPU check only
+        // for DLLs whose name starts with "amd", so a build named otherwise drops its FSR 4
+        // versions. And it takes a DLL whose name ends like AMD's upscaler for the upscaler.
+        std::wstring file = m.path.substr(m.path.find_last_of(L"\\/") + 1);
+        std::wstring lower;
+        for (wchar_t c : file) lower += towlower(c);
+        const std::wstring amdName = L"amd_fidelityfx_upscaler_dx12.dll";
+        if (lower.rfind(L"amd", 0) != 0)
+            Log("  warning: its name does not start with 'amd', so on Linux it may not offer FSR 4; "
+                "name it amd_fidelityfx_upscaler_dx12_<something>.dll");
+        if (lower.size() >= amdName.size() && lower.compare(lower.size() - amdName.size(), amdName.size(), amdName) == 0)
+            Log("  warning: its name ends like AMD's upscaler, so OptiScaler may take it for the upscaler itself; "
+                "name it amd_fidelityfx_upscaler_dx12_<something>.dll");
         ++it;
     }
 }

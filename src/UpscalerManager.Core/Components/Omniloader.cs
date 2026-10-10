@@ -80,6 +80,16 @@ public static class Omniloader
     }
 
     /// <summary>
+    /// What every build's file name starts with. OptiScaler treats DLLs by name: on Linux
+    /// it answers FSR 4's GPU check for the card only when the asking DLL's name starts
+    /// with "amd", and with forced INT8 it spoofs the vendor only for names starting with
+    /// this. A build renamed to anything else decides the GPU cannot run FSR 4 and drops
+    /// its FSR 4 versions. The name must not end like AMD's either, or OptiScaler's load
+    /// hook takes it for the upscaler itself.
+    /// </summary>
+    public const string BuildPrefix = "amd_fidelityfx_upscaler_dx12_";
+
+    /// <summary>
     /// The file name each build gets in <see cref="BuildsFolder"/>, from its label:
     /// the builds mostly share one name, so they cannot keep theirs.
     /// </summary>
@@ -95,9 +105,9 @@ public static class Omniloader
             if (stem.EndsWith(".dll", StringComparison.Ordinal)) stem = stem[..^4];
             if (stem.Length == 0) stem = "build";
 
-            var name = stem + ".dll";
+            var name = BuildPrefix + stem + ".dll";
             for (var n = 2; names.Contains(name, StringComparer.OrdinalIgnoreCase); n++)
-                name = $"{stem}-{n}.dll";
+                name = $"{BuildPrefix}{stem}-{n}.dll";
             names.Add(name);
         }
         return names;

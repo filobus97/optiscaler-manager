@@ -70,8 +70,8 @@ internal sealed partial class Harness
         Check("  the preview names the omniloader and its list",
             FilesPreview().Contains("(the omniloader") && FilesPreview().Contains(Omniloader.IniName), FilesPreview());
         Check("  and where each build goes, the first running first",
-            FilesPreview().Contains("omni/upscaler/optiscaler-s-own-fsr.dll  (OptiScaler's own FSR — runs first)")
-                && FilesPreview().Contains("omni/upscaler/your-amd-fidelityfx-upscaler-dx12.dll"),
+            FilesPreview().Contains("omni/upscaler/amd_fidelityfx_upscaler_dx12_optiscaler-s-own-fsr.dll  (OptiScaler's own FSR — runs first)")
+                && FilesPreview().Contains("omni/upscaler/amd_fidelityfx_upscaler_dx12_your-amd-fidelityfx-upscaler-dx12.dll"),
             FilesPreview());
         Check("  a driver-style build goes in by its own name",
             FilesPreview().Contains("amdxcffx64.dll  (Your amdxcffx64.dll — driver-style"), FilesPreview());
@@ -106,14 +106,14 @@ internal sealed partial class Harness
         Check("the omniloader sits where OptiScaler loads its upscaler",
             PeFileInspector.Inspect(upscaler).FileVersion == "0.1.0.0", PeFileInspector.Inspect(upscaler).FileVersion ?? "none");
         Check("  the builds sit beside it, under their own names",
-            File.Exists(Path.Combine(builds, "optiscaler-s-own-fsr.dll"))
-                && File.Exists(Path.Combine(builds, "your-amd-fidelityfx-upscaler-dx12.dll")),
+            File.Exists(Path.Combine(builds, "amd_fidelityfx_upscaler_dx12_optiscaler-s-own-fsr.dll"))
+                && File.Exists(Path.Combine(builds, "amd_fidelityfx_upscaler_dx12_your-amd-fidelityfx-upscaler-dx12.dll")),
             string.Join(", ", Directory.Exists(builds) ? Directory.GetFiles(builds).Select(Path.GetFileName) : Array.Empty<string>()));
         var ini = Path.Combine(lib, Omniloader.IniName);
         var text = File.Exists(ini) ? File.ReadAllText(ini) : "";
         Check("  its list has both, the release's own first",
-            text.Contains("[Modules]\r\nomni\\upscaler\\optiscaler-s-own-fsr.dll = OptiScaler's own FSR\r\n"
-                + "omni\\upscaler\\your-amd-fidelityfx-upscaler-dx12.dll = Your amd_fidelityfx_upscaler_dx12.dll\r\n"),
+            text.Contains("[Modules]\r\nomni\\upscaler\\amd_fidelityfx_upscaler_dx12_optiscaler-s-own-fsr.dll = OptiScaler's own FSR\r\n"
+                + "omni\\upscaler\\amd_fidelityfx_upscaler_dx12_your-amd-fidelityfx-upscaler-dx12.dll = Your amd_fidelityfx_upscaler_dx12.dll\r\n"),
             text);
         Check("  and the driver-style build is installed by its name",
             File.Exists(Path.Combine(dir, "amdxcffx64.dll")) && !text.Contains("amdxcffx64"));

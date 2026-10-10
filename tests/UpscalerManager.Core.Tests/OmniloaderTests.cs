@@ -66,8 +66,23 @@ public class OmniloaderTests
     [Fact]
     public void Each_build_gets_its_own_file_name_from_its_label()
         => Assert.Equal(
-            new[] { "optiscaler-s-own-fsr.dll", "faster-fsr-4.1.1-exact.dll", "your-fsr-4.1.1b.dll", "build.dll", "build-2.dll" },
+            new[] { "optiscaler-s-own-fsr.dll", "faster-fsr-4.1.1-exact.dll", "your-fsr-4.1.1b.dll", "build.dll", "build-2.dll" }
+                .Select(n => Omniloader.BuildPrefix + n),
             Omniloader.FileNamesFor(new[] { "OptiScaler's own FSR", "Faster FSR 4.1.1, exact", "Your fsr-4.1.1b.dll", "!!", "" }));
+
+    // OptiScaler answers FSR 4's GPU check on Linux only for DLLs whose name starts with
+    // "amd", and takes any DLL whose name ends like AMD's upscaler for the upscaler itself.
+    [Theory]
+    [InlineData("OptiScaler's own FSR")]
+    [InlineData("Your amd_fidelityfx_upscaler_dx12.dll")]
+    [InlineData("")]
+    public void A_build_name_starts_like_amds_and_never_ends_like_it(string label)
+    {
+        var name = Omniloader.FileNamesFor(new[] { label })[0];
+        Assert.StartsWith("amd", name);
+        Assert.False(name.EndsWith(Omniloader.UpscalerDllName, StringComparison.OrdinalIgnoreCase), name);
+        Assert.False(Path.GetFileNameWithoutExtension(name).EndsWith("amd_fidelityfx_upscaler_dx12", StringComparison.OrdinalIgnoreCase), name);
+    }
 
     [Fact]
     public void The_list_is_written_in_order_with_windows_paths()

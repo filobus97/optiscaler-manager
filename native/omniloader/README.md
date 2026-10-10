@@ -23,25 +23,30 @@ A driver-style build you tick is installed by its own name, beside the others.
 
 1. Find the folder OptiScaler loads the upscaler from. That is the game folder, or its
    `OptiScaler` subfolder on OptiScaler 0.9.5 and later.
-2. Make a folder there, such as `omni\upscaler`, and put each build in it. Give each one
-   its own file name, or its own subfolder with the name unchanged:
+2. Make a folder there, such as `omni\upscaler`, and put each build in it, renamed so
+   its name **starts with `amd_fidelityfx_upscaler_dx12_`**:
    ```
-   omni\upscaler\fsr-official.dll
-   omni\upscaler\fsr-4.1.1b.dll
-   omni\shader-overrides\amd_fidelityfx_upscaler_dx12.dll
+   omni\upscaler\amd_fidelityfx_upscaler_dx12_official.dll
+   omni\upscaler\amd_fidelityfx_upscaler_dx12_shader-overrides-exact.dll
    ```
+   OptiScaler treats DLLs by name. On Linux it answers FSR 4's GPU check only for DLLs
+   whose name starts with `amd`; a build named otherwise decides the GPU cannot run
+   FSR 4 and offers none of its FSR 4 versions. And a DLL whose name *ends* like AMD's
+   (`…\amd_fidelityfx_upscaler_dx12.dll`) is taken for the upscaler itself. The log
+   warns about either.
 3. Put `omniloader.dll` in place of `amd_fidelityfx_upscaler_dx12.dll`, renamed to that.
 4. Beside it, write `amd_fidelityfx_upscaler_dx12.omni.ini`:
    ```ini
    ; The first build answers whenever nothing picks a version.
    [Modules]
-   omni\upscaler\fsr-official.dll = Official
-   omni\upscaler\fsr-4.1.1b.dll = 4.1.1b
-   omni\shader-overrides\amd_fidelityfx_upscaler_dx12.dll = Shader overrides
+   omni\upscaler\amd_fidelityfx_upscaler_dx12_official.dll = Official
+   omni\upscaler\amd_fidelityfx_upscaler_dx12_shader-overrides-exact.dll = Shader overrides
    ```
    Paths are relative to the omniloader's folder; full paths work too. The text after
    `=` is a label. A version name only gets its label added when two builds report the
-   same name, for example `4.1.1 [4.1.1b]`.
+   same name, for example `4.1.1 [Shader overrides]`. A driver-style build
+   (`amdxcffx64.dll`) does not go in this list; it stays beside OptiScaler under its own
+   name.
 5. Start the game, open OptiScaler's overlay, and pick a version under FFX Upscaler.
 
 The omniloader reads the ini named after its own file. You can put a second copy in
