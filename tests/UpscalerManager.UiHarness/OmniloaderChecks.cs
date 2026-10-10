@@ -82,7 +82,10 @@ internal sealed partial class Harness
         await Settle(400);
         Shoot("install-omniloader.png");
 
-        var picked = boxes.Select(b => (ManagerService.OmniBuildOption)b.Tag!).ToList();
+        // Plus one that cannot be had, as an upstream release that changed would be.
+        var picked = boxes.Select(b => (ManagerService.OmniBuildOption)b.Tag!)
+            .Append(new ManagerService.OmniBuildOption("custom:gone.dll", "Your gone.dll"))
+            .ToList();
         await BackAsync();
         await BackAsync();
 
@@ -98,6 +101,10 @@ internal sealed partial class Harness
             Fail("installing with the omniloader", ex.Message);
             return;
         }
+
+        Check("a build that cannot be had is skipped, and said so, while the rest install",
+            _manager.LastInstallNotes.Count == 1 && _manager.LastInstallNotes[0].StartsWith("Skipped Your gone.dll"),
+            string.Join(" | ", _manager.LastInstallNotes));
 
         var dir = _manager.GetInstalledDirectory(game);
         var lib = GameInstallationService.OptiScalerLibraryDirectory(dir);

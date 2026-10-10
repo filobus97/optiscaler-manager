@@ -416,6 +416,13 @@ public partial class MainWindow : Window
             row.Game.IsOptiscalerInstalled = true;
             row.RefreshFromGame();
             _vm.StatusText = $"OptiScaler installed for {row.Game.Name}.";
+            if (_manager.LastInstallNotes.Count > 0)
+            {
+                // Builds left out are said where the result is, not only in the log.
+                var notes = string.Join(" ", _manager.LastInstallNotes);
+                _vm.StatusText += " " + notes;
+                row.StatusText = notes;
+            }
         }
         catch (Exception ex)
         {

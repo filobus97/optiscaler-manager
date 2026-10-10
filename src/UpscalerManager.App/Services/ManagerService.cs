@@ -599,6 +599,7 @@ public sealed class ManagerService
         string? optiscalerVersion = null, FasterFsr4Kind fasterKind = FasterFsr4Kind.Exact,
         IReadOnlyList<OmniBuildOption>? omniBuilds = null)
     {
+        LastInstallNotes = Array.Empty<string>();
         if (backend == Fsr4Backend.FasterShaders && FasterFsr4Refusal() is { } refused)
             throw new InvalidOperationException(refused);
         if (!IsBackendAvailable(backend))
@@ -1085,27 +1086,25 @@ public sealed class ManagerService
             throw new InvalidOperationException("Pick at least one FSR build for the omniloader to load.");
 
         var prepared = new List<PreparedOmniBuild>();
+        var skipped = new List<string>();
         foreach (var build in builds)
         {
-            var (source, value) = SplitOmniId(build.Id);
-            string path = source switch
+            // One build that cannot be had leaves the rest to install: a picker of several
+            // builds should not fail as a whole because one release changed upstream.
+            try
             {
-                "optiscaler" => BundledUpscaler(releaseCache)
-                    ?? throw new InvalidOperationException("This OptiScaler release ships no FSR upscaler of its own."),
-                "faster" => await PrepareFasterFsr4Async(releaseCache,
-                    value == "lossy" ? FasterFsr4Kind.Lossy : FasterFsr4Kind.Exact, status, replacesBundled: false),
-                "extras" => await DownloadExtrasForOmniAsync(value, status),
-                "custom" => Path.Combine(_components.GetCustomDllsPath(), value),
-                _ => throw new InvalidOperationException($"Unknown build: {build.Label}"),
-            };
-            if (!File.Exists(path))
-                throw new FileNotFoundException($"{build.Label} is missing.", path);
-
-            var kind = Omniloader.Classify(path);
-            if (kind == OmniBuildKind.NotUpscaler)
-                throw new InvalidOperationException($"{build.Label} is not an FSR upscaler, so the omniloader cannot load it.");
-            prepared.Add(new PreparedOmniBuild(path, build.Label, kind));
+                prepared.Add(await PrepareOmniBuildAsync(releaseCache, build, status));
+            }
+            catch (Exception ex)
+            {
+                Log.Write($"[Omniloader] Skipping {build.Label}: {ex.Message}");
+                status?.Report($"Skipping {build.Label}: {ex.Message}");
+                skipped.Add($"{build.Label} ({ex.Message})");
+            }
         }
+        LastInstallNotes = skipped.Count == 0
+            ? Array.Empty<string>()
+            : skipped.Select(s => "Skipped " + s).ToList();
 
         if (prepared.Count(p => p.Kind == OmniBuildKind.DriverStyle) > 1)
             throw new InvalidOperationException(
@@ -1113,9 +1112,39 @@ public sealed class ManagerService
                 + "Keep one of them.");
         if (!prepared.Any(p => p.Kind == OmniBuildKind.Module))
             throw new InvalidOperationException(
-                "None of the picked builds can go behind the omniloader: driver-style builds are loaded by OptiScaler "
-                + "itself. Add an ordinary FSR upscaler too, such as OptiScaler's own.");
+                (skipped.Count > 0 ? $"No build was left to install. {string.Join(" ", LastInstallNotes)}. " : "")
+                + "The omniloader needs at least one ordinary FSR upscaler (driver-style builds are loaded by "
+                + "OptiScaler itself), such as OptiScaler's own.");
         return prepared;
+    }
+
+    /// <summary>
+    /// What the last install left out, and why — builds the omniloader could not get or
+    /// use. Empty when everything picked went in.
+    /// </summary>
+    public IReadOnlyList<string> LastInstallNotes { get; private set; } = Array.Empty<string>();
+
+    private async Task<PreparedOmniBuild> PrepareOmniBuildAsync(
+        string releaseCache, OmniBuildOption build, IProgress<string>? status)
+    {
+        var (source, value) = SplitOmniId(build.Id);
+        string path = source switch
+        {
+            "optiscaler" => BundledUpscaler(releaseCache)
+                ?? throw new InvalidOperationException("This OptiScaler release ships no FSR upscaler of its own."),
+            "faster" => await PrepareFasterFsr4Async(releaseCache,
+                value == "lossy" ? FasterFsr4Kind.Lossy : FasterFsr4Kind.Exact, status, replacesBundled: false),
+            "extras" => await DownloadExtrasForOmniAsync(value, status),
+            "custom" => Path.Combine(_components.GetCustomDllsPath(), value),
+            _ => throw new InvalidOperationException($"Unknown build: {build.Label}"),
+        };
+        if (!File.Exists(path))
+            throw new FileNotFoundException("its file is missing", path);
+
+        var kind = Omniloader.Classify(path);
+        if (kind == OmniBuildKind.NotUpscaler)
+            throw new InvalidOperationException("it is not an FSR upscaler, so the omniloader cannot load it");
+        return new PreparedOmniBuild(path, build.Label, kind);
     }
 
     private async Task<string> DownloadExtrasForOmniAsync(string version, IProgress<string>? status)

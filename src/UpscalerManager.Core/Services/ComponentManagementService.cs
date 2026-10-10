@@ -1172,11 +1172,12 @@ namespace UpscalerManager.Core.Services
         {
             var extractDir = GetExtrasDllCachePath(version);
 
-            // Already unpacked. Judged by the INT8 file rather than by the directory
-            // existing, so a release unpacked by an older build — which kept only that
-            // one file — is re-fetched once and gains the rest.
-            if (Components.Fsr4Int8Build.FindIn(extractDir) is { } cached
-                && Directory.EnumerateFiles(extractDir, "*.dll").Count() > 1)
+            // Already unpacked. Judged by the INT8 file and the listing this build writes,
+            // rather than by the directory existing, so a release unpacked by an older
+            // build is fetched once more. (Counting DLLs instead re-fetched every release
+            // on every install: they almost all ship the upscaler alone.)
+            if (Components.Fsr4Int8Build.FindIn(extractDir) is not null
+                && File.Exists(Path.Combine(extractDir, ArchiveListingName)))
             {
                 Log.Write($"[ExtrasDownload] Release v{version} already cached at {extractDir}");
                 return extractDir;
@@ -1199,21 +1200,7 @@ namespace UpscalerManager.Core.Services
                 await StreamToFileAsync(() => _httpClient, downloadUrl, tempZip, progress, 20 * 1024 * 1024);
 
                 Log.Write($"[ExtrasDownload] Extracting from {Path.GetFileName(tempZip)}");
-                await Task.Run(() =>
-                {
-                    using var archive = SharpCompress.Archives.ArchiveFactory.Open(tempZip);
-                    foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
-                    {
-                        var name = ArchiveEntryName(entry.Key);
-                        if (!Components.SwappableDlls.IsSwappable(name)) continue;
-
-                        var dest = SafeDestinationPath(extractDir, name);
-                        using var entryStream = entry.OpenEntryStream();
-                        using var outStream = File.Create(dest);
-                        entryStream.CopyTo(outStream, 81920);
-                        Log.Write($"[ExtrasDownload] Extracted {name} to {dest}");
-                    }
-                });
+                await Task.Run(() => ExtractExtrasRelease(tempZip, extractDir, version));
             }
             finally
             {
@@ -1245,11 +1232,58 @@ namespace UpscalerManager.Core.Services
 
             var extracted = Components.Fsr4Int8Build.FindIn(extractDir);
             if (extracted is null)
+            {
+                var listing = Path.Combine(extractDir, ArchiveListingName);
+                var held = File.Exists(listing)
+                    ? string.Join(", ", File.ReadAllLines(listing).Where(l => l.Length > 0).Select(ArchiveEntryName))
+                    : "";
                 throw new Exception(
-                    "No FSR 4 INT8 DLL found inside the downloaded archive (expected " +
-                    string.Join(" or ", Components.Fsr4Int8Build.KnownDllNames) + ").");
+                    $"OptiScaler Client extras {version} has no FSR 4 INT8 DLL in its download (expected "
+                    + string.Join(" or ", Components.Fsr4Int8Build.KnownDllNames) + ")"
+                    + (held.Length > 0 ? $"; it holds {held}." : "."));
+            }
 
             return extracted;
+        }
+
+        /// <summary>The list of what an Extras release's archive held, kept beside what was unpacked.</summary>
+        private const string ArchiveListingName = "archive-contents.txt";
+
+        /// <summary>
+        /// Unpacks an Extras release: its INT8 build, and any other DLL the swap screen
+        /// can use. Returns the names written.
+        /// </summary>
+        /// <remarks>
+        /// why the INT8 names are named here and not left to the swap list: FSR's files were
+        /// retired from swapping in v0.29.0, and from then on this filter threw away the very
+        /// DLL an Extras release exists to deliver — every INT8 install failed with "no FSR 4
+        /// INT8 DLL found" while the archive held exactly that.
+        /// </remarks>
+        internal static IReadOnlyList<string> ExtractExtrasRelease(string archivePath, string extractDir, string version)
+        {
+            Directory.CreateDirectory(extractDir);
+            using var archive = SharpCompress.Archives.ArchiveFactory.Open(archivePath);
+
+            // Kept beside what is unpacked, so a release that turns out to hold no INT8
+            // build can say what it holds instead.
+            var listing = archive.Entries.Where(e => !e.IsDirectory).Select(e => e.Key ?? "").ToList();
+            File.WriteAllLines(Path.Combine(extractDir, ArchiveListingName), listing);
+            Log.Write($"[ExtrasDownload] v{version} holds: {string.Join(", ", listing)}");
+
+            var written = new List<string>();
+            foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
+            {
+                var name = ArchiveEntryName(entry.Key);
+                if (!Components.Fsr4Int8Build.IsKnown(name) && !Components.SwappableDlls.IsSwappable(name)) continue;
+
+                var dest = SafeDestinationPath(extractDir, name);
+                using var entryStream = entry.OpenEntryStream();
+                using var outStream = File.Create(dest);
+                entryStream.CopyTo(outStream, 81920);
+                written.Add(name);
+                Log.Write($"[ExtrasDownload] Extracted {name} to {dest}");
+            }
+            return written;
         }
 
         // ── AMD FidelityFX SDK (official, open-source) ────────────────────────────
