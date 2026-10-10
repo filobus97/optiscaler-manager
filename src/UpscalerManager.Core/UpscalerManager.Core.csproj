@@ -15,6 +15,10 @@
   <ItemGroup>
     <!-- OptiScaler.ini template used by ProfileManagementService.WriteOptiScalerIniToFile. -->
     <EmbeddedResource Include="..\..\assets\OptiScaler_example.ini" Link="assets\OptiScaler_example.ini" />
+    <!-- The omniloader, when native/omniloader/build.sh has built it (it needs MinGW-w64).
+         Without it the app still builds, and simply does not offer the option. -->
+    <EmbeddedResource Include="..\..\native\omniloader\out\omniloader.dll" LogicalName="omniloader.dll"
+                      Condition="Exists('..\..\native\omniloader\out\omniloader.dll')" />
   </ItemGroup>
 
   <ItemGroup>

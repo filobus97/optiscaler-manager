@@ -33,6 +33,8 @@ public static class ComponentIds
     public const string CustomMerged = "custom-merged";
     /// <summary>Faster FSR 4.1.1 builds from the FSR 4 shader overrides project.</summary>
     public const string Fsr4ShaderOverrides = "fsr4-shader-overrides";
+    /// <summary>The omniloader: several FSR upscaler builds behind one, switchable in-game.</summary>
+    public const string Omniloader = "omniloader";
 }
 
 /// <summary>

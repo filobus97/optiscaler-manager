@@ -44,4 +44,11 @@ public enum Fsr4Backend
     /// <see cref="ComponentIds.Fsr4ShaderOverrides"/>.
     /// </summary>
     FasterShaders,
+
+    /// <summary>
+    /// Several FSR upscaler builds behind the omniloader, all listed in OptiScaler's FFX
+    /// Upscaler picker so they can be switched in-game. Experimental. Maps to
+    /// <see cref="ComponentIds.Omniloader"/>.
+    /// </summary>
+    Omniloader,
 }

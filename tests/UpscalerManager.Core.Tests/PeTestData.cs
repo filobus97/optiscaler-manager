@@ -3,6 +3,7 @@
 
 using System;
 using System.IO;
+using System.Text;
 
 namespace UpscalerManager.Core.Tests
 {
@@ -125,6 +126,63 @@ namespace UpscalerManager.Core.Tests
                 while (ms.Position < RsrcRawOffset + RsrcRawSize) w.Write((byte)0);
             }
 
+            return ms.ToArray();
+        }
+
+        /// <summary>A minimal 64-bit DLL whose export directory names <paramref name="exports"/>.</summary>
+        public static byte[] BuildPeExporting(params string[] exports)
+        {
+            const uint Rva = 0x1000, Raw = 0x400, Size = 0x400;
+            using var ms = new MemoryStream();
+            using var w = new BinaryWriter(ms);
+
+            w.Write((ushort)0x5A4D);
+            while (ms.Position < 0x3C) w.Write((byte)0);
+            w.Write(0x80);
+            while (ms.Position < 0x80) w.Write((byte)0);
+            w.Write(0x00004550u);
+
+            w.Write((ushort)0x8664);   // Machine
+            w.Write((ushort)1);        // NumberOfSections
+            w.Write(0u); w.Write(0u); w.Write(0u);
+            w.Write((ushort)240);      // SizeOfOptionalHeader
+            w.Write((ushort)0x2022);   // Characteristics (DLL)
+
+            var optional = ms.Position;
+            w.Write((ushort)0x20B);
+            while (ms.Position < optional + 112) w.Write((byte)0);
+            w.Write(Rva);              // export directory
+            w.Write(Size);
+            while (ms.Position < optional + 240) w.Write((byte)0);
+
+            foreach (var c in ".edata\0\0") w.Write((byte)c);
+            w.Write(Size); w.Write(Rva); w.Write(Size); w.Write(Raw);
+            w.Write(0u); w.Write(0u); w.Write((ushort)0); w.Write((ushort)0);
+            w.Write(0x40000040u);
+            while (ms.Position < Raw) w.Write((byte)0);
+
+            // IMAGE_EXPORT_DIRECTORY, then the name pointers, then the names.
+            var names = Rva + 40;
+            var strings = names + 4u * (uint)exports.Length;
+            w.Write(0u); w.Write(0u); w.Write((ushort)0); w.Write((ushort)0);
+            w.Write(0u);                       // Name
+            w.Write(1u);                       // Base
+            w.Write((uint)exports.Length);     // NumberOfFunctions
+            w.Write((uint)exports.Length);     // NumberOfNames
+            w.Write(0u);                       // AddressOfFunctions
+            w.Write(names);                    // AddressOfNames
+            w.Write(0u);                       // AddressOfNameOrdinals
+            foreach (var name in exports)
+            {
+                w.Write(strings);
+                strings += (uint)name.Length + 1;
+            }
+            foreach (var name in exports)
+            {
+                w.Write(Encoding.ASCII.GetBytes(name));
+                w.Write((byte)0);
+            }
+            while (ms.Position < Raw + Size) w.Write((byte)0);
             return ms.ToArray();
         }
 

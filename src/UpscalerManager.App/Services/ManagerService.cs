@@ -195,6 +195,12 @@ public sealed class ManagerService
     public FfxVersionOptions FidelityFxVersionOptions(
         Game game, Fsr4Backend backend, string? int8Version, string? optiscalerVersion = null)
     {
+        // Behind the omniloader the list is every picked build's, merged at run time.
+        if (backend == Fsr4Backend.Omniloader)
+            return new FfxVersionOptions(Array.Empty<string>(),
+                "With several builds, the version is picked in OptiScaler's overlay, under FFX Upscaler. "
+                + "The first build you ticked runs until then.");
+
         var fromGame = FidelityFxProviderScanner.FromDirectory(game.InstallPath);
         FfxProviders? fromInstall = null;
         string? label = null;
@@ -361,6 +367,7 @@ public sealed class ManagerService
         Fsr4Backend.CustomMerged => HasCustomDlls,
         Fsr4Backend.Int8Community => OptiScalerExtrasEnabled,
         Fsr4Backend.FasterShaders => Fsr4ShaderOverridesEnabled && FasterFsr4Refusal() is null,
+        Fsr4Backend.Omniloader => Omniloader.IsAvailable,
         _ => true, // Default needs nothing
     };
 
@@ -542,14 +549,16 @@ public sealed class ManagerService
     public InstallPreview BuildInstallPreview(Game game, Fsr4Backend backend, UpscalerSelection selection,
         bool addFakenvapi = false, bool addNukemFg = false,
         SpoofMethod spoofMethod = SpoofMethod.Off, bool forceInt8 = false, bool fsr4Watermark = false,
-        string? optiscalerVersion = null, FasterFsr4Kind fasterKind = FasterFsr4Kind.Exact)
+        string? optiscalerVersion = null, FasterFsr4Kind fasterKind = FasterFsr4Kind.Exact,
+        IReadOnlyList<OmniBuildOption>? omniBuilds = null)
         => ComponentRegistry.BuildInstallPreview(backend, selection, ComponentRegistry.DefaultInjectionDll, MenuShortcutKey,
             backend == Fsr4Backend.CustomMerged ? _components.GetCustomDlls().Select(d => d.Name).ToList() : null,
             addFakenvapi, addNukemFg, spoofMethod, forceInt8, fsr4Watermark,
             legacyFsr4UpdateKey: GameInstallationService.IniDocumentsKey(
                 ReleaseCache(optiscalerVersion), "FSR", "Fsr4Update"),
             nukemKeys: GameInstallationService.NukemFrameGenerationKeys(ReleaseCache(optiscalerVersion)),
-            fasterKind: fasterKind);
+            fasterKind: fasterKind,
+            omniFiles: backend == Fsr4Backend.Omniloader ? OmniPreviewLines(omniBuilds ?? Array.Empty<OmniBuildOption>()) : null);
 
     /// <summary>
     /// The downloaded release a preview should read: the version the user picked, or
@@ -587,7 +596,8 @@ public sealed class ManagerService
         OptiScalerProfile? iniProfile, IProgress<string>? status = null,
         bool addFakenvapi = false, bool addNukemFg = false,
         SpoofMethod spoofMethod = SpoofMethod.Off, bool forceInt8 = false, bool fsr4Watermark = false,
-        string? optiscalerVersion = null, FasterFsr4Kind fasterKind = FasterFsr4Kind.Exact)
+        string? optiscalerVersion = null, FasterFsr4Kind fasterKind = FasterFsr4Kind.Exact,
+        IReadOnlyList<OmniBuildOption>? omniBuilds = null)
     {
         if (backend == Fsr4Backend.FasterShaders && FasterFsr4Refusal() is { } refused)
             throw new InvalidOperationException(refused);
@@ -624,6 +634,9 @@ public sealed class ManagerService
         var fasterDll = backend == Fsr4Backend.FasterShaders
             ? await PrepareFasterFsr4Async(cachePath, fasterKind, status)
             : null;
+        var omni = backend == Fsr4Backend.Omniloader
+            ? await PrepareOmniBuildsAsync(cachePath, omniBuilds ?? Array.Empty<OmniBuildOption>(), status)
+            : null;
         var fakenvapiCache = addFakenvapi ? await EnsureFakenvapiCacheAsync(status) : "";
         var nukemCache = addNukemFg ? _components.GetNukemFGCachePath() : "";
 
@@ -654,6 +667,11 @@ public sealed class ManagerService
             case Fsr4Backend.FasterShaders:
             {
                 PlaceFasterFsr4(game, gameDir, fasterDll!, status);
+                break;
+            }
+            case Fsr4Backend.Omniloader:
+            {
+                PlaceOmniloader(game, gameDir, omni!, status);
                 break;
             }
             case Fsr4Backend.Default:
@@ -902,17 +920,24 @@ public sealed class ManagerService
     /// writes anything: the GPU, the FSR version the release being installed ships, the
     /// listing, the download and its checks. Returns the checked DLL.
     /// </summary>
-    private async Task<string> PrepareFasterFsr4Async(string releaseCache, FasterFsr4Kind kind, IProgress<string>? status)
+    /// <param name="replacesBundled">
+    /// True when the build is to replace the release's own upscaler, which only works if
+    /// that is the 4.1.1 the build is made from. Behind the omniloader it sits beside the
+    /// others instead, so the release's version does not matter.
+    /// </param>
+    private async Task<string> PrepareFasterFsr4Async(string releaseCache, FasterFsr4Kind kind, IProgress<string>? status,
+        bool replacesBundled = true)
     {
         var generation = GpuGeneration;
         if (Fsr4ShaderOverrides.RefusalFor(generation) is { } refused)
             throw new InvalidOperationException(refused);
 
-        var bundled = Directory.Exists(releaseCache)
-            ? Directory.EnumerateFiles(releaseCache, Fsr4ShaderOverrides.DllName, SearchOption.AllDirectories).FirstOrDefault()
-            : null;
-        if (Fsr4ShaderOverrides.BaseMismatch(bundled is null ? null : PeFileInspector.Inspect(bundled).FileVersion) is { } mismatch)
-            throw new InvalidOperationException(mismatch);
+        if (replacesBundled)
+        {
+            var bundled = BundledUpscaler(releaseCache);
+            if (Fsr4ShaderOverrides.BaseMismatch(bundled is null ? null : PeFileInspector.Inspect(bundled).FileVersion) is { } mismatch)
+                throw new InvalidOperationException(mismatch);
+        }
 
         status?.Report("Looking up the faster FSR 4 builds…");
         var releases = await _components.Fsr4OverridesReleasesAsync();
@@ -952,6 +977,204 @@ public sealed class ManagerService
         status?.Report("Installing faster FSR 4.1.1…");
         _install.InstallTrackedFile(game, dll, Path.GetRelativePath(gameDir, target), gameDir, logTag: "FasterFsr4");
         Log.Write($"[FasterFsr4] Installed at {target}");
+    }
+
+    // ── Several builds behind the omniloader ────────────────────────────────
+    /// <summary>One build the omniloader can load, as the install screen lists it.</summary>
+    /// <param name="Id">"optiscaler", "faster:exact", "faster:lossy", "extras:&lt;version&gt;" or "custom:&lt;file&gt;".</param>
+    public sealed record OmniBuildOption(string Id, string Label, string? Note = null);
+
+    /// <summary>The FSR upscaler a release ships, or null when it has none.</summary>
+    private static string? BundledUpscaler(string releaseCache) =>
+        Directory.Exists(releaseCache)
+            ? Directory.EnumerateFiles(releaseCache, Omniloader.UpscalerDllName, SearchOption.AllDirectories).FirstOrDefault()
+            : null;
+
+    /// <summary>
+    /// Every build the omniloader could load on this machine, from every source that is
+    /// switched on: the release's own, the faster 4.1.1 builds this GPU gets, each
+    /// OptiScaler Client extras release, and the user's imported upscalers.
+    /// </summary>
+    public async Task<IReadOnlyList<OmniBuildOption>> OmniBuildOptionsAsync()
+    {
+        var options = new List<OmniBuildOption>
+        {
+            new("optiscaler", "OptiScaler's own FSR", "The upscaler the OptiScaler release ships."),
+        };
+
+        if (Fsr4ShaderOverridesEnabled && FasterFsr4Refusal() is null)
+        {
+            var generation = GpuGeneration;
+            options.Add(new("faster:exact", "Faster FSR 4.1.1, exact",
+                $"Shader overrides, the build for {RadeonGenerations.Describe(generation)}. "
+                + $"Listed as {Fsr4ShaderOverrides.OverlayLabel(generation, FasterFsr4Kind.Exact)}."));
+            options.Add(new("faster:lossy", "Faster FSR 4.1.1, lossy",
+                $"About twice as fast, softer. Listed as {Fsr4ShaderOverrides.OverlayLabel(generation, FasterFsr4Kind.Lossy)}."));
+        }
+
+        if (OptiScalerExtrasEnabled)
+            foreach (var (version, pre) in await GetInt8ReleasesAsync())
+                options.Add(new($"extras:{version}", $"OptiScaler Client extras {version}",
+                    pre ? "Pre-release." : null));
+
+        foreach (var custom in _components.GetCustomDlls())
+        {
+            var path = Path.Combine(_components.GetCustomDllsPath(), custom.Name);
+            if (File.Exists(path) && Omniloader.Classify(path) != OmniBuildKind.NotUpscaler)
+                options.Add(new($"custom:{custom.Name}", $"Your {custom.Name}", "Imported in Settings."));
+        }
+        return options;
+    }
+
+    /// <summary>The preview's lines for the builds picked, where each one will go.</summary>
+    private IReadOnlyList<string> OmniPreviewLines(IReadOnlyList<OmniBuildOption> builds)
+    {
+        var lines = new List<string>();
+        var modules = new List<OmniBuildOption>();
+        foreach (var build in builds)
+        {
+            // Only a build already on disk can be read; the rest are assumed to be
+            // upscalers until the install downloads and checks them.
+            var known = OmniSourceIfCached(build);
+            if (known is not null && Omniloader.Classify(known) == OmniBuildKind.DriverStyle)
+                lines.Add($"{Path.GetFileName(known)}  ({build.Label} — driver-style, OptiScaler lists it itself)");
+            else
+                modules.Add(build);
+        }
+
+        var names = Omniloader.FileNamesFor(modules.Select(m => m.Label).ToList());
+        for (var i = 0; i < modules.Count; i++)
+            lines.Insert(i, $"{Omniloader.BuildsFolder}/{names[i]}  ({modules[i].Label}{(i == 0 ? " — runs first" : "")})");
+        if (builds.Count == 0)
+            lines.Add("(no builds picked — tick at least one)");
+        return lines;
+    }
+
+    /// <summary>Where a build already sits in the app's caches, or null when it has to be downloaded.</summary>
+    private string? OmniSourceIfCached(OmniBuildOption build)
+    {
+        var (source, value) = SplitOmniId(build.Id);
+        return source switch
+        {
+            "extras" => Fsr4Int8Build.FindIn(_components.GetExtrasDllCachePath(value)),
+            "custom" => Path.Combine(_components.GetCustomDllsPath(), value),
+            _ => null,
+        };
+    }
+
+    private static (string Source, string Value) SplitOmniId(string id)
+    {
+        var colon = id.IndexOf(':');
+        return colon < 0 ? (id, "") : (id[..colon], id[(colon + 1)..]);
+    }
+
+    /// <summary>One build ready to place: its file, its label, and what it turned out to be.</summary>
+    private sealed record PreparedOmniBuild(string Path, string Label, OmniBuildKind Kind);
+
+    /// <summary>
+    /// Fetches and checks every picked build before anything is written, so a build
+    /// that cannot be had, or turns out not to be an upscaler, stops the install while
+    /// the game is still untouched.
+    /// </summary>
+    private async Task<IReadOnlyList<PreparedOmniBuild>> PrepareOmniBuildsAsync(
+        string releaseCache, IReadOnlyList<OmniBuildOption> builds, IProgress<string>? status)
+    {
+        if (!Omniloader.IsAvailable)
+            throw new InvalidOperationException("This build of the app does not include the omniloader.");
+        if (builds.Count == 0)
+            throw new InvalidOperationException("Pick at least one FSR build for the omniloader to load.");
+
+        var prepared = new List<PreparedOmniBuild>();
+        foreach (var build in builds)
+        {
+            var (source, value) = SplitOmniId(build.Id);
+            string path = source switch
+            {
+                "optiscaler" => BundledUpscaler(releaseCache)
+                    ?? throw new InvalidOperationException("This OptiScaler release ships no FSR upscaler of its own."),
+                "faster" => await PrepareFasterFsr4Async(releaseCache,
+                    value == "lossy" ? FasterFsr4Kind.Lossy : FasterFsr4Kind.Exact, status, replacesBundled: false),
+                "extras" => await DownloadExtrasForOmniAsync(value, status),
+                "custom" => Path.Combine(_components.GetCustomDllsPath(), value),
+                _ => throw new InvalidOperationException($"Unknown build: {build.Label}"),
+            };
+            if (!File.Exists(path))
+                throw new FileNotFoundException($"{build.Label} is missing.", path);
+
+            var kind = Omniloader.Classify(path);
+            if (kind == OmniBuildKind.NotUpscaler)
+                throw new InvalidOperationException($"{build.Label} is not an FSR upscaler, so the omniloader cannot load it.");
+            prepared.Add(new PreparedOmniBuild(path, build.Label, kind));
+        }
+
+        if (prepared.Count(p => p.Kind == OmniBuildKind.DriverStyle) > 1)
+            throw new InvalidOperationException(
+                "More than one of the picked builds is driver-style (amdxcffx64.dll), and OptiScaler loads only one. "
+                + "Keep one of them.");
+        if (!prepared.Any(p => p.Kind == OmniBuildKind.Module))
+            throw new InvalidOperationException(
+                "None of the picked builds can go behind the omniloader: driver-style builds are loaded by OptiScaler "
+                + "itself. Add an ordinary FSR upscaler too, such as OptiScaler's own.");
+        return prepared;
+    }
+
+    private async Task<string> DownloadExtrasForOmniAsync(string version, IProgress<string>? status)
+    {
+        status?.Report($"Downloading OptiScaler Client extras {version}…");
+        return await _components.DownloadExtrasDllAsync(version);
+    }
+
+    /// <summary>
+    /// Puts the omniloader where OptiScaler loads its FSR upscaler, the builds in a
+    /// folder beside it, and the list it reads — all tracked, so Remove takes them away.
+    /// A driver-style build goes in by its own name, where OptiScaler looks for it.
+    /// </summary>
+    private void PlaceOmniloader(Game game, string gameDir, IReadOnlyList<PreparedOmniBuild> builds, IProgress<string>? status)
+    {
+        var target = GameInstallationService.OptiScalerUpscalerPath(gameDir);
+        var libDir = Path.GetDirectoryName(target)!;
+        string Rel(string path) => Path.GetRelativePath(gameDir, Path.Combine(libDir, path));
+
+        var modules = builds.Where(b => b.Kind == OmniBuildKind.Module).ToList();
+        var names = Omniloader.FileNamesFor(modules.Select(m => m.Label).ToList());
+        var buildsDir = Omniloader.BuildsFolder.Replace('/', Path.DirectorySeparatorChar);
+        Directory.CreateDirectory(Path.Combine(libDir, buildsDir));
+
+        void MarkFolders(InstallationManifest manifest)
+        {
+            foreach (var dir in new[] { Rel(buildsDir), Rel(Path.GetDirectoryName(buildsDir)!) })
+                if (!manifest.InstalledDirectories.Contains(dir, StringComparer.OrdinalIgnoreCase))
+                    manifest.InstalledDirectories.Add(dir);
+        }
+
+        status?.Report($"Installing {modules.Count} FSR build(s) behind the omniloader…");
+        for (var i = 0; i < modules.Count; i++)
+            _install.InstallTrackedFile(game, modules[i].Path, Rel(Path.Combine(buildsDir, names[i])), gameDir,
+                MarkFolders, logTag: "Omniloader");
+
+        foreach (var driver in builds.Where(b => b.Kind == OmniBuildKind.DriverStyle))
+            _install.InstallTrackedFile(game, driver.Path, Path.GetFileName(driver.Path), gameDir, logTag: "Omniloader");
+
+        var temp = Path.Combine(Path.GetTempPath(), "osm_omni_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        try
+        {
+            // It reads the list named after its own file, and OptiScaler can be pointed
+            // at an upscaler under another name.
+            var ini = Path.Combine(temp, "omni.ini");
+            File.WriteAllText(ini, Omniloader.IniFor(modules.Select((m, i) => (names[i], m.Label)).ToList()));
+            _install.InstallTrackedFile(game, ini,
+                Rel(Path.GetFileNameWithoutExtension(target) + ".omni.ini"), gameDir, logTag: "Omniloader");
+
+            var loader = Path.Combine(temp, "omniloader.dll");
+            Omniloader.ExtractTo(loader);
+            _install.InstallTrackedFile(game, loader, Rel(Path.GetFileName(target)), gameDir, logTag: "Omniloader");
+        }
+        finally
+        {
+            try { Directory.Delete(temp, true); } catch { }
+        }
+        Log.Write($"[Omniloader] Installed at {target} with {string.Join(", ", modules.Select(m => m.Label))}");
     }
 
     // ── Revert support ──────────────────────────────────────────────────────

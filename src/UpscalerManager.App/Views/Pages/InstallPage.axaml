@@ -87,6 +87,15 @@
  FontSize="{StaticResource SizeCaption}"
  Foreground="{StaticResource BrTextSecondary}"/>
             </StackPanel>
+            <RadioButton Name="RbOmni" GroupName="Fsr4" Content="Several FSR builds, switchable in-game (experimental)"
+                         ToolTip.Tip="Puts the omniloader in place of OptiScaler's FSR upscaler. It loads every build you tick, and OptiScaler's overlay lists all their versions under FFX Upscaler, so you can switch between them without restarting the game."/>
+            <StackPanel Name="OmniPanel" Spacing="4" Margin="26,0,0,0" IsVisible="False">
+              <StackPanel Name="OmniList" Spacing="2"/>
+              <TextBlock Name="OmniNoteText" TextWrapping="Wrap"
+ FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"
+ Text="The first build ticked runs until you pick another in OptiScaler's overlay, under FFX Upscaler. Experimental: OptiScaler's FSR 4 model override does not reach builds behind the omniloader."/>
+            </StackPanel>
           </StackPanel>
 
           <Border Height="1" Background="{StaticResource BrBorderSubtle}" Margin="0,2"/>

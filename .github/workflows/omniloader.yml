@@ -1,14 +1,11 @@
 name: Omniloader
 
-# Builds the experimental omniloader, uploads the test kit testers unpack beside
-# OptiScaler, then runs its tests under Wine. Only the omniloader branch builds it; main
-# does not ship it yet.
+# Builds the experimental omniloader, runs its tests under Wine, and builds the app with the
+# omniloader inside it, for testers. Only the omniloader branch builds it; main does not
+# ship it yet.
 on:
   push:
     branches: [omniloader]
-    paths:
-      - "native/omniloader/**"
-      - ".github/workflows/omniloader.yml"
   workflow_dispatch:
 
 concurrency:
@@ -17,10 +14,12 @@ concurrency:
 
 env:
   DEBIAN_FRONTEND: noninteractive
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
-  build:
-    name: Build and test
+  native:
+    name: Omniloader DLL
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -44,6 +43,15 @@ jobs:
           path: native/omniloader/out/kit/
           if-no-files-found: error
 
+      # For the app jobs below, which carry the DLL inside the app.
+      - name: Upload DLL
+        uses: actions/upload-artifact@v6
+        with:
+          name: omniloader-dll
+          path: native/omniloader/out/omniloader.dll
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Install Wine
         timeout-minutes: 15
         run: sudo apt-get install -y --no-install-recommends wine64
@@ -54,3 +62,61 @@ jobs:
         env:
           WINEDLLOVERRIDES: "mscoree,mshtml="
         run: native/omniloader/build.sh test
+
+  app:
+    name: App (${{ matrix.rid }})
+    needs: native
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+          # On Windows, so the app gets its Windows output type, as releases do.
+          - os: windows-latest
+            rid: win-x64
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Fetch the omniloader
+        uses: actions/download-artifact@v7
+        with:
+          name: omniloader-dll
+          path: native/omniloader/out
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Test
+        run: dotnet test tests/UpscalerManager.Core.Tests/UpscalerManager.Core.Tests.csproj -c Release
+
+      - name: Publish
+        run: >
+          dotnet publish src/UpscalerManager.App/UpscalerManager.App.csproj
+          -c Release -r ${{ matrix.rid }} --self-contained true -o publish
+
+      # Artifacts drop the executable bit, so on Linux the app goes up inside its own zip,
+      # as releases do.
+      - name: Zip (Linux)
+        if: runner.os != 'Windows'
+        run: cd publish && zip -qr ../UpscalerManager-omniloader-${{ matrix.rid }}.zip .
+
+      - name: Upload app (Linux)
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v6
+        with:
+          name: UpscalerManager-omniloader-${{ matrix.rid }}-${{ github.sha }}
+          path: UpscalerManager-omniloader-${{ matrix.rid }}.zip
+          if-no-files-found: error
+
+      - name: Upload app (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v6
+        with:
+          name: UpscalerManager-omniloader-${{ matrix.rid }}-${{ github.sha }}
+          path: publish/
+          if-no-files-found: error

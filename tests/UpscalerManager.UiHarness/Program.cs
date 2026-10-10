@@ -54,6 +54,7 @@ namespace UpscalerManager.UiHarness
     {
         private readonly string _shots;
         private MainWindow _w = null!;
+        private ManagerService _manager = null!;
 
         public int Passes { get; private set; }
         public int Failures { get; private set; }
@@ -63,6 +64,7 @@ namespace UpscalerManager.UiHarness
         public async Task RunAsync()
         {
             var manager = new ManagerService(new AvaloniaManualComponentProvider(() => _w), new FakeGpu());
+            _manager = manager;
             _w = new MainWindow(manager) { Width = 880, Height = 640 };
             _w.Show();
 
@@ -83,6 +85,7 @@ namespace UpscalerManager.UiHarness
             await InstallPageAsync();
             await SettingsAsync();
             await FasterFsr4Async();
+            await OmniloaderAsync();
         }
 
         // ── Checks ───────────────────────────────────────────────────────────────

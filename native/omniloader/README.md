@@ -10,6 +10,15 @@ Any upscaler DLL that has the five FidelityFX API functions can go in the list: 
 official builds, OptiScaler Client extras (4.1.1b, the INT8 builds), the FSR 4 shader
 overrides (exact or lossy), or anything else built the same way.
 
+## With the app
+
+On the install screen, under **Advanced → Files to install**, pick **Several FSR builds,
+switchable in-game** and tick the builds you want. The list holds every build the
+sources switched on in Settings offer: OptiScaler's own, the faster FSR 4.1.1 builds
+your GPU gets, each OptiScaler Client extras release, and the DLLs you imported. The app
+puts the omniloader, the builds and the list in place, and **Remove** takes them away.
+A driver-style build you tick is installed by its own name, beside the others.
+
 ## Try it by hand
 
 1. Find the folder OptiScaler loads the upscaler from. That is the game folder, or its
@@ -76,8 +85,6 @@ every later call for that upscaler to the same build.
   correcting the preset a game sends) does not apply behind the omniloader, because it
   scans only the DLL OptiScaler loaded. Fixing it means OptiScaler also scanning the
   builds the omniloader loaded. Planned for a future release.
-- **App integration.** Picking several builds on the install screen, with the app
-  writing the folder and the ini.
 
 ## Build
 

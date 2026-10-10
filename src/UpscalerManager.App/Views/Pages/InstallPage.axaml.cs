@@ -1,5 +1,6 @@
 // Upscaler Manager - GPL-3.0-or-later. See repository LICENSE.
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -28,6 +29,10 @@ public partial class InstallPage : UserControl, IHostedPage
 
     /// <summary>Which faster FSR 4.1.1 build the user confirmed (read only when that option is chosen).</summary>
     public FasterFsr4Kind SelectedFasterKind { get; private set; } = FasterFsr4Kind.Exact;
+
+    /// <summary>The builds the user ticked for the omniloader, in list order (read only when that option is chosen).</summary>
+    public IReadOnlyList<ManagerService.OmniBuildOption> SelectedOmniBuilds { get; private set; }
+        = Array.Empty<ManagerService.OmniBuildOption>();
 
     /// <summary>The INT8 community build version the user confirmed (null unless INT8 chosen).</summary>
     public string? SelectedInt8Version { get; private set; }
@@ -115,6 +120,7 @@ public partial class InstallPage : UserControl, IHostedPage
         // and refused.
         int8.IsVisible = _manager.OptiScalerExtrasEnabled;
         SetupFasterOption();
+        SetupOmniOption();
 
         // Pre-selected, and under Advanced: OptiScaler's own release already bundles a
         // working FSR 4.x upscaler, so the zero-decision path delivers FSR 4 as it is.
@@ -332,6 +338,55 @@ public partial class InstallPage : UserControl, IHostedPage
         };
     }
 
+    /// <summary>
+    /// The omniloader option: offered only when this build of the app carries it, with
+    /// every build the switched-on sources have listed when it is picked.
+    /// </summary>
+    private void SetupOmniOption()
+    {
+        var omni = this.FindControl<RadioButton>("RbOmni")!;
+        omni.IsVisible = _manager.IsBackendAvailable(Fsr4Backend.Omniloader);
+        omni.IsCheckedChanged += async (s, e) =>
+        {
+            this.FindControl<StackPanel>("OmniPanel")!.IsVisible = omni.IsChecked == true;
+            if (omni.IsChecked == true) await LoadOmniBuildsAsync();
+            OnOptionChanged(s, e);
+        };
+    }
+
+    private bool _omniLoaded;
+    private async System.Threading.Tasks.Task LoadOmniBuildsAsync()
+    {
+        if (_omniLoaded) return;
+        _omniLoaded = true;
+        var list = this.FindControl<StackPanel>("OmniList")!;
+        list.Children.Add(new TextBlock { Text = "Loading the builds on offer…", Foreground = Brush("BrTextSecondary") });
+
+        var options = await _manager.OmniBuildOptionsAsync();
+        list.Children.Clear();
+        foreach (var option in options)
+        {
+            var box = new CheckBox
+            {
+                Content = option.Label,
+                Tag = option,
+                // OptiScaler's own is the one every install already has, so it starts ticked.
+                IsChecked = option.Id == "optiscaler",
+            };
+            if (option.Note is { } note) ToolTip.SetTip(box, note);
+            box.IsCheckedChanged += OnOptionChanged;
+            list.Children.Add(box);
+        }
+        UpdatePreview();
+    }
+
+    private IReadOnlyList<ManagerService.OmniBuildOption> CurrentOmniBuilds() =>
+        this.FindControl<StackPanel>("OmniList")!.Children
+            .OfType<CheckBox>()
+            .Where(c => c.IsChecked == true)
+            .Select(c => (ManagerService.OmniBuildOption)c.Tag!)
+            .ToList();
+
     private FasterFsr4Kind CurrentFasterKind() =>
         this.FindControl<ComboBox>("FasterKindCombo")!.SelectedIndex == 1 ? FasterFsr4Kind.Lossy : FasterFsr4Kind.Exact;
 
@@ -350,6 +405,7 @@ public partial class InstallPage : UserControl, IHostedPage
 
     private Fsr4Backend CurrentBackend()
     {
+        if (this.FindControl<RadioButton>("RbOmni")!.IsChecked == true) return Fsr4Backend.Omniloader;
         if (this.FindControl<RadioButton>("RbFaster")!.IsChecked == true) return Fsr4Backend.FasterShaders;
         if (this.FindControl<RadioButton>("RbInt8")!.IsChecked == true) return Fsr4Backend.Int8Community;
         if (this.FindControl<RadioButton>("RbCustomMerged")!.IsChecked == true) return Fsr4Backend.CustomMerged;
@@ -484,7 +540,8 @@ public partial class InstallPage : UserControl, IHostedPage
             addFakenvapi: IsChecked("ChkFakenvapi"), addNukemFg: IsChecked("ChkNukemFg"),
             spoofMethod: CurrentSpoofMethod(), forceInt8: IsChecked("ChkForceInt8"),
             fsr4Watermark: IsChecked("ChkWatermark"),
-            optiscalerVersion: CurrentOptiScalerVersion(), fasterKind: CurrentFasterKind());
+            optiscalerVersion: CurrentOptiScalerVersion(), fasterKind: CurrentFasterKind(),
+            omniBuilds: CurrentOmniBuilds());
 
         var files = this.FindControl<StackPanel>("FilesList")!;
         var ini = this.FindControl<StackPanel>("IniList")!;
@@ -536,6 +593,9 @@ public partial class InstallPage : UserControl, IHostedPage
         Fsr4Watermark = IsChecked("ChkWatermark");
         SelectedOptiScalerVersion = CurrentOptiScalerVersion();
         SelectedFasterKind = CurrentFasterKind();
+        SelectedOmniBuilds = SelectedBackend == Fsr4Backend.Omniloader
+            ? CurrentOmniBuilds()
+            : Array.Empty<ManagerService.OmniBuildOption>();
         RequestClose?.Invoke(true);
     }
 

@@ -132,6 +132,7 @@ public static class ComponentRegistry
         Fsr4Backend.Int8Community => new[] { ComponentIds.Fsr4Extras },
         Fsr4Backend.CustomMerged => new[] { ComponentIds.CustomMerged },
         Fsr4Backend.FasterShaders => new[] { ComponentIds.Fsr4ShaderOverrides },
+        Fsr4Backend.Omniloader => new[] { ComponentIds.Omniloader },
         _ => Array.Empty<string>(),
     };
 
@@ -197,7 +198,7 @@ public static class ComponentRegistry
         bool addFakenvapi = false, bool addNukemFg = false,
         SpoofMethod spoofMethod = SpoofMethod.Off, bool forceInt8 = false, bool fsr4Watermark = false,
         bool legacyFsr4UpdateKey = false, IReadOnlyList<IniKeyChange>? nukemKeys = null,
-        FasterFsr4Kind fasterKind = FasterFsr4Kind.Exact)
+        FasterFsr4Kind fasterKind = FasterFsr4Kind.Exact, IReadOnlyList<string>? omniFiles = null)
     {
         var ids = new List<string> { ComponentIds.OptiScaler };
         ids.AddRange(ComponentIdsFor(backend));
@@ -235,6 +236,19 @@ public static class ComponentRegistry
             files.Add(fasterKind == FasterFsr4Kind.Lossy
                 ? $"{Fsr4ShaderOverrides.DllName}  (faster FSR 4.1.1, lossy — replaces OptiScaler's)"
                 : $"{Fsr4ShaderOverrides.DllName}  (faster FSR 4.1.1, exact — replaces OptiScaler's)");
+            preview = preview with { Files = files };
+        }
+
+        // The omniloader takes the upscaler's name; the builds it loads are listed by the
+        // caller, which is the one that knows where each comes from.
+        if (backend == Fsr4Backend.Omniloader)
+        {
+            var files = preview.Files
+                .Where(f => !Get(ComponentIds.Omniloader).TargetFiles.Contains(f, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+            files.Add($"{Omniloader.UpscalerDllName}  (the omniloader — replaces OptiScaler's, loads the builds below)");
+            files.Add($"{Omniloader.IniName}  (the list of builds, in order)");
+            files.AddRange(omniFiles ?? Array.Empty<string>());
             preview = preview with { Files = files };
         }
 
@@ -294,6 +308,14 @@ public static class ComponentRegistry
             DisplayName = "Faster FSR 4.1.1 (shader overrides)",
             Description = "AMD's FSR 4.1.1 upscaler with its slowest shaders rewritten, from github.com/zgauthier2000/fsr4-shader-performance-overrides (third-party). Replaces the copy OptiScaler installs; exact keeps AMD's image, lossy trades some of it for speed.",
             TargetFiles = new[] { Fsr4ShaderOverrides.DllName },
+            Requires = new[] { ComponentIds.OptiScaler },
+        },
+        new ComponentDefinition
+        {
+            Id = ComponentIds.Omniloader,
+            DisplayName = "Several FSR builds (omniloader)",
+            Description = "Experimental. Puts the omniloader in place of OptiScaler's FSR upscaler and loads every build you pick behind it, so all their versions are in OptiScaler's FFX Upscaler list and can be switched in-game.",
+            TargetFiles = new[] { Omniloader.UpscalerDllName, Omniloader.IniName },
             Requires = new[] { ComponentIds.OptiScaler },
         },
         new ComponentDefinition
