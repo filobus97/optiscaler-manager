@@ -22,30 +22,26 @@ namespace UpscalerManager.Core.Tests
         public void Dispose() { try { Directory.Delete(_game, true); } catch { } }
 
         [Theory]
-        [InlineData(RadeonGeneration.Rdna3, FasterFsr4Kind.Exact, "amd_fidelityfx_upscaler_dx12.dll")]
-        [InlineData(RadeonGeneration.Rdna3, FasterFsr4Kind.Lossy, "test-lossy.zip")]
-        [InlineData(RadeonGeneration.Rdna2, FasterFsr4Kind.Exact, "test-rdna2.zip")]
-        [InlineData(RadeonGeneration.Rdna2, FasterFsr4Kind.Lossy, "test-lossy-rdna2.zip")]
-        [InlineData(RadeonGeneration.SteamDeck, FasterFsr4Kind.Exact, "test-rdna2-compact.zip")]
-        [InlineData(RadeonGeneration.SteamDeck, FasterFsr4Kind.Lossy, "test-lossy-rdna2-compact.zip")]
-        [InlineData(RadeonGeneration.Rdna3Integrated, FasterFsr4Kind.Exact, "test-igpu.zip")]
-        [InlineData(RadeonGeneration.Rdna3Integrated, FasterFsr4Kind.Lossy, "test-lossy-igpu.zip")]
-        public void EachGenerationGetsTheBuildMadeForIt(RadeonGeneration generation, FasterFsr4Kind kind, string asset)
+        [InlineData(RadeonGeneration.Rdna3, "fsr4.1.1-cyboman.zip")]
+        [InlineData(RadeonGeneration.Rdna2, "fsr4.1.1-cyboman.zip")]
+        [InlineData(RadeonGeneration.SteamDeck, "fsr4.1.1-igpu-cyboman.zip")]
+        [InlineData(RadeonGeneration.Rdna3Integrated, "fsr4.1.1-igpu-cyboman.zip")]
+        [InlineData(RadeonGeneration.Rdna2Integrated, "fsr4.1.1-igpu-cyboman.zip")]
+        public void CardsAndIntegratedGraphicsGetTheirOwnZip(RadeonGeneration generation, string asset)
         {
-            Assert.Equal(asset, Fsr4ShaderOverrides.AssetFor(generation, kind));
+            // Since dll-2026-10-09 the project ships two zips instead of a file per family.
+            Assert.Equal(asset, Fsr4ShaderOverrides.AssetFor(generation));
             Assert.Null(Fsr4ShaderOverrides.RefusalFor(generation));
         }
 
         [Theory]
         [InlineData(RadeonGeneration.Rdna4)]
         [InlineData(RadeonGeneration.NotRadeon)]
-        [InlineData(RadeonGeneration.Rdna2Integrated)]
         [InlineData(RadeonGeneration.Unknown)]
         public void EverythingElseIsRefusedWithAReason(RadeonGeneration generation)
         {
             Assert.NotNull(Fsr4ShaderOverrides.RefusalFor(generation));
-            Assert.Null(Fsr4ShaderOverrides.AssetFor(generation, FasterFsr4Kind.Exact));
-            Assert.Null(Fsr4ShaderOverrides.AssetFor(generation, FasterFsr4Kind.Lossy));
+            Assert.Null(Fsr4ShaderOverrides.AssetFor(generation));
         }
 
         [Fact]
@@ -53,12 +49,39 @@ namespace UpscalerManager.Core.Tests
             => Assert.Contains("RX 9000", Fsr4ShaderOverrides.RefusalFor(RadeonGeneration.Rdna4));
 
         [Theory]
-        [InlineData(RadeonGeneration.Rdna3, FasterFsr4Kind.Exact, "4.1.1-r3-cyboman")]
-        [InlineData(RadeonGeneration.Rdna3, FasterFsr4Kind.Lossy, "4.1.1-r3-lossy-cyboman")]
-        [InlineData(RadeonGeneration.SteamDeck, FasterFsr4Kind.Exact, "4.1.1-r2c-cyboman")]
-        [InlineData(RadeonGeneration.Rdna3Integrated, FasterFsr4Kind.Lossy, "4.1.1-ig-lossy-cyboman")]
+        [InlineData(RadeonGeneration.Rdna3, FasterFsr4Kind.Exact, "4.1.1-cyboman")]
+        [InlineData(RadeonGeneration.Rdna2, FasterFsr4Kind.Lossy, "4.1.1-lossy-cyboman")]
+        [InlineData(RadeonGeneration.SteamDeck, FasterFsr4Kind.Exact, "4.1.1-igpu-cyboman")]
+        [InlineData(RadeonGeneration.Rdna3Integrated, FasterFsr4Kind.Lossy, "4.1.1-igpu-lossy-cyboman")]
         public void TheOverlayLabelIsTheOneTheAuthorPublishes(RadeonGeneration generation, FasterFsr4Kind kind, string label)
             => Assert.Equal(label, Fsr4ShaderOverrides.OverlayLabel(generation, kind));
+
+        [Theory]
+        [InlineData(FasterFsr4Kind.Exact, "MZexact")]
+        [InlineData(FasterFsr4Kind.Lossy, "MZlossy")]
+        public void TheFolderInTheZipPicksTheBuild(FasterFsr4Kind kind, string content)
+        {
+            // Both builds share one file name; the exact/ and lossy/ folders tell them apart.
+            var zip = Path.Combine(_game, "release.zip");
+            using (var archive = System.IO.Compression.ZipFile.Open(zip, System.IO.Compression.ZipArchiveMode.Create))
+            {
+                foreach (var (entry, text) in new[]
+                         {
+                             ("exact/amd_fidelityfx_upscaler_dx12.dll", "MZexact"),
+                             ("lossy/amd_fidelityfx_upscaler_dx12.dll", "MZlossy"),
+                             ("lossy/WARNING.txt", "read me"),
+                         })
+                {
+                    using var writer = new StreamWriter(archive.CreateEntry(entry).Open());
+                    writer.Write(text);
+                }
+            }
+
+            var dest = Path.Combine(_game, "out.dll");
+            ComponentManagementService.ExtractFsr4Override(zip, kind, dest);
+
+            Assert.Equal(content, File.ReadAllText(dest));
+        }
 
         [Fact]
         public void OnlyAmdsOwn411BuildMayBeReplaced()
@@ -129,18 +152,36 @@ namespace UpscalerManager.Core.Tests
             ]
             """;
 
-            var release = ComponentManagementService.ParseFsr4OverridesReleases(json);
+            var releases = ComponentManagementService.ParseFsr4OverridesReleases(json);
 
-            Assert.NotNull(release);
-            Assert.Equal("dll-2026-10-07", release!.Value.Tag);
-            var dll = Assert.Single(release.Value.Assets, a => a.Name == "amd_fidelityfx_upscaler_dx12.dll");
+            Assert.Equal(new[] { "dll-2026-10-07", "dll-2026-10-06.6" }, releases.Select(r => r.Tag));
+            var dll = Assert.Single(releases[0].Assets, a => a.Name == "amd_fidelityfx_upscaler_dx12.dll");
             Assert.Equal("abcdef", dll.Sha256);
-            Assert.Null(Assert.Single(release.Value.Assets, a => a.Name == "test-lossy.zip").Sha256);
+            Assert.Null(Assert.Single(releases[0].Assets, a => a.Name == "test-lossy.zip").Sha256);
+        }
+
+        [Fact]
+        public void TheNewestReleaseThatHasTheFileWins()
+        {
+            // The project renamed its downloads once already; a release without the file
+            // this app expects is passed over rather than failing the install.
+            var releases = new[]
+            {
+                new GitHubRelease("dll-2026-10-20", new[] { new ReleaseAsset("renamed.zip", "https://example/r", null) }),
+                new GitHubRelease("dll-2026-10-09", new[] { new ReleaseAsset("fsr4.1.1-cyboman.zip", "https://example/a", "aa") }),
+                new GitHubRelease("dll-2026-10-07", new[] { new ReleaseAsset("test-rdna2.zip", "https://example/b", "bb") }),
+            };
+
+            var picked = ComponentManagementService.PickFsr4OverridesRelease(releases, "fsr4.1.1-cyboman.zip");
+
+            Assert.NotNull(picked);
+            Assert.Equal("dll-2026-10-09", picked!.Value.Release.Tag);
+            Assert.Null(ComponentManagementService.PickFsr4OverridesRelease(releases, "nowhere.zip"));
         }
 
         [Fact]
         public void NoDllReleaseMeansNothingToOffer()
-            => Assert.Null(ComponentManagementService.ParseFsr4OverridesReleases(
+            => Assert.Empty(ComponentManagementService.ParseFsr4OverridesReleases(
                 """[ { "tag_name": "timing-kit-1", "assets": [] } ]"""));
     }
 }

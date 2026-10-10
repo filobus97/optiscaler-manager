@@ -34,19 +34,23 @@ public static class Fsr4ShaderOverrides
     /// </summary>
     public const string RequiredBaseVersion = "4.1.1.2740";
 
-    /// <summary>The release asset for a GPU and a kind, or null when none is built for it.</summary>
-    public static string? AssetFor(RadeonGeneration generation, FasterFsr4Kind kind) => (generation, kind) switch
+    /// <summary>
+    /// The release asset for a GPU, or null when none is built for it. Since release
+    /// dll-2026-10-09 there are two: one for RX 7000 and RX 6000 cards, one for graphics
+    /// built into the processor, the Steam Deck's included. Each holds an exact and a
+    /// lossy build (see <see cref="EntryFor"/>).
+    /// </summary>
+    public static string? AssetFor(RadeonGeneration generation) => generation switch
     {
-        (RadeonGeneration.Rdna3, FasterFsr4Kind.Exact) => DllName,
-        (RadeonGeneration.Rdna3, FasterFsr4Kind.Lossy) => "test-lossy.zip",
-        (RadeonGeneration.Rdna2, FasterFsr4Kind.Exact) => "test-rdna2.zip",
-        (RadeonGeneration.Rdna2, FasterFsr4Kind.Lossy) => "test-lossy-rdna2.zip",
-        (RadeonGeneration.SteamDeck, FasterFsr4Kind.Exact) => "test-rdna2-compact.zip",
-        (RadeonGeneration.SteamDeck, FasterFsr4Kind.Lossy) => "test-lossy-rdna2-compact.zip",
-        (RadeonGeneration.Rdna3Integrated, FasterFsr4Kind.Exact) => "test-igpu.zip",
-        (RadeonGeneration.Rdna3Integrated, FasterFsr4Kind.Lossy) => "test-lossy-igpu.zip",
+        RadeonGeneration.Rdna3 or RadeonGeneration.Rdna2 => "fsr4.1.1-cyboman.zip",
+        RadeonGeneration.Rdna3Integrated or RadeonGeneration.Rdna2Integrated or RadeonGeneration.SteamDeck
+            => "fsr4.1.1-igpu-cyboman.zip",
         _ => null,
     };
+
+    /// <summary>The path of the chosen build inside either zip.</summary>
+    public static string EntryFor(FasterFsr4Kind kind) =>
+        (kind == FasterFsr4Kind.Lossy ? "lossy/" : "exact/") + DllName;
 
     /// <summary>Why a GPU is offered nothing, or null when it is offered both builds.</summary>
     public static string? RefusalFor(RadeonGeneration generation) => generation switch
@@ -54,7 +58,6 @@ public static class Fsr4ShaderOverrides
         RadeonGeneration.Rdna4 =>
             "Not for RX 9000: these builds lift AMD's GPU check, and an RX 9000 would run the RDNA 3 model instead of its own.",
         RadeonGeneration.NotRadeon => "Built for Radeon cards only.",
-        RadeonGeneration.Rdna2Integrated => "No build exists for RDNA 2 integrated graphics other than the Steam Deck.",
         RadeonGeneration.Unknown => "Could not tell which Radeon generation this GPU is, so no build can be chosen safely.",
         _ => null,
     };
@@ -62,14 +65,14 @@ public static class Fsr4ShaderOverrides
     /// <summary>What OptiScaler's overlay names the upscaler when the build is the one loaded.</summary>
     public static string OverlayLabel(RadeonGeneration generation, FasterFsr4Kind kind)
     {
-        var target = generation switch
+        var integrated = AssetFor(generation) == "fsr4.1.1-igpu-cyboman.zip";
+        return (integrated, kind) switch
         {
-            RadeonGeneration.Rdna2 => "r2",
-            RadeonGeneration.SteamDeck => "r2c",
-            RadeonGeneration.Rdna3Integrated => "ig",
-            _ => "r3",
+            (true, FasterFsr4Kind.Lossy) => "4.1.1-igpu-lossy-cyboman",
+            (true, _) => "4.1.1-igpu-cyboman",
+            (false, FasterFsr4Kind.Lossy) => "4.1.1-lossy-cyboman",
+            _ => "4.1.1-cyboman",
         };
-        return kind == FasterFsr4Kind.Lossy ? $"4.1.1-{target}-lossy-cyboman" : $"4.1.1-{target}-cyboman";
     }
 
     /// <summary>

@@ -58,7 +58,7 @@
               <CheckBox Name="ChkFsr4ShaderOverrides" Content="FSR 4 shader overrides"
  IsCheckedChanged="OnSourceChanged"
                         ToolTip.Tip="zgauthier2000/fsr4-shader-performance-overrides. AMD's FSR 4.1.1 with its slowest shaders rewritten: the exact build keeps AMD's image byte for byte and is about 25–30% cheaper at 4K on RX 7000; the lossy build is about twice as fast and softens the image. AMD's GPU check is lifted in every build, so they are never offered on RX 9000."/>
-              <TextBlock Text="Faster FSR 4.1.1 for RX 7000, RX 6000 and the Steam Deck · zgauthier2000/fsr4-shader-performance-overrides"
+              <TextBlock Text="Faster FSR 4.1.1 for RX 7000, RX 6000, integrated graphics and the Steam Deck · zgauthier2000/fsr4-shader-performance-overrides"
  TextWrapping="Wrap" Margin="28,0,0,0"
  FontSize="{StaticResource SizeCaption}"
  Foreground="{StaticResource BrTextSecondary}"/>

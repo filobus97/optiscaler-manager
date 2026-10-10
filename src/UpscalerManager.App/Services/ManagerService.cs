@@ -915,17 +915,21 @@ public sealed class ManagerService
             throw new InvalidOperationException(mismatch);
 
         status?.Report("Looking up the faster FSR 4 builds…");
-        var release = await _components.LatestFsr4OverridesReleaseAsync()
-            ?? throw new InvalidOperationException(
+        var releases = await _components.Fsr4OverridesReleasesAsync();
+        if (releases.Count == 0)
+            throw new InvalidOperationException(
                 "The faster FSR 4 builds could not be listed. Check the connection and try again.");
-        var assetName = Fsr4ShaderOverrides.AssetFor(generation, kind)!;
-        var asset = release.Assets.FirstOrDefault(a => a.Name.Equals(assetName, StringComparison.OrdinalIgnoreCase))
+        var assetName = Fsr4ShaderOverrides.AssetFor(generation)!;
+        var (release, asset) = ComponentManagementService.PickFsr4OverridesRelease(releases, assetName)
             ?? throw new InvalidOperationException(
-                $"Release {release.Tag} has no {assetName} for {RadeonGenerations.Describe(generation)}.");
+                $"No release of the shader overrides has {assetName} any more — the project has renamed its "
+                + "downloads, and this app needs an update to follow.");
+        if (release != releases[0])
+            Log.Write($"[FasterFsr4] Newest release {releases[0].Tag} has no {assetName}; using {release.Tag}");
 
         status?.Report($"Downloading faster FSR 4.1.1 ({kind.ToString().ToLowerInvariant()}, {release.Tag})…");
-        var dll = await _components.DownloadFsr4OverrideAsync(release.Tag, asset);
-        Log.Write($"[FasterFsr4] {assetName} from {release.Tag} ready; OptiScaler's overlay should name it "
+        var dll = await _components.DownloadFsr4OverrideAsync(release.Tag, asset, kind);
+        Log.Write($"[FasterFsr4] {assetName} ({kind}) from {release.Tag} ready; OptiScaler's overlay should name it "
                   + Fsr4ShaderOverrides.OverlayLabel(generation, kind));
         return dll;
     }

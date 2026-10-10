@@ -114,9 +114,13 @@ reason:
   report support for this one too. So the app reads the GPU's generation — PCI device ID
   first, name second — and refuses the option on RX 9000, or wherever the generation
   cannot be read.
-- **The build for the card, not one build for all.** RX 7000, RX 6000, the Steam Deck
-  (a compact RDNA 2 variant) and RDNA 3 integrated graphics each get their own, exact or
-  lossy.
+- **The build for the hardware.** Since the project's release `dll-2026-10-09` there are
+  two zips, each holding an `exact/` and a `lossy/` build: one for RX 7000 and RX 6000
+  cards, one for graphics built into the processor, the Steam Deck's included. The
+  project had shipped a file per GPU family until the day before, and the app that
+  expected those names failed every install the moment they went. So the app takes the
+  newest release that still has the file it knows, and a later rename falls back to the
+  last release it can read.
 - **Where OptiScaler loads it.** `[Libraries] FfxDx12SRPath` if set, else OptiScaler's
   library folder, which is the `OptiScaler` subfolder from the release that introduced
   it. The game folder is not read by those releases, so a copy put there would leave

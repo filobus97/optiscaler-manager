@@ -76,10 +76,11 @@ rewritten:
 - **exact** keeps AMD's image byte for byte, about 25–30% cheaper at 4K on RX 7000;
 - **lossy** is about twice as fast, softer, with frame times that alternate.
 
-The build for your card is picked for you (RX 7000, RX 6000, Steam Deck, RDNA 3
-integrated graphics). It is refused on RX 9000, which runs a different FSR 4 model. Turn
-the source on under *Settings → Sources* first; OptiScaler's overlay then names the
-upscaler `4.1.1-r3-cyboman` when it is the one running.
+The build for your hardware is picked for you: one for RX 7000 and RX 6000 cards, one
+for integrated graphics and the Steam Deck. It is refused on RX 9000, which runs a
+different FSR 4 model. Turn the source on under *Settings → Sources* first; OptiScaler's
+overlay then names the upscaler `4.1.1-cyboman` (`4.1.1-igpu-cyboman` on integrated
+graphics, with `lossy` in the name for the lossy build) when it is the one running.
 
 ![The faster FSR 4.1.1 option on an RX 7000](docs/screenshots/install-faster-fsr4.png)
 

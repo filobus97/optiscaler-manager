@@ -42,14 +42,14 @@ internal sealed partial class Harness
         Check("  picking it shows the build for this card",
             note.Text?.Contains("RX 7000 (RDNA 3)") == true, note.Text ?? "");
         Check("  and how to see it is the one running",
-            note.Text?.Contains("4.1.1-r3-cyboman") == true, note.Text ?? "");
+            note.Text?.Contains("4.1.1-cyboman") == true, note.Text ?? "");
         Check("  the preview says it replaces OptiScaler's upscaler",
             FilesPreview().Contains("faster FSR 4.1.1, exact — replaces OptiScaler's"), FilesPreview());
 
         Named<ComboBox>("FasterKindCombo").SelectedIndex = 1;
         await Settle();
         Check("  lossy says it changes the image",
-            note.Text?.Contains("Changes the image") == true && note.Text.Contains("4.1.1-r3-lossy-cyboman"), note.Text ?? "");
+            note.Text?.Contains("Changes the image") == true && note.Text.Contains("4.1.1-lossy-cyboman"), note.Text ?? "");
         Check("  and the preview follows", FilesPreview().Contains("lossy"), FilesPreview());
 
         Named<ComboBox>("FasterKindCombo").SelectedIndex = 0;
