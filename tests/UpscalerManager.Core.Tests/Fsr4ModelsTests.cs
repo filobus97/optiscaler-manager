@@ -1,6 +1,7 @@
 // Upscaler Manager - GPL-3.0-or-later. See repository LICENSE.
 
 using UpscalerManager.Core.Components;
+using UpscalerManager.Core.Models;
 using UpscalerManager.Core.Services;
 using Xunit;
 
@@ -89,4 +90,36 @@ public class OptiScalerChannelsTests
     [InlineData("nightly-2026", "nightly-2026")]
     public void Nightlies_read_as_their_date(string version, string shown)
         => Assert.Equal(shown, OptiScalerChannels.Describe(version));
+}
+
+public class OptiScalerSourcesTests
+{
+    private static AppConfiguration Full() => new()
+    {
+        OptiScaler = new() { RepoOwner = "optiscaler", RepoName = "OptiScaler" },
+        OptiScalerBetas = new() { RepoOwner = "Agustinm28", RepoName = "OptiScaler-Betas" },
+        OptiScalerNightly = new() { RepoOwner = "optiscaler", RepoName = "OptiScaler-nightly" },
+        OptiScalerExtras = new() { RepoOwner = "Agustinm28", RepoName = "OptiScaler-Extras" },
+        Fakenvapi = new() { RepoOwner = "optiscaler", RepoName = "fakenvapi" },
+        NukemFG = new() { RepoOwner = "Nukem9", RepoName = "dlssg-to-fsr3" },
+        OptiPatcher = new() { RepoOwner = "optiscaler", RepoName = "OptiPatcher" },
+    };
+
+    [Fact]
+    public void A_config_from_before_the_nightlies_is_refilled()
+    {
+        var saved = Full();
+        saved.OptiScalerNightly = new();
+        Assert.True(ComponentManagementService.MissesARepository(saved));
+        Assert.False(ComponentManagementService.MissesARepository(Full()));
+    }
+
+    [Theory]
+    [InlineData("nightly", null, false, true)]
+    [InlineData("nightly", "https://example.invalid/OptiScaler.7z", false, false)]
+    [InlineData("nightly-20261024", null, true, false)]
+    [InlineData("0.9.5", null, false, false)]
+    public void Only_the_retired_rolling_nightly_is_dropped(string version, string? url, bool nightly, bool dropped)
+        => Assert.Equal(dropped, ComponentManagementService.IsRetiredNightlyTag(
+            new OptiScalerReleaseEntry { Version = version, DownloadUrl = url, IsNightly = nightly }));
 }

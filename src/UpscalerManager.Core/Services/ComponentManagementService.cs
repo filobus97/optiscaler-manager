@@ -196,10 +196,8 @@ namespace UpscalerManager.Core.Services
 
                         // If core repos are empty (e.g. config was generated with blank defaults),
                         // merge them from the install-dir template so the app stays functional.
-                        // Also re-merge if any individual repo is missing (e.g. OptiPatcher added in a later version).
-                        bool needsMerge = string.IsNullOrEmpty(_config.OptiScaler.RepoOwner)
-                                       || string.IsNullOrEmpty(_config.OptiPatcher.RepoOwner);
-                        if (needsMerge)
+                        // Also re-merge if any individual repo is missing (e.g. a source added in a later version).
+                        if (MissesARepository(_config))
                         {
                             MergeReposFromTemplate(_config);
                             try
@@ -261,6 +259,16 @@ namespace UpscalerManager.Core.Services
                 Log.Write($"[Config] Failed to load configuration, using defaults: {ex.Message}");
             }
         }
+
+        /// <summary>
+        /// True when any download source is blank, as in a config saved by a version that
+        /// predates it: the nightlies were added in 0.35.0, and without this check every
+        /// existing install skipped them.
+        /// </summary>
+        internal static bool MissesARepository(AppConfiguration config) =>
+            new[] { config.OptiScaler, config.OptiScalerBetas, config.OptiScalerNightly, config.OptiScalerExtras,
+                    config.Fakenvapi, config.NukemFG, config.OptiPatcher }
+                .Any(r => string.IsNullOrEmpty(r.RepoOwner) || string.IsNullOrEmpty(r.RepoName));
 
         /// <summary>
         /// Reads the install-dir config.json (if present) and copies any non-empty
@@ -388,6 +396,8 @@ namespace UpscalerManager.Core.Services
         {
             if (_releasesCache.Releases.Count > 0) return;
             if (ReadReleasesCache("optiscaler_releases_cache.json", "ReleasesCache", OptimizerContext.Default.OptiScalerReleasesCache) is not { } loaded) return;
+            // Older caches can hold it, and the cache never forgets a version.
+            loaded.Releases.RemoveAll(IsRetiredNightlyTag);
             _releasesCache = loaded;
             RebuildInMemoryCacheFromReleases();
         }
@@ -435,6 +445,14 @@ namespace UpscalerManager.Core.Services
             }
             (_cachedLatestExtrasVersion, _cachedExtrasVersions) = summary;
         }
+
+        /// <summary>
+        /// OptiScaler's rolling "nightly" release on its main repository, which has carried no
+        /// build since the nightlies moved to their own repository. Listed, it failed to install.
+        /// </summary>
+        internal static bool IsRetiredNightlyTag(OptiScalerReleaseEntry entry) =>
+            !entry.IsNightly && string.IsNullOrEmpty(entry.DownloadUrl)
+            && string.Equals(entry.Version, "nightly", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// Merges newly fetched release entries into the persistent cache.
@@ -972,6 +990,14 @@ namespace UpscalerManager.Core.Services
                                 }
                             }
                         }
+                    }
+
+                    // Nothing to install: OptiScaler's own rolling "nightly" release carries only
+                    // GitHub's source archives since the builds moved to their own repository.
+                    if (downloadUrl == null)
+                    {
+                        Log.Write($"[FetchVersions] {repoLabel} → skipping {version}: no package attached");
+                        continue;
                     }
 
                     bool isPrerelease = element.TryGetProperty("prerelease", out var pr) && pr.GetBoolean();
