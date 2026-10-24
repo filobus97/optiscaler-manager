@@ -15,6 +15,10 @@
         "RepoOwner": "Agustinm28",
         "RepoName": "OptiScaler-Betas"
     },
+    "OptiScalerNightly": {
+        "RepoOwner": "optiscaler",
+        "RepoName": "OptiScaler-nightly"
+    },
     "OptiScalerExtras": {
         "RepoOwner": "Agustinm28",
         "RepoName": "OptiScaler-Extras"

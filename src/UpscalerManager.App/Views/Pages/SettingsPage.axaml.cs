@@ -309,12 +309,17 @@ public partial class SettingsPage : UserControl, IHostedPage
         if (result is null) return;
         result.IsVisible = true;
         result.Text = "Checking…";
+        // The release lists of every source are checked too: this is the button people
+        // press when they expect to see what is new.
+        var lists = _manager.RefreshSourcesAsync(force: true);
         var check = await _manager.CheckForAppUpdateAsync();
-        result.Text = check.LatestVersion is null
+        await lists;
+        result.Text = (check.LatestVersion is null
             ? "Could not reach GitHub (offline or rate-limited)."
             : check.UpdateAvailable
                 ? $"v{check.LatestVersion} is available."
-                : $"Up to date (latest is v{check.LatestVersion}).";
+                : $"Up to date (latest is v{check.LatestVersion}).")
+            + (_manager.SourcesRefreshedAt is { } at ? $" Release lists refreshed at {at:HH:mm}." : "");
 
         var updateNow = this.FindControl<Button>("UpdateNowButton");
         if (updateNow is not null)

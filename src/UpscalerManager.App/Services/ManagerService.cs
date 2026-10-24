@@ -383,6 +383,7 @@ public sealed class ManagerService
 
     public async Task<IReadOnlyList<string>> GetInt8VersionsAsync()
     {
+        await AwaitRunningRefreshAsync();
         if (_components.ExtrasAvailableVersions.Count == 0)
         {
             try { await _components.CheckForUpdatesAsync(); } catch { /* offline / rate-limited */ }
@@ -502,6 +503,43 @@ public sealed class ManagerService
         try { await _components.CheckForUpdatesAsync(); } catch { /* offline / rate-limited */ }
     }
 
+    private Task? _sourcesRefresh;
+
+    /// <summary>When the release lists were last refreshed in this session, or null.</summary>
+    public DateTime? SourcesRefreshedAt { get; private set; }
+
+    /// <summary>
+    /// Refreshes what every source lists: OptiScaler's stable, beta and nightly releases,
+    /// OptiScaler Client extras, fakenvapi, OptiPatcher, Nukem's releases, and the DLSS
+    /// Swapper index. Run at startup and by Settings' update check, so a list is current
+    /// before anyone opens it rather than after the first download. Never throws.
+    /// </summary>
+    /// <remarks>
+    /// why: the lists used to be fetched only when empty, so once anything was cached the
+    /// install screen kept offering it — a release days old stayed "latest" until some
+    /// download happened to refresh the cache.
+    /// </remarks>
+    public Task RefreshSourcesAsync(bool force = false)
+    {
+        if (_sourcesRefresh is { IsCompleted: false } running) return running;
+        return _sourcesRefresh = RunAsync();
+
+        async Task RunAsync()
+        {
+            try { await _components.CheckForUpdatesAsync(force); } catch { /* offline / rate-limited */ }
+            if (SwapRepositoryDownloadsEnabled)
+                try { await DllRepositoryService.WarmAsync(); } catch { /* the cached index still serves */ }
+            SourcesRefreshedAt = DateTime.Now;
+        }
+    }
+
+    /// <summary>Waits for a refresh already under way, so a list opened meanwhile shows its result.</summary>
+    private async Task AwaitRunningRefreshAsync()
+    {
+        if (_sourcesRefresh is { IsCompleted: false } running)
+            await Task.WhenAny(running, Task.Delay(TimeSpan.FromSeconds(20)));
+    }
+
     /// <summary>
     /// Opens the manual-import flow (file picker / archive) for Nukem's
     /// dlssg_to_fsr3_amd_is_better.dll and stores it in the cache.
@@ -611,6 +649,7 @@ public sealed class ManagerService
     /// </summary>
     public async Task<IReadOnlyList<string>> GetOptiScalerVersionsAsync()
     {
+        await AwaitRunningRefreshAsync();
         if (_components.OptiScalerAvailableVersions.Count == 0)
         {
             try { await _components.CheckForUpdatesAsync(); } catch { /* offline / rate-limited */ }
@@ -622,6 +661,9 @@ public sealed class ManagerService
 
     /// <summary>Version strings that are pre-releases/betas (for grouping in the UI).</summary>
     public bool IsBetaOptiScalerVersion(string version) => _components.BetaVersions.Contains(version);
+
+    /// <summary>Version strings from OptiScaler's nightly repository.</summary>
+    public bool IsNightlyOptiScalerVersion(string version) => _components.NightlyVersions.Contains(version);
 
     // ── Install OptiScaler ──────────────────────────────────────────────────
     public async Task InstallAsync(Game game, Fsr4Backend backend, string? int8Version, UpscalerSelection selection,

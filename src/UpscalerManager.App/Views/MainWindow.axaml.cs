@@ -59,6 +59,9 @@ public partial class MainWindow : Window
 
         if (!Program.RelaunchedAfterUpdate)
             _ = CheckForAppUpdateAsync(); // fire-and-forget; silent unless a newer release exists
+        // What every source lists, refreshed in the background so the install and swap
+        // screens open on current versions.
+        _ = _manager.RefreshSourcesAsync();
         await RescanAsync();
         // Set last so it wins over the scan's game count.
         if (Program.RelaunchedAfterUpdate)

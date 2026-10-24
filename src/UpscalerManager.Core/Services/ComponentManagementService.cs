@@ -52,6 +52,8 @@ namespace UpscalerManager.Core.Services
 
         private static System.Collections.Generic.List<string>? _cachedOptiScalerVersions = null;
         private static System.Collections.Generic.HashSet<string> _cachedBetaVersions = new();
+        private static System.Collections.Generic.HashSet<string> _cachedNightlyVersions = new();
+        private static string? _cachedLatestNightlyVersion;
         private static string? _cachedLatestBetaVersion = null;
         private static string? _cachedLatestStableVersion = null;
         private static string? _cachedFakenvapiVersion = null;
@@ -91,6 +93,11 @@ namespace UpscalerManager.Core.Services
             }
         }
         public System.Collections.Generic.HashSet<string> BetaVersions => _cachedBetaVersions;
+
+        /// <summary>OptiScaler's daily builds, from its nightly repository.</summary>
+        public System.Collections.Generic.HashSet<string> NightlyVersions => _cachedNightlyVersions;
+
+        public string? LatestNightlyVersion => _cachedLatestNightlyVersion;
         public string? LatestBetaVersion => _cachedLatestBetaVersion;
         public string? LatestStableVersion => _cachedLatestStableVersion;
 
@@ -279,6 +286,7 @@ namespace UpscalerManager.Core.Services
                 if (!string.IsNullOrEmpty(template.App.RepoOwner))            target.App            = template.App;
                 if (!string.IsNullOrEmpty(template.OptiScaler.RepoOwner))     target.OptiScaler     = template.OptiScaler;
                 if (!string.IsNullOrEmpty(template.OptiScalerBetas.RepoOwner))target.OptiScalerBetas= template.OptiScalerBetas;
+                if (!string.IsNullOrEmpty(template.OptiScalerNightly.RepoOwner)) target.OptiScalerNightly = template.OptiScalerNightly;
                 if (!string.IsNullOrEmpty(template.OptiScalerExtras.RepoOwner))target.OptiScalerExtras = template.OptiScalerExtras;
                 if (!string.IsNullOrEmpty(template.Fakenvapi.RepoOwner))      target.Fakenvapi      = template.Fakenvapi;
                 if (!string.IsNullOrEmpty(template.NukemFG.RepoOwner))        target.NukemFG        = template.NukemFG;
@@ -443,6 +451,7 @@ namespace UpscalerManager.Core.Services
             {
                 existing.IsLatestStable = false;
                 existing.IsLatestBeta = false;
+                existing.IsLatestNightly = false;
             }
 
             foreach (var entry in newEntries)
@@ -463,7 +472,9 @@ namespace UpscalerManager.Core.Services
                             existing.DownloadUrl = entry.DownloadUrl;
                         existing.IsLatestStable = entry.IsLatestStable;
                         existing.IsLatestBeta = entry.IsLatestBeta;
+                        existing.IsLatestNightly = entry.IsLatestNightly;
                         existing.IsBeta = entry.IsBeta;
+                        existing.IsNightly = entry.IsNightly;
                     }
                 }
             }
@@ -480,9 +491,17 @@ namespace UpscalerManager.Core.Services
 
             var all = _releasesCache.Releases;
 
-            var stablesList = all.Where(r => !r.IsBeta)
+            var stablesList = all.Where(r => !r.IsBeta && !r.IsNightly)
                                  .OrderBy(r => r.Version, VersionOrder.Descending)
                                  .ToList();
+
+            var nightliesList = all.Where(r => r.IsNightly)
+                                   .OrderBy(r => r.Version, VersionOrder.Descending)
+                                   .ToList();
+            _cachedNightlyVersions = new System.Collections.Generic.HashSet<string>(
+                nightliesList.Select(r => r.Version), StringComparer.OrdinalIgnoreCase);
+            _cachedLatestNightlyVersion = all.FirstOrDefault(r => r.IsLatestNightly)?.Version
+                ?? nightliesList.FirstOrDefault()?.Version;
 
             var betasList = all.Where(r => r.IsBeta)
                                .OrderBy(r => r.Version, VersionOrder.Descending)
@@ -501,11 +520,12 @@ namespace UpscalerManager.Core.Services
             var merged = new System.Collections.Generic.List<string>();
             merged.AddRange(stablesList.Select(r => r.Version));
             merged.AddRange(betasList.Select(r => r.Version));
+            merged.AddRange(nightliesList.Select(r => r.Version));
 
             if (merged.Count > 0)
                 _cachedOptiScalerVersions = merged.Distinct().ToList();
 
-            Log.Write($"[ReleasesCache] Rebuilt in-memory cache: {stablesList.Count} stable + {betasList.Count} beta versions");
+            Log.Write($"[ReleasesCache] Rebuilt in-memory cache: {stablesList.Count} stable + {betasList.Count} beta + {nightliesList.Count} nightly versions");
         }
 
         // ── Download helpers ─────────────────────────────────────────────────────
@@ -671,7 +691,11 @@ namespace UpscalerManager.Core.Services
 
         // ─────────────────────────────────────────────────────────────────────────
 
-        public async Task CheckForUpdatesAsync()
+        /// <param name="force">
+        /// The player asked: the cooldown shrinks from 15 minutes to one, which still keeps
+        /// a run of clicks from spending GitHub's hourly allowance.
+        /// </param>
+        public async Task CheckForUpdatesAsync(bool force = false)
         {
             await _checkSemaphore.WaitAsync();
             try
@@ -687,7 +711,7 @@ namespace UpscalerManager.Core.Services
                     : _lastApiCheckTime;
 
                 if ((_cachedOptiScalerVersions == null || _cachedOptiScalerVersions.Count == 0) ||
-                    (DateTime.Now - lastCheck).TotalMinutes > 15)
+                    (DateTime.Now - lastCheck).TotalMinutes > (force ? 1 : 15))
                 {
                     Log.Write($"[ComponentCheck] Fetching updates from GitHub API (last check: {(DateTime.Now - lastCheck).ToString(@"hh\:mm\:ss")} ago)");
 
@@ -705,6 +729,8 @@ namespace UpscalerManager.Core.Services
                         await Task.Delay(150);
                         var optiBetasTask = FetchAllReleasesWithUrlAsync(_config.OptiScalerBetas, isBeta: true);
                         await Task.Delay(150);
+                        var optiNightlyTask = FetchNightliesSafelyAsync();
+                        await Task.Delay(150);
                         var fakeTask = FetchFakenvapiReleasesAsync();
                         await Task.Delay(150);
                         var extrasTask = FetchExtrasReleasesAsync();
@@ -716,13 +742,13 @@ namespace UpscalerManager.Core.Services
                         // when the copy they imported is behind the latest.
                         var nukemCheckTask = CheckComponentUpdateAsync("NukemFG", _config.NukemFG);
 
-                        await Task.WhenAll(optiVersionsTask, optiBetasTask, fakeTask, extrasTask, optiPatcherTask, nukemCheckTask);
+                        await Task.WhenAll(optiVersionsTask, optiBetasTask, optiNightlyTask, fakeTask, extrasTask, optiPatcherTask, nukemCheckTask);
 
                         _cachedNukemFGVersion = await nukemCheckTask;
 
                         var stableEntries = await optiVersionsTask;
                         var betaEntries = await optiBetasTask;
-                        var allNewEntries = stableEntries.Concat(betaEntries).ToList();
+                        var allNewEntries = stableEntries.Concat(betaEntries).Concat(await optiNightlyTask).ToList();
 
                         if (allNewEntries.Count > 0)
                         {
@@ -885,8 +911,18 @@ namespace UpscalerManager.Core.Services
             return null;
         }
 
+        /// <summary>
+        /// The nightly list, or nothing: a nightly repository that cannot be reached must not
+        /// fail the stable and beta lists fetched beside it.
+        /// </summary>
+        private async Task<System.Collections.Generic.List<OptiScalerReleaseEntry>> FetchNightliesSafelyAsync()
+        {
+            try { return await FetchAllReleasesWithUrlAsync(_config.OptiScalerNightly, isBeta: false, isNightly: true); }
+            catch (Exception) { return new System.Collections.Generic.List<OptiScalerReleaseEntry>(); }
+        }
+
         private async Task<System.Collections.Generic.List<OptiScalerReleaseEntry>> FetchAllReleasesWithUrlAsync(
-            RepositoryConfig config, bool isBeta)
+            RepositoryConfig config, bool isBeta, bool isNightly = false)
         {
             var entries = new System.Collections.Generic.List<OptiScalerReleaseEntry>();
             var repoLabel = $"{config.RepoOwner}/{config.RepoName}";
@@ -942,8 +978,14 @@ namespace UpscalerManager.Core.Services
 
                     bool isThisLatestStable = false;
                     bool isThisLatestBeta = false;
+                    bool isThisLatestNightly = false;
 
-                    if (isBeta)
+                    // GitHub lists releases newest first; every nightly is a pre-release.
+                    if (isNightly)
+                    {
+                        isThisLatestNightly = entries.Count == 0;
+                    }
+                    else if (isBeta)
                     {
                         if (!latestBetaMarked)
                         {
@@ -967,9 +1009,11 @@ namespace UpscalerManager.Core.Services
                         // Beta = from the dedicated betas repo OR marked prerelease on
                         // the main repo (nightlies/pre tags) — otherwise pre-releases
                         // get sorted in among the stable versions.
-                        IsBeta = isBeta || isPrerelease,
+                        IsBeta = !isNightly && (isBeta || isPrerelease),
+                        IsNightly = isNightly,
                         IsLatestStable = isThisLatestStable,
                         IsLatestBeta = isThisLatestBeta,
+                        IsLatestNightly = isThisLatestNightly,
                     });
                 }
 
@@ -1744,6 +1788,15 @@ namespace UpscalerManager.Core.Services
                         Log.Write($"[Download] Trying beta repo (without v prefix): {url}");
                         response = await GetWithRetryAsync(() => _httpClient, url, maxRetries: 2, timeoutSeconds: 20);
                         repoSource = " (beta repo)";
+                    }
+
+                    if (!response.IsSuccessStatusCode && !string.IsNullOrEmpty(_config.OptiScalerNightly.RepoOwner))
+                    {
+                        // Nightly tags are the version itself (nightly-YYYYMMDD).
+                        url = $"https://api.github.com/repos/{_config.OptiScalerNightly.RepoOwner}/{_config.OptiScalerNightly.RepoName}/releases/tags/{version}";
+                        Log.Write($"[Download] Trying nightly repo: {url}");
+                        response = await GetWithRetryAsync(() => _httpClient, url, maxRetries: 2, timeoutSeconds: 20);
+                        repoSource = " (nightly repo)";
                     }
 
                     if (response.IsSuccessStatusCode)

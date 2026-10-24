@@ -92,6 +92,8 @@ namespace UpscalerManager.Core.Models
         public RepositoryConfig App { get; set; } = new();
         public RepositoryConfig OptiScaler { get; set; } = new();
         public RepositoryConfig OptiScalerBetas { get; set; } = new();
+        /// <summary>OptiScaler's daily builds (optiscaler/OptiScaler-nightly), tagged nightly-YYYYMMDD.</summary>
+        public RepositoryConfig OptiScalerNightly { get; set; } = new();
         public RepositoryConfig OptiScalerExtras { get; set; } = new();
         public RepositoryConfig Fakenvapi { get; set; } = new();
         public RepositoryConfig NukemFG { get; set; } = new();
@@ -234,6 +236,9 @@ namespace UpscalerManager.Core.Models
         public bool IsBeta { get; set; }
         public bool IsLatestStable { get; set; }
         public bool IsLatestBeta { get; set; }
+        /// <summary>A daily build from the nightly repository: kept apart from betas, which are curated.</summary>
+        public bool IsNightly { get; set; }
+        public bool IsLatestNightly { get; set; }
     }
 
     /// <summary>

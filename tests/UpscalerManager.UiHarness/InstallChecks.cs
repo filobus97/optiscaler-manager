@@ -31,6 +31,30 @@ internal sealed partial class Harness
         Check("an ordinary game shows no anti-cheat warning", !Shown(Named<Border>("AntiCheatBox")));
         Shoot("install.png");
 
+        // Stable, beta and nightly: each channel lists its own releases under its own latest.
+        var versions = Named<ComboBox>("OptiScalerVersionCombo");
+        string Items() => string.Join(" | ", versions.Items.OfType<ComboBoxItem>().Select(i => i.Content as string));
+        await Until(() => Named<RadioButton>("RbChannelNightly").IsVisible, "the release channels");
+        Check("the install screen offers the stable, beta and nightly channels",
+            Named<RadioButton>("RbChannelStable").IsChecked == true && Named<RadioButton>("RbChannelBeta").IsVisible
+                && Named<RadioButton>("RbChannelNightly").IsVisible);
+        Check("  stable lists releases only", Items().StartsWith("Latest stable") && !Items().Contains("nightly"), Items());
+        Named<RadioButton>("RbChannelNightly").IsChecked = true;
+        await Settle();
+        Check("  nightly lists the daily builds by date, the newest first",
+            Items().StartsWith("Latest nightly — ") && Items().Contains("24 Oct 2026  (nightly-20261024)")
+                && !Items().Contains("0.9.5"), Items());
+        Check("  and says what a nightly is",
+            Shown(Named<TextBlock>("ChannelNoteText")) && Named<TextBlock>("ChannelNoteText").Text?.Contains("untested") == true);
+        Check("  picking one installs that nightly",
+            (versions.SelectedItem as ComboBoxItem)?.Tag as string is { } tag && tag.StartsWith("nightly-"),
+            (versions.SelectedItem as ComboBoxItem)?.Tag as string ?? "null");
+        Named<RadioButton>("RbChannelBeta").IsChecked = true;
+        await Settle();
+        Check("  beta lists the pre-releases", Items().StartsWith("Latest beta — ") && Items().Contains("0.9.6-pre1"), Items());
+        Named<RadioButton>("RbChannelStable").IsChecked = true;
+        await Settle();
+
         await BackAsync();
         await BackAsync();
     }

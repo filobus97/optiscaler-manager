@@ -215,45 +215,77 @@ public partial class InstallPage : UserControl, IHostedPage
         combo.SelectionChanged += OnOptionChanged;
     }
 
-    // Lazily populate the OptiScaler version list; "Latest" stays selected until the
-    // fetch completes so the dialog is usable immediately (and offline). Stable
-    // releases and pre-releases are grouped under non-selectable separators.
+    // The release channels and their versions. "Latest stable" stays selected until the
+    // lists arrive, so the screen is usable at once (and offline).
+    private IReadOnlyList<string> _stables = Array.Empty<string>();
+    private IReadOnlyList<string> _betas = Array.Empty<string>();
+    private IReadOnlyList<string> _nightlies = Array.Empty<string>();
+    private string _channel = "RbChannelStable";
+
     private async void SetupOptiScalerVersions()
     {
         var combo = this.FindControl<ComboBox>("OptiScalerVersionCombo")!;
-        ComboBoxItem Selectable(string label, string? version) => new() { Content = label, Tag = version };
-        ComboBoxItem Separator(string label) => new()
-        {
-            Content = label,
-            IsEnabled = false,
-            FontSize = 11,
-            Foreground = Brush("BrTextSecondary"),
-        };
-
-        combo.ItemsSource = new[] { Selectable("Latest stable (recommended)", null) };
-        combo.SelectedIndex = 0;
-
-        var versions = await _manager.GetOptiScalerVersionsAsync();
-        var stables = versions.Where(v => !_manager.IsBetaOptiScalerVersion(v)).ToList();
-        var betas = versions.Where(_manager.IsBetaOptiScalerVersion).ToList();
-
-        var items = new System.Collections.Generic.List<ComboBoxItem>
-        {
-            Selectable("Latest stable (recommended)", null),
-        };
-        if (stables.Count > 0)
-        {
-            items.Add(Separator("— Stable releases —"));
-            items.AddRange(stables.Select(v => Selectable(v, v)));
-        }
-        if (betas.Count > 0)
-        {
-            items.Add(Separator("— Pre-releases / betas —"));
-            items.AddRange(betas.Select(v => Selectable(v, v)));
-        }
-        combo.ItemsSource = items;
+        combo.ItemsSource = new[] { new ComboBoxItem { Content = "Latest stable (recommended)", Tag = null } };
         combo.SelectedIndex = 0;
         combo.SelectionChanged += OnOptionChanged;
+        foreach (var name in new[] { "RbChannelStable", "RbChannelBeta", "RbChannelNightly" })
+            this.FindControl<RadioButton>(name)!.IsCheckedChanged += (s, e) =>
+            {
+                if (s is not RadioButton { IsChecked: true } picked) return;
+                // Read from the button just checked: the one it replaces reports unchecked
+                // only after this runs.
+                _channel = picked.Name!;
+                FillVersions();
+                OnOptionChanged(s, e);
+            };
+        UpdateChannelButtons();
+
+        var versions = await _manager.GetOptiScalerVersionsAsync();
+        _nightlies = versions.Where(_manager.IsNightlyOptiScalerVersion).ToList();
+        _betas = versions.Where(v => _manager.IsBetaOptiScalerVersion(v) && !_manager.IsNightlyOptiScalerVersion(v)).ToList();
+        _stables = versions.Except(_betas).Except(_nightlies).ToList();
+        UpdateChannelButtons();
+        FillVersions();
+    }
+
+    /// <summary>A channel with nothing in it is not offered.</summary>
+    private void UpdateChannelButtons()
+    {
+        this.FindControl<RadioButton>("RbChannelBeta")!.IsVisible = _betas.Count > 0;
+        this.FindControl<RadioButton>("RbChannelNightly")!.IsVisible = _nightlies.Count > 0;
+    }
+
+    /// <summary>The chosen channel's versions, newest first, under its own "latest".</summary>
+    private void FillVersions()
+    {
+        var combo = this.FindControl<ComboBox>("OptiScalerVersionCombo")!;
+        var note = this.FindControl<TextBlock>("ChannelNoteText")!;
+        var items = new System.Collections.Generic.List<ComboBoxItem>();
+
+        if (_channel == "RbChannelNightly" && _nightlies.Count > 0)
+        {
+            items.Add(new ComboBoxItem { Content = $"Latest nightly — {OptiScalerChannels.Describe(_nightlies[0])}", Tag = _nightlies[0] });
+            items.AddRange(_nightlies.Select(v => new ComboBoxItem { Content = OptiScalerChannels.Describe(v), Tag = v }));
+            note.Text = "Built from OptiScaler's development branch every day and published untested. "
+                        + "New features land here first: OptiScaler 10's FSR 4 model picker and Vulkan FSR 4 are "
+                        + "nightly-only until it ships.";
+            note.IsVisible = true;
+        }
+        else if (_channel == "RbChannelBeta" && _betas.Count > 0)
+        {
+            items.Add(new ComboBoxItem { Content = $"Latest beta — {_betas[0]}", Tag = _betas[0] });
+            items.AddRange(_betas.Select(v => new ComboBoxItem { Content = v, Tag = v }));
+            note.IsVisible = false;
+        }
+        else
+        {
+            items.Add(new ComboBoxItem { Content = "Latest stable (recommended)", Tag = null });
+            items.AddRange(_stables.Select(v => new ComboBoxItem { Content = v, Tag = v }));
+            note.IsVisible = false;
+        }
+
+        combo.ItemsSource = items;
+        combo.SelectedIndex = 0;
     }
 
     private string? CurrentOptiScalerVersion()

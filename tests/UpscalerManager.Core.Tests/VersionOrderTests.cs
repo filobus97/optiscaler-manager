@@ -1,5 +1,6 @@
 // Upscaler Manager - GPL-3.0-or-later. See repository LICENSE.
 using System.Collections.Generic;
+using System.Linq;
 using UpscalerManager.Core.Models;
 using Xunit;
 
@@ -184,5 +185,16 @@ public class VersionOrderTests
         Assert.True(VersionOrder.IsNewer("310.1.0.0", null));
         Assert.False(VersionOrder.IsNewer(null, "310.1.0.0"));
         Assert.False(VersionOrder.IsNewer(null, null));
+    }
+
+    // OptiScaler's nightly repository tags each build nightly-YYYYMMDD. The date is the
+    // only number in the tag, so it is what orders them, newest first.
+    [Fact]
+    public void Nightlies_sort_newest_first_by_their_date()
+    {
+        var sorted = new[] { "nightly-20261018", "nightly-20261024", "nightly-20260930" }
+            .OrderBy(v => v, VersionOrder.Descending)
+            .ToArray();
+        Assert.Equal(new[] { "nightly-20261024", "nightly-20261018", "nightly-20260930" }, sorted);
     }
 }

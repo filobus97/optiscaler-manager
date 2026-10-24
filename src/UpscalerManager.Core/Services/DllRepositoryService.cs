@@ -77,6 +77,12 @@ public sealed class DllRepositoryService
     // ── The index ────────────────────────────────────────────────────────────
 
     /// <summary>
+    /// Loads the index ahead of need, fetching it when the cached copy is stale, so the
+    /// swap picker opens on a current list.
+    /// </summary>
+    public static Task WarmAsync(CancellationToken cancel = default) => ManifestAsync(cancel);
+
+    /// <summary>
     /// The manifest text, from memory, then disk, then the network. Returns null when
     /// all three fail, which is not an error: this is an extra route, and every other
     /// source on the page still works without it.

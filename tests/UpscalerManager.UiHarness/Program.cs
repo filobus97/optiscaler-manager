@@ -63,6 +63,17 @@ namespace UpscalerManager.UiHarness
 
         public async Task RunAsync()
         {
+            // A release list as the app keeps it, with one release in each channel, so the
+            // channel switch has something to show whether or not GitHub can be reached.
+            var cacheFile = Path.Combine(UpscalerManager.Core.Services.AppDataPaths.Root, "optiscaler_releases_cache.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(cacheFile)!);
+            File.WriteAllText(cacheFile, """
+                { "LastUpdated": "2026-10-24T09:00:00", "Releases": [
+                  { "Version": "0.9.5", "IsLatestStable": true },
+                  { "Version": "0.9.6-pre1", "IsBeta": true, "IsLatestBeta": true },
+                  { "Version": "nightly-20261024", "IsNightly": true, "IsLatestNightly": true } ] }
+                """);
+
             var manager = new ManagerService(new AvaloniaManualComponentProvider(() => _w), new FakeGpu());
             _manager = manager;
             _w = new MainWindow(manager) { Width = 880, Height = 640 };

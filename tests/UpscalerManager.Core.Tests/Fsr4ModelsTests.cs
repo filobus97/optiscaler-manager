@@ -80,3 +80,13 @@ public class Fsr4ModelsTests
     public void Each_generation_has_its_model(RadeonGeneration generation, Fsr4ModelChoice model)
         => Assert.Equal(model, Fsr4Models.OfficialFor(generation));
 }
+
+public class OptiScalerChannelsTests
+{
+    [Theory]
+    [InlineData("nightly-20261024", "24 Oct 2026  (nightly-20261024)")]
+    [InlineData("0.9.5", "0.9.5")]
+    [InlineData("nightly-2026", "nightly-2026")]
+    public void Nightlies_read_as_their_date(string version, string shown)
+        => Assert.Equal(shown, OptiScalerChannels.Describe(version));
+}

@@ -63,6 +63,13 @@ is why it stays OptiScaler's job.
 
 ![The generation guard refusing SDK 1 builds](docs/screenshots/swap-guard.png)
 
+**Stable, beta or nightly.** The install screen switches between OptiScaler's releases,
+its pre-releases and its daily builds from
+[`optiscaler/OptiScaler-nightly`](https://github.com/optiscaler/OptiScaler-nightly), each
+with its own version list. Every source's list is refreshed in the background when the
+app starts, and again by *Settings → Check for updates*, so a screen opens on current
+versions.
+
 **Installing shows the diff first.** Pick the release and the upscaler; everything else
 has a default and lives under *Advanced*. The preview lists the exact files that will be
 placed and the exact `OptiScaler.ini` keys that will change, and updates as you change

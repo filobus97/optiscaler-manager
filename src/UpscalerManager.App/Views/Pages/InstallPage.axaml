@@ -24,9 +24,21 @@
         <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" >
           <TextBlock Grid.Row="0" Grid.Column="0" Text="Version" VerticalAlignment="Center"
  Margin="0,0,12,0" Foreground="{StaticResource BrTextSecondary}"/>
-          <ComboBox Grid.Row="0" Grid.Column="1" Name="OptiScalerVersionCombo" MinWidth="260"
- HorizontalAlignment="Left"
-                    ToolTip.Tip="Which OptiScaler release to install. Older ones are offered for troubleshooting, or to reproduce a setup that worked."/>
+          <StackPanel Grid.Row="0" Grid.Column="1" Spacing="6">
+            <StackPanel Orientation="Horizontal" Spacing="14">
+              <RadioButton Name="RbChannelStable" GroupName="Channel" Content="Stable" IsChecked="True"
+                           ToolTip.Tip="OptiScaler's releases."/>
+              <RadioButton Name="RbChannelBeta" GroupName="Channel" Content="Beta"
+                           ToolTip.Tip="Pre-releases: builds on their way to the next release."/>
+              <RadioButton Name="RbChannelNightly" GroupName="Channel" Content="Nightly"
+                           ToolTip.Tip="A build of OptiScaler's development branch, made every day and not tested before it is published."/>
+            </StackPanel>
+            <ComboBox Name="OptiScalerVersionCombo" MinWidth="260" HorizontalAlignment="Left"
+                      ToolTip.Tip="Which OptiScaler release to install. Older ones are offered for troubleshooting, or to reproduce a setup that worked."/>
+            <TextBlock Name="ChannelNoteText" TextWrapping="Wrap" IsVisible="False"
+ FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
+          </StackPanel>
 
           <TextBlock Grid.Row="1" Grid.Column="0" Text="Upscaler" VerticalAlignment="Center"
  Margin="0,10,12,0" Foreground="{StaticResource BrTextSecondary}"/>
