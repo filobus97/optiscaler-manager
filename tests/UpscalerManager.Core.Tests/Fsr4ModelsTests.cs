@@ -114,6 +114,16 @@ public class OptiScalerSourcesTests
         Assert.False(ComponentManagementService.MissesARepository(Full()));
     }
 
+    [Fact]
+    public void Nightlies_never_listed_skip_the_saved_cooldown()
+    {
+        Assert.True(ComponentManagementService.NightliesNeverListed(Full(), 0));
+        Assert.False(ComponentManagementService.NightliesNeverListed(Full(), 3));
+        var noRepo = Full();
+        noRepo.OptiScalerNightly = new();
+        Assert.False(ComponentManagementService.NightliesNeverListed(noRepo, 0));
+    }
+
     [Theory]
     [InlineData("nightly", null, false, true)]
     [InlineData("nightly", "https://example.invalid/OptiScaler.7z", false, false)]

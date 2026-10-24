@@ -260,6 +260,11 @@ namespace UpscalerManager.Core.Services
             }
         }
 
+        /// <summary>True when the nightly repository is set but no nightly has ever been listed.</summary>
+        internal static bool NightliesNeverListed(AppConfiguration config, int nightliesListed) =>
+            nightliesListed == 0 && !string.IsNullOrEmpty(config.OptiScalerNightly.RepoOwner)
+            && !string.IsNullOrEmpty(config.OptiScalerNightly.RepoName);
+
         /// <summary>
         /// True when any download source is blank, as in a config saved by a version that
         /// predates it: the nightlies were added in 0.35.0, and without this check every
@@ -724,7 +729,11 @@ namespace UpscalerManager.Core.Services
                 // To avoid spamming GitHub API (rate limits), only check every 15 minutes max.
                 // _lastApiCheckTime covers in-session deduplication; _config.LastApiCheckTime
                 // persists across restarts so the cooldown survives app close/reopen.
+                // A source with nothing listed yet, as the nightlies are right after an update
+                // that adds them, waits only for this session's own cooldown: the one saved by
+                // the previous version would hide it for up to 15 minutes.
                 var lastCheck = _config.LastApiCheckTime.HasValue && _config.LastApiCheckTime.Value > _lastApiCheckTime
+                                && !NightliesNeverListed(_config, _cachedNightlyVersions.Count)
                     ? _config.LastApiCheckTime.Value
                     : _lastApiCheckTime;
 
