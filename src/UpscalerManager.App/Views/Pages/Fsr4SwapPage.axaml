@@ -1,0 +1,62 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="UpscalerManager.App.Views.Pages.Fsr4SwapPage"
+        XYFocus.NavigationModes="Keyboard,Gamepad">
+
+  <Grid RowDefinitions="*,Auto">
+
+    <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="12" Margin="0,0,8,4">
+
+        <Border Classes="Card">
+          <Grid ColumnDefinitions="Auto,*">
+            <TextBlock Grid.Column="0" Text="FSR 4 build" VerticalAlignment="Center"
+ Margin="0,0,12,0" Foreground="{StaticResource BrTextSecondary}"/>
+            <ComboBox Grid.Column="1" Name="BuildCombo" MinWidth="260" HorizontalAlignment="Left"
+                      ToolTip.Tip="Where the FSR 4 upscaler comes from. The same builds the omniloader offers, less the driver-style ones, which need OptiScaler to load them."/>
+          </Grid>
+        </Border>
+
+        <TextBlock Name="BuildNoteText" TextWrapping="Wrap" IsVisible="False"
+ FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
+
+        <!-- What is lost, or what stands in the way. Above the files, so it is read before
+             the list it qualifies. -->
+        <Border Name="NoticeBox" IsVisible="False" Padding="12,10"
+ CornerRadius="{StaticResource RadiusControl}"
+ Background="{StaticResource BrBgElevated}"
+ BorderBrush="{StaticResource BrWarning}" BorderThickness="1">
+          <StackPanel Name="NoticeList" Spacing="3"/>
+        </Border>
+
+        <Border Classes="Card">
+          <StackPanel Spacing="6">
+            <TextBlock Text="Files written in the game" FontSize="{StaticResource SizeHeading}"
+ FontWeight="SemiBold"/>
+            <TextBlock Name="SummaryText" TextWrapping="Wrap"
+ FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
+            <StackPanel Name="FilesList" Spacing="3"/>
+            <TextBlock Text="Anything already there is backed up first, so Undo on the game's page can put it back."
+ FontSize="{StaticResource SizeCaption}" TextWrapping="Wrap"
+ Foreground="{StaticResource BrTextSecondary}"/>
+          </StackPanel>
+        </Border>
+
+      </StackPanel>
+    </ScrollViewer>
+
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" Margin="0,12,0,0">
+      <TextBlock Grid.Column="0" Name="StatusText" VerticalAlignment="Center" TextWrapping="Wrap"
+ FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
+      <Button Grid.Column="1" Name="CancelButton" Content="Cancel" Click="OnCancel" IsCancel="True"
+ Margin="8,0,0,0"
+              ToolTip.Tip="Close without changing anything (Esc)."/>
+      <Button Grid.Column="2" Name="ConfirmButton" Classes="BtnPrimary" Content="Confirm and write"
+ Margin="8,0,0,0" IsEnabled="False" Click="OnConfirm"
+              ToolTip.Tip="Write exactly the files listed."/>
+    </Grid>
+  </Grid>
+</UserControl>

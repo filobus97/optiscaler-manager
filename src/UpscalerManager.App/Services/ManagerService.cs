@@ -102,6 +102,7 @@ public sealed class ManagerService
             .ToList();
 
     private readonly DllSwapService _swaps = new();
+    private readonly Fsr4SwapService _fsr4 = new();
     private readonly DllLibraryService _library = new();
     private readonly DllRepositoryService _repository;
 
@@ -113,6 +114,7 @@ public sealed class ManagerService
     public IReadOnlyList<SwapSlot> SwapSlots(Game game)
     {
         _swaps.ForgetStaleSwaps(game);
+        _fsr4.ForgetStale(game);
         return _swaps.Slots(game);
     }
 
@@ -678,6 +680,10 @@ public sealed class ManagerService
         foreach (var file in fsr4.DriverFiles)
             if (!File.Exists(file.Path))
                 throw new InvalidOperationException($"The imported {file.FileName} {file.Version} is gone. Import it again in Settings.");
+        // OptiScaler brings its own FidelityFX files, and the FSR 4 set would be written over.
+        if (_fsr4.IsActive(game))
+            throw new InvalidOperationException(
+                $"FSR 4 without OptiScaler is set up in {game.Name}. Undo it on the game's page first.");
         if (backend == Fsr4Backend.FasterShaders && FasterFsr4Refusal() is { } refused)
             throw new InvalidOperationException(refused);
         if (!IsBackendAvailable(backend))
@@ -1325,6 +1331,224 @@ public sealed class ManagerService
             Log.Write($"[AmdDriver] Installed {file.FileName} {file.Version} at {target}");
         }
     }
+
+    // ── FSR 4 without OptiScaler ────────────────────────────────────────────
+    /// <summary>What a game's page needs to know to offer FSR 4 without OptiScaler.</summary>
+    /// <param name="GameFiles">The FidelityFX files in the game; empty while a set is in place.</param>
+    /// <param name="Active">The set this app wrote, or null.</param>
+    /// <param name="Standing">Whether that set is still what is in the game.</param>
+    public sealed record Fsr4SwapOverview(
+        IReadOnlyList<FidelityFxFile> GameFiles, Fsr4SwapManifest? Active, DllSwapService.SwapStanding Standing,
+        bool OptiScalerInstalled)
+    {
+        /// <summary>True when the game ships something FSR 4 can replace and nothing stands in the way of showing it.</summary>
+        public bool Offered => Active is null && !OptiScalerInstalled && Fsr4SwapPlanner.Targets(GameFiles).Count > 0;
+    }
+
+    /// <summary>
+    /// Reads the game for the page: drops a record of files that are gone, then looks at
+    /// what the game ships. Off the UI thread, because it opens every DLL in the folder.
+    /// </summary>
+    public Task<Fsr4SwapOverview> Fsr4SwapOverviewAsync(Game game) => Task.Run(() =>
+    {
+        _fsr4.ForgetStale(game);
+        var active = _fsr4.Current(game);
+        var optiScaler = _fsr4.OptiScalerInstalled(game);
+        IReadOnlyList<FidelityFxFile> files = active is null && !optiScaler
+            ? Fsr4SwapService.Scan(game)
+            : Array.Empty<FidelityFxFile>();
+        return new Fsr4SwapOverview(files, active, Fsr4SwapService.StandingOf(active), optiScaler);
+    });
+
+    /// <summary>True when this app has FSR 4 files in the game, so OptiScaler should not be installed over them.</summary>
+    public bool HasFsr4Swap(Game game) => _fsr4.IsActive(game);
+
+    /// <summary>What stands in the way of setting up FSR 4 now, or null.</summary>
+    public string? Fsr4SwapRefusal(Game game) => _fsr4.Refusal(game);
+
+    /// <summary>
+    /// The FSR 4 builds that can go straight into a game: every source the omniloader
+    /// lists, less the driver-style builds, which need OptiScaler to load them.
+    /// </summary>
+    public async Task<IReadOnlyList<OmniBuildOption>> Fsr4SwapBuildOptionsAsync()
+    {
+        var options = await OmniBuildOptionsAsync();
+        return options
+            .Where(o => OmniSourceIfCached(o) is not { } cached || Omniloader.Classify(cached) == OmniBuildKind.Module)
+            .ToList();
+    }
+
+    /// <summary>The files a build would write, or why it cannot be used.</summary>
+    public sealed record Fsr4Preview(Fsr4Plan? Plan, Fsr4Sources? Sources, string? Problem);
+
+    /// <summary>
+    /// What setting up FSR 4 with this build would do to the game. Nothing is written.
+    /// With <paramref name="fetchBuilds"/> off, a build that is not downloaded yet is
+    /// planned by its name alone. The OptiScaler release is fetched either way when its
+    /// files are needed, because which route a game gets depends on whether it has a loader.
+    /// </summary>
+    public async Task<Fsr4Preview> PreviewFsr4SwapAsync(
+        Game game, OmniBuildOption build, IReadOnlyList<FidelityFxFile> gameFiles, bool fetchBuilds,
+        IProgress<string>? status = null)
+    {
+        var (sources, problem) = await ResolveFsr4SourcesAsync(gameFiles, build, fetchBuilds, status);
+        if (sources is null) return new Fsr4Preview(null, null, problem);
+        return new Fsr4Preview(_fsr4.Plan(game, sources, gameFiles), sources, null);
+    }
+
+    /// <summary>Downloads what the build needs, then writes the set into the game, backing up what it replaces.</summary>
+    public async Task ApplyFsr4SwapAsync(Game game, OmniBuildOption build, IProgress<string>? status = null)
+    {
+        if (_fsr4.Refusal(game) is { } refused) throw new InvalidOperationException(refused);
+
+        var files = await Task.Run(() => Fsr4SwapService.Scan(game));
+        var preview = await PreviewFsr4SwapAsync(game, build, files, fetchBuilds: true, status);
+        if (preview.Problem is { } problem) throw new InvalidOperationException(problem);
+
+        status?.Report("Writing the files…");
+        await Task.Run(() => _fsr4.Apply(game, preview.Plan!, preview.Sources!));
+        RefreshGameAnalysis(game);
+    }
+
+    /// <summary>Puts the game's own files back and removes the ones the set added.</summary>
+    public void UndoFsr4Swap(Game game, bool force = false)
+    {
+        _fsr4.Revert(game, force);
+        RefreshGameAnalysis(game);
+    }
+
+    /// <summary>
+    /// Undoes what is still ours when the game has replaced part of the set since, and
+    /// clears the record. Returns the files left alone.
+    /// </summary>
+    public IReadOnlyList<string> ForgetFsr4Swap(Game game)
+    {
+        var left = _fsr4.RevertWhatRemains(game);
+        RefreshGameAnalysis(game);
+        return left;
+    }
+
+    /// <summary>
+    /// The newest OptiScaler release already on disk and complete: the latest stable one
+    /// if it is there, otherwise the newest stable, otherwise anything.
+    /// </summary>
+    private string? CachedOptiScalerRelease()
+    {
+        var held = _components.GetDownloadedOptiScalerVersions()
+            .Where(_components.IsOptiScalerCacheComplete)
+            .ToList();
+        var latest = _components.LatestStableVersion;
+        return held.FirstOrDefault(v => string.Equals(v, latest, StringComparison.OrdinalIgnoreCase))
+               ?? held.FirstOrDefault(v => !IsBetaOptiScalerVersion(v))
+               ?? held.FirstOrDefault();
+    }
+
+    private async Task<string> FetchOptiScalerReleaseAsync(IProgress<string>? status)
+    {
+        if (_components.LatestStableVersion is null)
+        {
+            try { await _components.CheckForUpdatesAsync(); } catch { /* offline: say so below */ }
+        }
+        var version = _components.LatestStableVersion
+                      ?? throw new InvalidOperationException(
+                          "No OptiScaler release is available and none is downloaded. Connect to the internet and try again.");
+        status?.Report($"Downloading OptiScaler {version}…");
+        await _components.DownloadOptiScalerAsync(version);
+        return version;
+    }
+
+    /// <summary>
+    /// Finds the upscaler a build is, and the loader and frame generation module to go
+    /// with it for a game on the SDK 1 runtime. A problem is returned, not thrown: it is
+    /// the page's answer to "can I use this".
+    /// </summary>
+    private async Task<(Fsr4Sources? Sources, string? Problem)> ResolveFsr4SourcesAsync(
+        IReadOnlyList<FidelityFxFile> gameFiles, OmniBuildOption build, bool fetchBuilds, IProgress<string>? status)
+    {
+        var (source, value) = SplitOmniId(build.Id);
+        var needsLoader = gameFiles.Any(f => f.Role == FidelityFxRole.Monolith);
+
+        // The release is read for its upscaler, and for the loader and frame generation
+        // module an SDK 1 game needs. It is the same download an install makes.
+        string? fetchProblem = null;
+        var release = CachedOptiScalerRelease();
+        if (release is null && (source == "optiscaler" || needsLoader))
+        {
+            try { release = await FetchOptiScalerReleaseAsync(status); }
+            catch (Exception ex) { fetchProblem = ex.Message; }
+        }
+        var releaseFiles = release is null
+            ? Array.Empty<FidelityFxFile>()
+            : await Task.Run(() => FidelityFxFiles.Scan(_components.GetOptiScalerCachePath(release))).ConfigureAwait(false);
+
+        string? upscalerPath;
+        switch (source)
+        {
+            case "optiscaler":
+                upscalerPath = releaseFiles.FirstOrDefault(f => f.Role == FidelityFxRole.Upscaler)?.FullPath;
+                if (upscalerPath is null)
+                    return (null, fetchProblem
+                                  ?? (release is null
+                                      ? "No OptiScaler release is downloaded yet. Pick another build, or install OptiScaler once."
+                                      : $"OptiScaler {release} ships no FSR upscaler."));
+                break;
+
+            case "faster":
+                try
+                {
+                    upscalerPath = fetchBuilds
+                        ? await PrepareFasterFsr4Async(release is null ? "" : _components.GetOptiScalerCachePath(release),
+                            value == "lossy" ? FasterFsr4Kind.Lossy : FasterFsr4Kind.Exact, status, replacesBundled: false)
+                        : "";
+                }
+                catch (Exception ex) { return (null, ex.Message); }
+                break;
+
+            case "extras":
+                upscalerPath = OmniSourceIfCached(build);
+                if (upscalerPath is null || !File.Exists(upscalerPath))
+                {
+                    if (!fetchBuilds) { upscalerPath = ""; break; }
+                    try { upscalerPath = await DownloadExtrasForOmniAsync(value, status); }
+                    catch (Exception ex) { return (null, ex.Message); }
+                }
+                break;
+
+            case "custom":
+                upscalerPath = OmniSourceIfCached(build);
+                break;
+
+            default:
+                return (null, $"Unknown build: {build.Label}");
+        }
+
+        string? version = null;
+        if (!string.IsNullOrEmpty(upscalerPath))
+        {
+            if (!File.Exists(upscalerPath)) return (null, "That build's file is missing.");
+            var (upscaler, reason) = Fsr4SwapService.ReadUpscaler(upscalerPath);
+            if (upscaler is null) return (null, $"{build.Label} cannot be used here: {reason}.");
+            version = upscaler.Version;
+        }
+
+        FidelityFxFile? loader = null, frames = null;
+        if (needsLoader)
+        {
+            var custom = await Task.Run(() => FidelityFxFiles.Scan(_components.GetCustomDllsPath())).ConfigureAwait(false);
+            // The set the upscaler came from first: a loader and modules of one release belong together.
+            var origins = source == "custom"
+                ? new[] { custom, releaseFiles }
+                : new[] { releaseFiles, custom };
+            foreach (var origin in origins)
+            {
+                (loader, frames) = Fsr4SwapService.FindCompanions(origin);
+                if (loader is not null) break;
+            }
+        }
+
+        return (new Fsr4Sources(upscalerPath ?? "", build.Label, version, loader, frames), null);
+    }
+
 
     // ── Revert support ──────────────────────────────────────────────────────
     /// <summary>True when OptiScaler has a tracked install (backup/manifest) for this game.</summary>

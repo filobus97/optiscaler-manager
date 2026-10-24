@@ -188,26 +188,110 @@ namespace UpscalerManager.Core.Tests
         }
 
         /// <summary>
-        /// A minimal 64-bit DLL with both an export directory and a version, as AMD's driver
-        /// files have. The version block is appended after the section, where the inspector's
-        /// signature scan finds it.
+        /// A minimal 64-bit DLL with both an export directory and a version resource: the
+        /// file version, and optionally the OriginalFilename and FileDescription strings a
+        /// renamed AMD DLL is recognised by.
         /// </summary>
-        public static byte[] BuildVersionedPeExporting(string fileVersion, params string[] exports)
+        public static byte[] BuildVersionedPeExporting(
+            string fileVersion, string[] exports, string? originalFilename = null, string? fileDescription = null)
         {
-            var pe = BuildPeExporting(exports);
-            var parts = fileVersion.Split('.').Select(ushort.Parse).Concat(new ushort[] { 0, 0, 0, 0 }).ToArray();
+            const uint EdataRva = 0x1000, EdataRaw = 0x400, EdataSize = 0x400;
+            const uint RsrcRva = 0x2000, RsrcRaw = 0x800, RsrcSize = 0x400;
             using var ms = new MemoryStream();
             using var w = new BinaryWriter(ms);
-            w.Write(pe);
-            w.Write(0xFEEF04BDu);
-            w.Write(0x00010000u);
-            w.Write(((uint)parts[0] << 16) | parts[1]);
-            w.Write(((uint)parts[2] << 16) | parts[3]);
-            w.Write(((uint)parts[0] << 16) | parts[1]);
-            w.Write(((uint)parts[2] << 16) | parts[3]);
-            for (var i = 0; i < 7; i++) w.Write(0u);
+
+            w.Write((ushort)0x5A4D);
+            while (ms.Position < 0x3C) w.Write((byte)0);
+            w.Write(0x80);
+            while (ms.Position < 0x80) w.Write((byte)0);
+            w.Write(0x00004550u);
+
+            w.Write((ushort)0x8664);   // Machine
+            w.Write((ushort)2);        // NumberOfSections
+            w.Write(0u); w.Write(0u); w.Write(0u);
+            w.Write((ushort)240);      // SizeOfOptionalHeader
+            w.Write((ushort)0x2022);   // Characteristics (DLL)
+
+            var optional = ms.Position;
+            w.Write((ushort)0x20B);
+            while (ms.Position < optional + 112) w.Write((byte)0);
+            w.Write(EdataRva); w.Write(EdataSize);   // export directory
+            w.Write(0u); w.Write(0u);                // import directory
+            w.Write(RsrcRva); w.Write(RsrcSize);     // resource directory
+            while (ms.Position < optional + 240) w.Write((byte)0);
+
+            foreach (var c in ".edata\0\0") w.Write((byte)c);
+            w.Write(EdataSize); w.Write(EdataRva); w.Write(EdataSize); w.Write(EdataRaw);
+            w.Write(0u); w.Write(0u); w.Write((ushort)0); w.Write((ushort)0);
+            w.Write(0x40000040u);
+            foreach (var c in ".rsrc\0\0\0") w.Write((byte)c);
+            w.Write(RsrcSize); w.Write(RsrcRva); w.Write(RsrcSize); w.Write(RsrcRaw);
+            w.Write(0u); w.Write(0u); w.Write((ushort)0); w.Write((ushort)0);
+            w.Write(0x40000040u);
+
+            while (ms.Position < EdataRaw) w.Write((byte)0);
+            var names = EdataRva + 40;
+            var strings = names + 4u * (uint)exports.Length;
+            w.Write(0u); w.Write(0u); w.Write((ushort)0); w.Write((ushort)0);
+            w.Write(0u); w.Write(1u);
+            w.Write((uint)exports.Length); w.Write((uint)exports.Length);
+            w.Write(0u); w.Write(names); w.Write(0u);
+            foreach (var name in exports)
+            {
+                w.Write(strings);
+                strings += (uint)name.Length + 1;
+            }
+            foreach (var name in exports)
+            {
+                w.Write(Encoding.ASCII.GetBytes(name));
+                w.Write((byte)0);
+            }
+            while (ms.Position < EdataRaw + EdataSize) w.Write((byte)0);
+
+            var parts = fileVersion.Split('.').Select(ushort.Parse).ToArray();
+            ushort a = parts[0], b = parts.Length > 1 ? parts[1] : (ushort)0;
+            ushort c3 = parts.Length > 2 ? parts[2] : (ushort)0, d = parts.Length > 3 ? parts[3] : (ushort)0;
+
+            // The version block, as the resource tree below points at it.
+            using var block = new MemoryStream();
+            using var bw = new BinaryWriter(block);
+            bw.Write(0xFEEF04BDu); bw.Write(0x00010000u);
+            bw.Write(((uint)a << 16) | b); bw.Write(((uint)c3 << 16) | d);
+            bw.Write(((uint)a << 16) | b); bw.Write(((uint)c3 << 16) | d);
+            void Str(string key, string? value)
+            {
+                if (value is null) return;
+                foreach (var text in new[] { key, value })
+                {
+                    bw.Write(Encoding.Unicode.GetBytes(text));
+                    bw.Write((ushort)0);
+                    while (block.Position % 4 != 0) bw.Write((byte)0);
+                }
+            }
+            Str("OriginalFilename", originalFilename);
+            Str("FileDescription", fileDescription);
+
+            // Resource tree: type 16 (version) -> name 1 -> language 0x409 -> the block.
+            const uint DataAt = 0x58;
+            void Level(uint id, uint target)
+            {
+                w.Write(0u); w.Write(0u); w.Write(0u);       // characteristics, time, version
+                w.Write((ushort)0); w.Write((ushort)1);      // named entries, id entries
+                w.Write(id); w.Write(target);
+            }
+            Level(16, 0x80000000u | 0x18);
+            Level(1, 0x80000000u | 0x30);
+            Level(0x409, 0x48);
+            w.Write(RsrcRva + DataAt); w.Write((uint)block.Length); w.Write(0u); w.Write(0u);
+            w.Write(block.ToArray());
+            if (ms.Position > RsrcRaw + RsrcSize) throw new InvalidOperationException("The fixture's resource section is too small.");
+            while (ms.Position < RsrcRaw + RsrcSize) w.Write((byte)0);
             return ms.ToArray();
         }
+
+        /// <summary>As above with only a version and exports, the shape AMD's driver files take.</summary>
+        public static byte[] BuildVersionedPeExporting(string fileVersion, params string[] exports)
+            => BuildVersionedPeExporting(fileVersion, exports, null, null);
 
         /// <summary>Writes bytes to a temp .dll and returns the path (caller deletes).</summary>
         public static string WriteTempDll(byte[] bytes)

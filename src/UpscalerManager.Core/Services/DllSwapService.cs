@@ -146,7 +146,7 @@ public sealed class DllSwapService
     /// <summary>True when this game has anything swapped, so its backup is still needed.</summary>
     public bool HasSwaps(Game game)
     {
-        try { return LoadManifest(game).Files.Count > 0; }
+        try { return LoadManifest(game).Files.Count > 0 || Fsr4SwapService.HasRecordForDirectory(game.InstallPath); }
         catch { return true; }   // unreadable record: assume the backup matters
     }
 
@@ -159,6 +159,9 @@ public sealed class DllSwapService
     {
         try
         {
+            // The FSR 4 route keeps its originals in the same store under its own record.
+            if (Fsr4SwapService.HasRecordForDirectory(gameDir)) return true;
+
             var path = Path.Combine(_backupStore.GetBackupRoot(gameDir), SwapManifestFileName);
             if (!File.Exists(path)) return false;
             var manifest = JsonSerializer.Deserialize(File.ReadAllText(path), OptimizerContext.Default.SwapManifest);
@@ -185,6 +188,7 @@ public sealed class DllSwapService
     {
         var manifest = SafeManifest(game);
         var optiScaler = _backupStore.LoadManifest(game.InstallPath);
+        var fsr4Files = Fsr4SwapService.WrittenNames(game.InstallPath);
 
         // Group by filename rather than taking the first match. Every directory the
         // file was found in becomes a copy of the same slot: they are one swap, because
@@ -229,7 +233,7 @@ public sealed class DllSwapService
                 // as "the game's" rather than one buried in an engine subfolder.
                 copies.OrderBy(c => c.Directory.Length).ThenBy(c => c.Directory, StringComparer.OrdinalIgnoreCase).ToList(),
                 swapped,
-                Judge(fileName, swapped, optiScaler)));
+                Judge(fileName, swapped, optiScaler, fsr4Files)));
         }
 
         return slots.OrderBy(s => SwappableDlls.DisplayOrder(s.FileName)).ToList();
@@ -294,8 +298,16 @@ public sealed class DllSwapService
     /// would leave two components each believing they own the file, and whichever
     /// reverted second would restore the other's build over the game's original.
     /// </summary>
-    private static SwapVerdict Judge(string fileName, SwappedFile? swapped, InstallationManifest? optiScaler)
+    private static SwapVerdict Judge(
+        string fileName, SwappedFile? swapped, InstallationManifest? optiScaler, IReadOnlySet<string> fsr4Files)
     {
+        // Part of the FSR 4 set, which is written and undone as one: replacing one file of
+        // it would leave the set mixed, and its Undo would then refuse.
+        if (fsr4Files.Contains(fileName))
+            return SwapVerdict.No(
+                $"{fileName} is part of the FSR 4 files this app set up in the game. "
+                + "Undo that first (\u201cFSR 4 without OptiScaler\u201d on this page), then swap.");
+
         // A file this app has stopped swapping. The row exists to undo the swap that is
         // there, so reverting stays available and installing anything new does not.
         if (SwappableDlls.IsRetired(fileName))
@@ -487,7 +499,7 @@ public sealed class DllSwapService
     /// holding the same filename cannot back up over each other — which would destroy
     /// one of the two originals with no way to tell.
     /// </summary>
-    private static string BackupRelativeFor(Game game, string directory, string fileName)
+    internal static string BackupRelativeFor(Game game, string directory, string fileName, string prefix = BackupPrefix)
     {
         string relative;
         try { relative = Path.GetRelativePath(game.InstallPath, directory); }
@@ -503,7 +515,7 @@ public sealed class DllSwapService
         if (slug.Length == 0) slug = "_root";
         if (slug.Length > 80) slug = slug[..80];
 
-        return Path.Combine(BackupPrefix, slug, fileName);
+        return Path.Combine(prefix, slug, fileName);
     }
 
     /// <summary>
@@ -848,7 +860,7 @@ public sealed class DllSwapService
         }
     }
 
-    private void TryDeleteStoredBackup(Game game, string backupRelative)
+    internal void TryDeleteStoredBackup(Game game, string backupRelative)
     {
         try
         {

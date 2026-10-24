@@ -98,6 +98,7 @@ namespace UpscalerManager.UiHarness
             await FasterFsr4Async();
             await OmniloaderAsync();
             await Fsr4DriverFilesAsync();
+            await Fsr4SwapAsync();
         }
 
         // ── Checks ───────────────────────────────────────────────────────────────

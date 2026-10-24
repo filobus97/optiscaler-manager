@@ -173,3 +173,57 @@ public class SwapManifest
 
     public List<SwappedFile> Files { get; set; } = new();
 }
+
+/// <summary>One file the FSR 4 set wrote into a game, and what it takes to put it back.</summary>
+public class Fsr4SwapFile
+{
+    /// <summary>The directory it was written to.</summary>
+    public string Directory { get; set; } = string.Empty;
+
+    /// <summary>The name it was written under, which is the name the game loads.</summary>
+    public string FileName { get; set; } = string.Empty;
+
+    /// <summary>What it is: "loader", "upscaler" or "frame generation".</summary>
+    public string Kind { get; set; } = string.Empty;
+
+    /// <summary>False when nothing was there before — reverting then removes the file.</summary>
+    public bool ExistedBefore { get; set; } = true;
+
+    /// <summary>The version that was there before, or null when it carried none.</summary>
+    public string? OriginalVersion { get; set; }
+
+    /// <summary>Hash of what was there before, so a restored file can be confirmed.</summary>
+    public string? OriginalSha256 { get; set; }
+
+    /// <summary>Where the original is stored, relative to the backup store's files directory.</summary>
+    public string BackupRelative { get; set; } = string.Empty;
+
+    /// <summary>Hash of the file as written, checked before reverting.</summary>
+    public string? InstalledSha256 { get; set; }
+}
+
+/// <summary>
+/// The FSR 4 set this app wrote into one game: every file, as one unit.
+///
+/// Kept apart from <see cref="SwapManifest"/> because it is not a swap of one DLL: the
+/// files only work together, so they are recorded together and put back together.
+/// </summary>
+public class Fsr4SwapManifest
+{
+    public int ManifestVersion { get; set; } = 1;
+
+    public string GameName { get; set; } = string.Empty;
+
+    /// <summary>The FSR 4 build's name, as it was picked.</summary>
+    public string BuildLabel { get; set; } = string.Empty;
+
+    /// <summary>The upscaler's version, e.g. "4.1.1.2740".</summary>
+    public string BuildVersion { get; set; } = string.Empty;
+
+    /// <summary>True when the game's own frame generation was left without a module to run on.</summary>
+    public bool LosesFrameGeneration { get; set; }
+
+    public string AppliedAtUtc { get; set; } = string.Empty;
+
+    public List<Fsr4SwapFile> Files { get; set; } = new();
+}

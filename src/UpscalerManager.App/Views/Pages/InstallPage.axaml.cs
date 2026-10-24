@@ -670,9 +670,17 @@ public partial class InstallPage : UserControl, IHostedPage
         var conflictBox = this.FindControl<Border>("ConflictBox")!;
         var conflictList = this.FindControl<StackPanel>("ConflictList")!;
         conflictList.Children.Clear();
-        conflictBox.IsVisible = preview.Conflicts.Count > 0;
         foreach (var c in preview.Conflicts)
             conflictList.Children.Add(Mono("⚠ " + c, FontWeight.Normal, "BrError"));
+
+        // OptiScaler brings its own FidelityFX files, which would be written over the FSR 4 set.
+        var fsr4 = _manager.HasFsr4Swap(_game);
+        if (fsr4)
+            conflictList.Children.Add(Mono(
+                "⚠ FSR 4 without OptiScaler is set up in this game. Undo it on the game's page first.",
+                FontWeight.Normal, "BrError"));
+        conflictBox.IsVisible = conflictList.Children.Count > 0;
+        this.FindControl<Button>("ConfirmButton")!.IsEnabled = !fsr4;
     }
 
     private static IBrush Brush(string key) =>

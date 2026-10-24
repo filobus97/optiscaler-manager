@@ -120,5 +120,9 @@ internal sealed partial class Harness
         Check("Remove takes the driver files away",
             !File.Exists(Path.Combine(lib, AmdDriverFiles.Dx12Name)) && !File.Exists(Path.Combine(lib, AmdDriverFiles.VulkanName)),
             Directory.Exists(lib) ? string.Join(", ", Directory.GetFiles(lib).Select(Path.GetFileName)) : "(folder gone)");
+
+        // The stand-in release is only for this pass: left in the cache, it would be the
+        // newest release every later pass picks up.
+        Directory.Delete(release, recursive: true);
     }
 }

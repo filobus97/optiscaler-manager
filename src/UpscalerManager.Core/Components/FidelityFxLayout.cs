@@ -123,6 +123,18 @@ public static class FidelityFxLayout
             : $"{Noun(candidate)}, and this game uses {Noun(current)} — AMD split the runtime "
               + "in SDK 2.0.0 and the two generations cannot stand in for each other.";
 
+    /// <summary>The name AMD ships a role's file under, or null for a role without one.</summary>
+    public static string? CanonicalName(FidelityFxRole role) => role switch
+    {
+        FidelityFxRole.Monolith => "amd_fidelityfx_dx12.dll",
+        FidelityFxRole.Loader => "amd_fidelityfx_loader_dx12.dll",
+        FidelityFxRole.Upscaler => "amd_fidelityfx_upscaler_dx12.dll",
+        FidelityFxRole.FrameGeneration => "amd_fidelityfx_framegeneration_dx12.dll",
+        FidelityFxRole.Denoiser => "amd_fidelityfx_denoiser_dx12.dll",
+        FidelityFxRole.RadianceCache => "amd_fidelityfx_radiancecache_dx12.dll",
+        _ => null,
+    };
+
     /// <summary>Which SDK generation a role belongs to, for a row that only has room to tag it.</summary>
     public static string Generation(FidelityFxRole role) => role switch
     {
@@ -150,10 +162,12 @@ public static class FidelityFxLayout
     /// why: the loader's 2.3.0 is an SDK version, and left bare it reads as an FSR
     /// version two generations behind the 4.1.1 module sitting next to it.
     /// </summary>
-    public static string Describe(string? fileName, string? fileVersion, string? effectVersion)
-    {
-        var role = Identify(fileName, fileVersion, effectVersion);
+    public static string Describe(string? fileName, string? fileVersion, string? effectVersion) =>
+        Describe(Identify(fileName, fileVersion, effectVersion), fileVersion, effectVersion);
 
+    /// <summary>The same label for a file whose role is already known, as a renamed one's is.</summary>
+    public static string Describe(FidelityFxRole role, string? fileVersion, string? effectVersion)
+    {
         return role switch
         {
             // The FSR version is inside the file, and the build number is not it.

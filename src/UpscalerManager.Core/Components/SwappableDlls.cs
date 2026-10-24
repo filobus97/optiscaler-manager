@@ -18,8 +18,8 @@ namespace UpscalerManager.Core.Components;
 /// shipping NvNgx_Dlss.dll would never be seen.
 ///
 /// The two FidelityFX runtimes are here, guarded: one filename covers both SDK
-/// generations and a swap across them is refused. FSR 4 is not reachable this way at
-/// all. See docs/fidelityfx.md for both.
+/// generations and a swap across them is refused. FSR 4 is not reachable this way: it
+/// goes in as a set, through <see cref="Fsr4SwapPlanner"/>. See docs/fidelityfx.md for both.
 /// </summary>
 public static class SwappableDlls
 {
