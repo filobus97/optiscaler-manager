@@ -29,6 +29,10 @@ internal sealed partial class Harness
         await Until(() => Page is InstallPage, "the install page");
         await Settle(600);
         Check("an ordinary game shows no anti-cheat warning", !Shown(Named<Border>("AntiCheatBox")));
+        Check("FSR 4 comes from OptiScaler's own until driver files are imported",
+            Named<RadioButton>("RbDefault").IsChecked == true && !Named<RadioButton>("RbAmdDriver").IsVisible,
+            Named<RadioButton>("RbDefault").Content as string ?? "");
+        Check("  and an AMD GPU is shown how to bring them", Shown(Named<StackPanel>("ImportDriverHint")));
         Shoot("install.png");
 
         // Stable, beta and nightly: each channel lists its own releases under its own latest.

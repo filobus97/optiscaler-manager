@@ -113,8 +113,7 @@ public partial class InstallPage : UserControl, IHostedPage
         var customMerged = this.FindControl<RadioButton>("RbCustomMerged")!;
         var def = this.FindControl<RadioButton>("RbDefault")!;
 
-        customMerged.IsEnabled = _manager.HasCustomDlls;
-        if (!customMerged.IsEnabled) customMerged.Content = "Custom DLLs — none imported (Settings)";
+        customMerged.IsVisible = _manager.HasCustomDlls;
 
         // A source switched off in Settings is not offered at all, rather than offered
         // and refused.
@@ -122,9 +121,13 @@ public partial class InstallPage : UserControl, IHostedPage
         SetupFasterOption();
         SetupOmniOption();
 
-        // Pre-selected, and under Advanced: OptiScaler's own release already bundles a
-        // working FSR 4.x upscaler, so the zero-decision path delivers FSR 4 as it is.
-        def.IsChecked = true;
+        // OptiScaler's own release already bundles a working FSR 4.x upscaler, so the
+        // zero-decision path delivers FSR 4 as it is; the player's AMD driver files, where
+        // they are needed, deliver AMD's newest.
+        var driver = this.FindControl<RadioButton>("RbAmdDriver")!;
+        SetupDriverOption(pick: true);
+        driver.IsCheckedChanged += (s, e) => { RefreshDriverRow(); OnOptionChanged(s, e); };
+        this.FindControl<ComboBox>("AmdDriverVersionCombo")!.SelectionChanged += OnOptionChanged;
 
         int8.IsCheckedChanged += OnInt8CheckedChanged;
         int8.IsCheckedChanged += OnOptionChanged;
@@ -420,7 +423,7 @@ public partial class InstallPage : UserControl, IHostedPage
             .ToList();
 
     /// <summary>
-    /// The FSR 4 model picker, the force switch and the AMD driver files. The picker is shown
+    /// The FSR 4 model picker and the force switch. The picker is shown
     /// only for a release that takes [FSR] Fsr4Model (OptiScaler 10 and newer).
     /// </summary>
     private void SetupFsr4Options()
@@ -432,41 +435,120 @@ public partial class InstallPage : UserControl, IHostedPage
         model.SelectedIndex = 0;
         model.SelectionChanged += OnOptionChanged;
         this.FindControl<CheckBox>("ChkForceFsr4")!.IsCheckedChanged += OnOptionChanged;
+    }
 
-        var driver = this.FindControl<CheckBox>("ChkAmdDriver")!;
+    /// <summary>
+    /// The player's AMD driver files as one place FSR 4 can come from, picked where they are
+    /// needed. Without them, an AMD GPU is shown how to bring them.
+    /// </summary>
+    private void SetupDriverOption(bool pick)
+    {
+        var option = this.FindControl<RadioButton>("RbAmdDriver")!;
+        var def = this.FindControl<RadioButton>("RbDefault")!;
         var versions = this.FindControl<ComboBox>("AmdDriverVersionCombo")!;
-        var imported = _manager.AmdDriverFilesImported
-            .GroupBy(f => f.Version)
+        var imported = _manager.AmdDriverFilesImported.GroupBy(f => f.Version).ToList();
+
+        versions.ItemsSource = imported
             .Select(g => new ComboBoxItem
             {
-                Content = $"{g.Key}  ({string.Join(" + ", g.Select(f => AmdDriverFiles.Describe(f.Api)))})",
+                Content = $"{DriverLabel(g)}  ({string.Join(" + ", g.Select(f => AmdDriverFiles.Describe(f.Api)))})",
                 Tag = g.ToList(),
             })
             .ToList();
+        versions.SelectedIndex = imported.Count > 0 ? 0 : -1;
 
-        if (imported.Count == 0)
+        var recommended = imported.Count > 0 && ManagerService.DriverFilesNeeded;
+        option.IsVisible = imported.Count > 0;
+        if (imported.Count > 0)
         {
-            driver.IsEnabled = false;
-            driver.Content = "AMD driver FSR 4 files — none imported (Settings)";
+            var fsr = imported[0].FirstOrDefault(f => f.Api == AmdDriverApi.Dx12) is { } dx12
+                && _manager.AmdDriverFsrVersions(dx12) is { Count: > 0 } read ? read[0] : "4";
+            option.Content = $"AMD's FSR {fsr}, from your driver files" + (recommended ? " (recommended)" : "");
         }
-        else
-        {
-            versions.ItemsSource = imported;
-            versions.SelectedIndex = 0;
-            versions.SelectionChanged += OnOptionChanged;
-            // On by default where nothing else provides them.
-            driver.IsChecked = ManagerService.DriverFilesNeeded;
-        }
-        driver.IsCheckedChanged += (s, e) => { RefreshDriverRow(); OnOptionChanged(s, e); };
+        def.Content = recommended ? "OptiScaler's own" : "OptiScaler's own (recommended)";
+
+        this.FindControl<StackPanel>("ImportDriverHint")!.IsVisible =
+            imported.Count == 0 && _manager.DetectPrimaryGpu()?.Vendor == GpuVendor.AMD;
+        if (pick) (recommended ? option : def).IsChecked = true;
         RefreshDriverRow();
+    }
+
+    private string DriverLabel(IEnumerable<AmdDriverFile> files)
+    {
+        var list = files.ToList();
+        return list.FirstOrDefault(f => f.Api == AmdDriverApi.Dx12) is { } dx12
+            ? _manager.AmdDriverLabel(dx12)
+            : $"AMD driver ({list[0].Version})";
+    }
+
+    /// <summary>Imports AMD's driver files from here, and picks them once they are in.</summary>
+    private async void OnImportDriverFiles(object? sender, RoutedEventArgs e)
+    {
+        if (TopLevel.GetTopLevel(this) is not { } top) return;
+        var files = await top.StorageProvider.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
+        {
+            Title = "Select AMD's driver installer, an archive, or the driver files",
+            AllowMultiple = true,
+            FileTypeFilter = new[]
+            {
+                new Avalonia.Platform.Storage.FilePickerFileType("AMD driver installer, archive or DLL")
+                    { Patterns = new[] { "*.exe", "*.zip", "*.7z", "*.rar", "*.dll" } },
+            },
+        });
+        if (files is null || files.Count == 0) return;
+
+        var status = this.FindControl<TextBlock>("ImportDriverStatus")!;
+        var button = this.FindControl<Button>("ImportDriverButton")!;
+        button.IsEnabled = false;
+        // A driver installer is over a gigabyte, and reading through it takes a while.
+        status.Text = "Looking for the FSR 4 files… a driver installer takes a minute or two.";
+        try
+        {
+            var result = await _manager.ImportAmdDriverFilesAsync(files.Select(f => f.Path.LocalPath));
+            status.Text = result.Added.Count > 0 ? "" : "No driver file found. " + string.Join(" ", result.Notes);
+        }
+        catch (Exception ex)
+        {
+            status.Text = $"Import failed: {ex.Message}";
+        }
+        button.IsEnabled = true;
+
+        SetupDriverOption(pick: false);
+        var option = this.FindControl<RadioButton>("RbAmdDriver")!;
+        if (option.IsVisible) option.IsChecked = true;
+        UpdatePreview();
     }
 
     private void RefreshDriverRow()
     {
         var versions = this.FindControl<ComboBox>("AmdDriverVersionCombo")!;
         this.FindControl<StackPanel>("AmdDriverVersionPanel")!.IsVisible =
-            IsChecked("ChkAmdDriver") && versions.ItemCount > 1;
+            this.FindControl<RadioButton>("RbAmdDriver")!.IsChecked == true && versions.ItemCount > 1;
     }
+
+    /// <summary>One line on what the chosen FSR 4 source does; the options with a panel of their own say it there.</summary>
+    private void RefreshFsr4SourceNote()
+    {
+        var note = this.FindControl<TextBlock>("Fsr4SourceNoteText")!;
+        note.Text = CurrentBackend() switch
+        {
+            Fsr4Backend.Default when CurrentDriverFiles().Count > 0 =>
+                $"Placed next to OptiScaler, for {string.Join(" and ", CurrentDriverFiles().Select(f => AmdDriverFiles.Describe(f.Api)))}. "
+                + "They carry every FSR 4 model and run the one for your GPU unless the model under Advanced says otherwise."
+                + (ManagerService.DriverFilesNeeded ? "" : " Your installed driver already has FSR 4: a copy here pins this version."),
+            Fsr4Backend.Default => "The release as it ships, with the FSR upscaler it bundles.",
+            Fsr4Backend.CustomMerged => "Your DLLs from Settings, laid over the release.",
+            Fsr4Backend.Int8Community => "A third-party FSR 4 build, from OptiScaler Client extras.",
+            _ => "",
+        };
+        note.IsVisible = note.Text.Length > 0;
+    }
+
+    private IReadOnlyList<AmdDriverFile> CurrentDriverFiles() =>
+        this.FindControl<RadioButton>("RbAmdDriver")!.IsChecked == true
+            ? (this.FindControl<ComboBox>("AmdDriverVersionCombo")!.SelectedItem as ComboBoxItem)?.Tag as List<AmdDriverFile>
+              ?? (IReadOnlyList<AmdDriverFile>)Array.Empty<AmdDriverFile>()
+            : Array.Empty<AmdDriverFile>();
 
     /// <summary>Shows the model picker where the release takes it, with what "for this GPU" means here.</summary>
     private void RefreshFsr4Rows()
@@ -484,10 +566,7 @@ public partial class InstallPage : UserControl, IHostedPage
         var model = (this.FindControl<ComboBox>("Fsr4ModelCombo")!.SelectedItem as ComboBoxItem)?.Tag as Fsr4ModelChoice?
             ?? Fsr4ModelChoice.Auto;
         if (!_manager.Fsr4Schema(CurrentOptiScalerVersion()).HasModelKey) model = Fsr4ModelChoice.Auto;
-        var driverFiles = IsChecked("ChkAmdDriver")
-            ? (this.FindControl<ComboBox>("AmdDriverVersionCombo")!.SelectedItem as ComboBoxItem)?.Tag as List<AmdDriverFile>
-            : null;
-        return new Fsr4Options(model, IsChecked("ChkForceFsr4"), (IReadOnlyList<AmdDriverFile>?)driverFiles ?? Array.Empty<AmdDriverFile>());
+        return new Fsr4Options(model, IsChecked("ChkForceFsr4"), CurrentDriverFiles());
     }
 
     private FasterFsr4Kind CurrentFasterKind() =>
@@ -576,12 +655,13 @@ public partial class InstallPage : UserControl, IHostedPage
         var backend = CurrentBackend();
         var int8 = CurrentInt8Version();
         var release = CurrentOptiScalerVersion();
-        var signature = $"{backend}|{int8}|{release}";
+        var drivers = CurrentDriverFiles();
+        var signature = $"{backend}|{int8}|{release}|{drivers.FirstOrDefault()?.Version}";
         if (signature == _ffxVersionSource) return;
         _ffxVersionSource = signature;
 
         var combo = this.FindControl<ComboBox>("FfxVersionCombo")!;
-        var options = _manager.FidelityFxVersionOptions(_game, backend, int8, release);
+        var options = _manager.FidelityFxVersionOptions(_game, backend, int8, release, drivers);
 
         combo.Items.Clear();
 
@@ -645,6 +725,7 @@ public partial class InstallPage : UserControl, IHostedPage
         if (!_ready) return;
         RefreshUpscalerRows();
         RefreshFsr4Rows();
+        RefreshFsr4SourceNote();
         var preview = _manager.BuildInstallPreview(_game, CurrentBackend(), CurrentUpscaler(),
             addFakenvapi: IsChecked("ChkFakenvapi"), addNukemFg: IsChecked("ChkNukemFg"),
             spoofMethod: CurrentSpoofMethod(), fsr4: CurrentFsr4(),

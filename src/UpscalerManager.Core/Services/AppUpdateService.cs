@@ -86,6 +86,12 @@ namespace UpscalerManager.Core.Services
             if (Version.TryParse(current, out var c) && Version.TryParse(latest, out var l))
                 return l > c;
 
+            // A testing build ("0.36.0-test.1") is compared as a version, so a tester is not
+            // offered the older release, and is offered the release it became.
+            static string Core(string v) => v.Split('-')[0];
+            if (Version.TryParse(Core(current), out _) && Version.TryParse(Core(latest), out _))
+                return VersionOrder.IsNewer(latest, current);
+
             return !string.Equals(current, latest, StringComparison.OrdinalIgnoreCase);
         }
 

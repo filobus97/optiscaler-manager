@@ -35,11 +35,14 @@ internal sealed partial class Harness
         await BackAsync();
 
         // Stand-ins for the two files of an AMD driver: they hand FSR 4 out through
-        // UpdateFfxApiProvider and carry a version.
+        // UpdateFfxApiProvider and carry a version. The DirectX 12 one also carries a
+        // provider table, read for the FSR version it names, after the image where the
+        // loader ignores it.
         var unpacked = Path.Combine(Path.GetTempPath(), "um-harness-driver-" + Guid.NewGuid().ToString("N"), "Packages", "Drivers");
         Directory.CreateDirectory(unpacked);
         File.WriteAllBytes(Path.Combine(unpacked, AmdDriverFiles.Dx12Name),
-            PeTestData.BuildVersionedPeExporting("2.4.0.1234", AmdDriverFiles.ProviderExport));
+            PeTestData.BuildVersionedPeExporting("2.4.0.1234", AmdDriverFiles.ProviderExport)
+                .Concat(System.Text.Encoding.ASCII.GetBytes("\04.1.2\0" + "3.1.5\0")).ToArray());
         File.WriteAllBytes(Path.Combine(unpacked, AmdDriverFiles.VulkanName),
             PeTestData.BuildVersionedPeExporting("2.4.0.1234", AmdDriverFiles.ProviderExport));
         var import = await _manager.ImportAmdDriverFilesAsync(new[] { Path.GetDirectoryName(Path.GetDirectoryName(unpacked))! });
@@ -58,21 +61,25 @@ internal sealed partial class Harness
         await BackAsync();
 
         await OpenInstallFor("Stellar Blade");
-        Named<ToggleButton>("AdvancedToggle").IsChecked = true;
-        await Settle();
-        var driver = Named<CheckBox>("ChkAmdDriver");
-        Check("the install screen offers them, on by default on Linux",
-            driver.IsEnabled && driver.IsChecked == true, $"{driver.IsEnabled} {driver.IsChecked}");
+        var driver = Named<RadioButton>("RbAmdDriver");
+        Check("the install screen offers them by their FSR version, picked on Linux",
+            driver.IsVisible && driver.IsChecked == true, $"{driver.IsVisible} {driver.IsChecked}");
+        Check("  named so", driver.Content as string ?? "", "AMD's FSR 4.1.2, from your driver files (recommended)");
+        Check("  with no import button once they are in", !Named<StackPanel>("ImportDriverHint").IsVisible);
         Check("  the preview says where they go",
             FilesPreview().Contains("amdxcffx64.dll  (AMD driver 2.4.0.1234, FSR 4 for DirectX 12 — next to OptiScaler)")
                 && FilesPreview().Contains("amdvkffx64.dll  (AMD driver 2.4.0.1234, FSR 4 for Vulkan — next to OptiScaler)"),
             FilesPreview());
+        Check("  the FSR version list starts at the driver's",
+            (Named<ComboBox>("FfxVersionCombo").Items.OfType<ComboBoxItem>().FirstOrDefault()?.Content as string ?? "")
+                .Contains("FSR 4.1.2"),
+            Named<ComboBox>("FfxVersionCombo").Items.OfType<ComboBoxItem>().FirstOrDefault()?.Content as string ?? "");
         Check("  the model note says which model this GPU runs",
             Named<TextBlock>("Fsr4ModelNoteText").Text?.Contains("INT8 model") == true,
             Named<TextBlock>("Fsr4ModelNoteText").Text ?? "");
-        driver.IsChecked = false;
+        Named<RadioButton>("RbDefault").IsChecked = true;
         await Settle();
-        Check("  and leaves them out when switched off", !FilesPreview().Contains("AMD driver"), FilesPreview());
+        Check("  and leaves them out when OptiScaler's own is picked", !FilesPreview().Contains("AMD driver"), FilesPreview());
         driver.IsChecked = true;
         await Settle();
         driver.BringIntoView();

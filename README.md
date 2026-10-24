@@ -90,7 +90,7 @@ placed and the exact `OptiScaler.ini` keys that will change, and updates as you 
 the options. Whatever is already there is backed up to a per-game store first, so
 **Remove** puts it back. A game with anti-cheat gets a warning before anything else.
 
-**Faster FSR 4.1.1, if you want it.** Under *Advanced → Files to install*, the
+**Faster FSR 4.1.1, if you want it.** Under *FSR 4 from*, the
 [FSR 4 shader overrides](https://github.com/zgauthier2000/fsr4-shader-performance-overrides)
 replace OptiScaler's FSR 4.1.1 upscaler with AMD's own DLL, its slowest shaders
 rewritten:
@@ -108,9 +108,11 @@ graphics, with `lossy` in the name for the lossy build) when it is the one runni
 **FSR 4 on more GPUs, through AMD's own driver files.** Since driver 26.10.1, AMD's FSR 4
 (4.1.2) carries four models: FP8 for RX 9000, INT8 for RX 7000, an INT8 model for RX 6000,
 and a small INT8 Lite model for integrated graphics. The driver picks the one for the GPU.
-- **On Linux** there is no AMD driver for OptiScaler to find them in, so the install
-  screen places your imported driver files next to OptiScaler (on by default there).
-  On Windows your installed driver already provides them.
+- **On Linux** there is no AMD driver for OptiScaler to find them in. Once you import
+  them, *FSR 4 from* on the install screen offers them by the FSR version they carry,
+  picked by default, and places them next to OptiScaler. Before that, the same spot has
+  an *Import AMD driver files…* button. On Windows your installed driver already
+  provides them.
 - **The model** can be picked at install for OptiScaler 10 and newer (`[FSR] Fsr4Model`),
   and changed later in OptiScaler's overlay.
 - **Forcing FSR 4** on a GPU OptiScaler does not list is written under the name each
@@ -118,7 +120,7 @@ and a small INT8 Lite model for integrated graphics. The driver picks the one fo
   `Fsr4ForceEnableInt8` (older). With no model picked it forces the GPU's own model, or
   INT8 Lite where FSR 4 has none, since Lite runs on any GPU.
 
-**Several FSR builds, switchable in-game.** Under *Advanced → Files to install*, tick
+**Several FSR builds, switchable in-game.** Under *FSR 4 from*, tick
 any number of builds from every source that is on: OptiScaler's own, the faster 4.1.1
 builds, each OptiScaler Client extras release, the DLLs you imported. The
 [omniloader](native/omniloader/README.md) takes the place of OptiScaler's FSR upscaler,

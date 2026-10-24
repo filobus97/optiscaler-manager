@@ -82,6 +82,30 @@ public sealed class ManagerService
 
     public void DeleteAmdDriverFile(AmdDriverFile file) => _amdDrivers.Delete(file);
 
+    private readonly Dictionary<string, IReadOnlyList<string>> _driverFsrVersions = new();
+
+    /// <summary>
+    /// The FSR 4 versions an imported driver file provides, newest first, read from its
+    /// provider table. Only FSR 4 numbers are believed: a driver DLL is large, and full of
+    /// other strings that look like versions.
+    /// </summary>
+    public IReadOnlyList<string> AmdDriverFsrVersions(AmdDriverFile file)
+    {
+        lock (_driverFsrVersions)
+        {
+            if (_driverFsrVersions.TryGetValue(file.Path, out var known)) return known;
+            var read = FidelityFxVersion.AllFromBinary(file.Path).Where(v => v.StartsWith("4.")).ToList();
+            _driverFsrVersions[file.Path] = read;
+            return read;
+        }
+    }
+
+    /// <summary>"AMD driver FSR 4.1.2 (2.4.0.4370)": the FSR version where the file says, and always the file's own.</summary>
+    public string AmdDriverLabel(AmdDriverFile file) =>
+        AmdDriverFsrVersions(file) is { Count: > 0 } fsr
+            ? $"AMD driver FSR {fsr[0]} ({file.Version})"
+            : $"AMD driver FSR 4 ({file.Version})";
+
     /// <summary>
     /// Whether an install should place driver files unless told otherwise: on Linux, where
     /// there is no AMD driver store for OptiScaler to find them in. On Windows the installed
@@ -226,7 +250,8 @@ public sealed class ManagerService
     /// and FSR 4 looked unavailable at exactly the moment it was being installed.
     /// </summary>
     public FfxVersionOptions FidelityFxVersionOptions(
-        Game game, Fsr4Backend backend, string? int8Version, string? optiscalerVersion = null)
+        Game game, Fsr4Backend backend, string? int8Version, string? optiscalerVersion = null,
+        IReadOnlyList<AmdDriverFile>? driverFiles = null)
     {
         // Behind the omniloader the list is every picked build's, merged at run time.
         if (backend == Fsr4Backend.Omniloader)
@@ -265,6 +290,16 @@ public sealed class ManagerService
                 fromInstall = FidelityFxProviderScanner.FromDirectory(ReleaseCache(optiscalerVersion));
                 label = "the OptiScaler release being installed";
                 break;
+        }
+
+        // OptiScaler loads AMD's driver file beside its own upscaler, so both lists are on offer.
+        if (driverFiles?.FirstOrDefault(f => f.Api == AmdDriverApi.Dx12) is { } driver
+            && AmdDriverFsrVersions(driver) is { Count: > 0 } fromDriver)
+        {
+            fromInstall = new FfxProviders(
+                FidelityFxProviderScanner.Merge(fromInstall?.Versions, fromDriver),
+                fromInstall is null ? driver.FileName : $"{fromInstall.FromFile} and {driver.FileName}");
+            label = fromInstall.FromFile == driver.FileName ? "your AMD driver files" : $"{label} and your AMD driver files";
         }
 
         var versions = FidelityFxProviderScanner.Merge(fromInstall?.Versions, fromGame?.Versions);
@@ -1126,7 +1161,7 @@ public sealed class ManagerService
         // Each imported DirectX 12 driver file is a build of its own: AMD's FSR 4.1.2 and
         // later carry every model and pick the one for the GPU.
         foreach (var driver in _amdDrivers.List().Where(f => f.Api == AmdDriverApi.Dx12))
-            options.Add(new($"driver:{driver.Version}", $"AMD driver FSR 4 {driver.Version}",
+            options.Add(new($"driver:{driver.Version}", AmdDriverLabel(driver),
                 "Your imported amdxcffx64.dll. It picks the FSR 4 model for this GPU itself."));
         return options;
     }

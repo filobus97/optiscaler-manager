@@ -111,6 +111,9 @@ namespace UpscalerManager.Core.Tests
         [InlineData("0.6.0", "v0.7.0", true)]   // v-prefix on the remote tag
         [InlineData("0.9.9", "1.0.0", true)]
         [InlineData("0.6.0+abc", "0.6.0", false)] // build metadata ignored
+        [InlineData("0.36.0-test.4", "0.35.2", false)] // a testing build is not sent back
+        [InlineData("0.36.0-test.4", "0.36.0", true)]  // and is offered what it became
+        [InlineData("0.35.2", "0.36.0-test.4", true)]
         public void IsNewer_ComparesSemanticVersions(string current, string latest, bool expected)
             => Assert.Equal(expected, AppUpdateService.IsNewer(current, latest));
 

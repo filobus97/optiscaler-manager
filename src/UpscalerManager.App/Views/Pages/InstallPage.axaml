@@ -18,10 +18,10 @@
  Foreground="{StaticResource BrTextPrimary}"/>
       </Border>
 
-      <!-- The primary path: which release, and which upscaler it should run. Everything
-           else has a defensible default and lives under Advanced. -->
+      <!-- The primary path: which release, which upscaler it should run, and where its
+           FSR 4 comes from. Everything else has a defensible default and lives under Advanced. -->
       <Border Classes="Card">
-        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" >
+        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
           <TextBlock Grid.Row="0" Grid.Column="0" Text="Version" VerticalAlignment="Center"
  Margin="0,0,12,0" Foreground="{StaticResource BrTextSecondary}"/>
           <StackPanel Grid.Row="0" Grid.Column="1" Spacing="6">
@@ -49,37 +49,20 @@
  FontSize="{StaticResource SizeCaption}" TextWrapping="Wrap"
  Foreground="{StaticResource BrTextSecondary}"/>
 
-          <TextBlock Grid.Row="3" Grid.Column="0" Name="FfxVersionLabel" Text="FSR version"
- VerticalAlignment="Center" IsVisible="False"
- Margin="0,10,12,0" Foreground="{StaticResource BrTextSecondary}"/>
-          <ComboBox Grid.Row="3" Grid.Column="1" Name="FfxVersionCombo" MinWidth="260" Margin="0,10,0,0"
- HorizontalAlignment="Left" IsVisible="False" SelectionChanged="OnOptionChanged"
-                    ToolTip.Tip="One FidelityFX code covers FSR 2.3, 3.1 and 4.x — this picks which of them runs, via [FSR] UpscalerIndex."/>
-          <TextBlock Grid.Row="4" Grid.Column="1" Name="FfxVersionNoteText" Margin="0,4,0,0"
- FontSize="{StaticResource SizeCaption}" TextWrapping="Wrap" IsVisible="False"
+          <TextBlock Grid.Row="3" Grid.Column="0" Text="FSR 4 from" VerticalAlignment="Top"
+ Margin="0,14,12,0" Foreground="{StaticResource BrTextSecondary}"/>
+          <StackPanel Grid.Row="3" Grid.Column="1" Spacing="6" Margin="0,12,0,0">
+            <RadioButton Name="RbAmdDriver" GroupName="Fsr4" IsVisible="False"
+                         ToolTip.Tip="AMD's own FSR 4, from the amdxcffx64.dll (DirectX 12) and amdvkffx64.dll (Vulkan) you imported in Settings. They go next to OptiScaler, which loads them before the driver's own. Needed on Linux, where there is no AMD driver to find them in; on Windows your installed driver already provides them."/>
+            <StackPanel Name="AmdDriverVersionPanel" Orientation="Horizontal" Spacing="8"
+ Margin="26,0,0,0" IsVisible="False">
+              <TextBlock Text="Files" VerticalAlignment="Center"
  Foreground="{StaticResource BrTextSecondary}"/>
-        </Grid>
-      </Border>
-
-      <!-- Everything with a defensible default. Hidden rather than unbuilt: these
-           controls feed the preview, and a collapsed Expander has no controls to read. -->
-      <ToggleButton Name="AdvancedToggle" Classes="Disclosure" IsCheckedChanged="OnAdvancedToggled">
-        <Grid ColumnDefinitions="*,Auto">
-          <TextBlock Text="Advanced" FontSize="{StaticResource SizeHeading}" FontWeight="SemiBold"/>
-          <TextBlock Grid.Column="1" Name="AdvancedChevron" Text="&#x2304;"
- Foreground="{StaticResource BrTextSecondary}"/>
-        </Grid>
-      </ToggleButton>
-
-      <Border Name="AdvancedPanel" Classes="Card" IsVisible="False">
-        <StackPanel Spacing="10">
-
-          <TextBlock Text="Files to install" FontSize="{StaticResource SizeCaption}"
- Foreground="{StaticResource BrTextSecondary}"/>
-          <StackPanel Spacing="6">
-            <RadioButton Name="RbDefault" GroupName="Fsr4" Content="OptiScaler default"
+              <ComboBox Name="AmdDriverVersionCombo" MinWidth="200"/>
+            </StackPanel>
+            <RadioButton Name="RbDefault" GroupName="Fsr4" Content="OptiScaler's own"
                          ToolTip.Tip="Install the release exactly as it ships. It bundles the newest FSR upscaler it can hook and hooks the game's own DLSS and XeSS where present, so this is right on any GPU unless you have a reason to replace a file."/>
-            <RadioButton Name="RbCustomMerged" GroupName="Fsr4" Content="Custom DLLs"
+            <RadioButton Name="RbCustomMerged" GroupName="Fsr4" Content="Your custom DLLs"
                          ToolTip.Tip="Your imported DLLs overlaid on the install: names OptiScaler ships are swapped in place, unknown ones are added alongside. Import them in Settings. OptiScaler can only hook FSR binaries it has patterns for, so a mismatched upscaler build silently disables FSR 4."/>
             <RadioButton Name="RbInt8" GroupName="Fsr4" Content="FSR 4 INT8 community build"
                          ToolTip.Tip="A community FSR 4 INT8 build from github.com/Agustinm28/OptiScaler-Extras — a third-party repo, not part of OptiScaler. This is the route to FSR 4 without a driver that provides it."/>
@@ -99,7 +82,7 @@
  FontSize="{StaticResource SizeCaption}"
  Foreground="{StaticResource BrTextSecondary}"/>
             </StackPanel>
-            <RadioButton Name="RbOmni" GroupName="Fsr4" Content="Several FSR builds, switchable in-game (experimental)"
+            <RadioButton Name="RbOmni" GroupName="Fsr4" Content="Several builds, switchable in-game (experimental)"
                          ToolTip.Tip="Puts the omniloader in place of OptiScaler's FSR upscaler. It loads every build you tick, and OptiScaler's overlay lists all their versions under FFX Upscaler, so you can switch between them without restarting the game."/>
             <StackPanel Name="OmniPanel" Spacing="4" Margin="26,0,0,0" IsVisible="False">
               <StackPanel Name="OmniList" Spacing="2"/>
@@ -108,9 +91,47 @@
  Foreground="{StaticResource BrTextSecondary}"
  Text="The first build ticked runs until you pick another in OptiScaler's overlay, under FFX Upscaler. Experimental: OptiScaler's FSR 4 model override does not reach builds behind the omniloader."/>
             </StackPanel>
+            <TextBlock Name="Fsr4SourceNoteText" TextWrapping="Wrap"
+ FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
+            <!-- Where FSR 4 could come from but does not yet: the files are the player's own. -->
+            <StackPanel Name="ImportDriverHint" Spacing="6" IsVisible="False">
+              <TextBlock TextWrapping="Wrap" FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"
+ Text="AMD's newest FSR 4, with a model for every Radeon, is in AMD's driver files. They are never downloaded here: import them from AMD's driver installer, or an archive or folder that holds them."/>
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Name="ImportDriverButton" Content="Import AMD driver files…" Click="OnImportDriverFiles"/>
+                <TextBlock Name="ImportDriverStatus" VerticalAlignment="Center" TextWrapping="Wrap"
+ FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
+              </StackPanel>
+            </StackPanel>
           </StackPanel>
 
-          <Border Height="1" Background="{StaticResource BrBorderSubtle}" Margin="0,2"/>
+          <TextBlock Grid.Row="4" Grid.Column="0" Name="FfxVersionLabel" Text="FSR version"
+ VerticalAlignment="Center" IsVisible="False"
+ Margin="0,10,12,0" Foreground="{StaticResource BrTextSecondary}"/>
+          <ComboBox Grid.Row="4" Grid.Column="1" Name="FfxVersionCombo" MinWidth="260" Margin="0,10,0,0"
+ HorizontalAlignment="Left" IsVisible="False" SelectionChanged="OnOptionChanged"
+                    ToolTip.Tip="One FidelityFX code covers FSR 2.3, 3.1 and 4.x — this picks which of them runs, via [FSR] UpscalerIndex."/>
+          <TextBlock Grid.Row="5" Grid.Column="1" Name="FfxVersionNoteText" Margin="0,4,0,0"
+ FontSize="{StaticResource SizeCaption}" TextWrapping="Wrap" IsVisible="False"
+ Foreground="{StaticResource BrTextSecondary}"/>
+        </Grid>
+      </Border>
+
+      <!-- Everything with a defensible default. Hidden rather than unbuilt: these
+           controls feed the preview, and a collapsed Expander has no controls to read. -->
+      <ToggleButton Name="AdvancedToggle" Classes="Disclosure" IsCheckedChanged="OnAdvancedToggled">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Text="Advanced" FontSize="{StaticResource SizeHeading}" FontWeight="SemiBold"/>
+          <TextBlock Grid.Column="1" Name="AdvancedChevron" Text="&#x2304;"
+ Foreground="{StaticResource BrTextSecondary}"/>
+        </Grid>
+      </ToggleButton>
+
+      <Border Name="AdvancedPanel" Classes="Card" IsVisible="False">
+        <StackPanel Spacing="10">
 
           <TextBlock Text="FSR 4" FontSize="{StaticResource SizeCaption}"
  Foreground="{StaticResource BrTextSecondary}"/>
@@ -128,16 +149,6 @@
             </StackPanel>
             <CheckBox Name="ChkForceFsr4" Content="Run FSR 4 even where OptiScaler says this GPU can't"
                       ToolTip.Tip="Overrides the support OptiScaler detects for the GPU, under the name this OptiScaler release uses ([FSR] Fsr4GpuSupport, Fsr4ForceModel or Fsr4ForceEnableInt8). It cannot make a GPU run a model it lacks the hardware for; INT8 Lite is the one any GPU can run."/>
-            <StackPanel Spacing="4">
-              <CheckBox Name="ChkAmdDriver" Content="AMD driver FSR 4 files"
-                        ToolTip.Tip="Places your imported amdxcffx64.dll (DirectX 12) and amdvkffx64.dll (Vulkan) next to OptiScaler, which loads them before the driver's own. Needed on Linux, where there is no AMD driver to find them in; on Windows your installed driver already provides them. Import them in Settings from an AMD driver package — they are never downloaded."/>
-              <StackPanel Name="AmdDriverVersionPanel" Orientation="Horizontal" Spacing="8"
- Margin="26,0,0,0" IsVisible="False">
-                <TextBlock Text="Version" VerticalAlignment="Center"
- Foreground="{StaticResource BrTextSecondary}"/>
-                <ComboBox Name="AmdDriverVersionCombo" MinWidth="200"/>
-              </StackPanel>
-            </StackPanel>
             <CheckBox Name="ChkWatermark" Content="Show the FSR 4 watermark, to verify"
                       ToolTip.Tip="Draws a watermark reporting FSR4, FSR4-i8 or FSR3 — the reliable way to see whether FSR 4 is really running or fell back. Turn it off once verified."/>
           </StackPanel>
