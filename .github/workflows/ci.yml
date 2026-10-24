@@ -33,8 +33,18 @@ jobs:
           WINEDLLOVERRIDES: "mscoree,mshtml="
         run: native/omniloader/build.sh test
 
+      # For the app builds below, which carry the DLL inside the app.
+      - name: Upload DLL
+        uses: actions/upload-artifact@v6
+        with:
+          name: omniloader-dll
+          path: native/omniloader/out/omniloader.dll
+          if-no-files-found: error
+          retention-days: 1
+
   build:
     name: Build (${{ matrix.rid }})
+    needs: omniloader
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -52,6 +62,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+
+      # Without it the app still builds, and silently drops the omniloader option.
+      - name: Fetch the omniloader
+        uses: actions/download-artifact@v7
+        with:
+          name: omniloader-dll
+          path: native/omniloader/out
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v5
@@ -72,3 +89,35 @@ jobs:
       # plus the component registry (mutual exclusion + preview).
       - name: Test
         run: dotnet test tests/UpscalerManager.Core.Tests/UpscalerManager.Core.Tests.csproj -c Release
+
+      # Every push to main leaves an app to try, kept for two weeks. Only a [release]
+      # commit or a tag publishes one; these are for testing.
+      - name: Publish
+        if: github.event_name != 'pull_request'
+        run: >
+          dotnet publish src/UpscalerManager.App/UpscalerManager.App.csproj
+          -c Release -r ${{ matrix.rid }} --self-contained true -o publish
+
+      # Artifacts drop the executable bit, so on Linux the app goes up inside its own zip,
+      # as releases do.
+      - name: Zip (Linux)
+        if: github.event_name != 'pull_request' && runner.os != 'Windows'
+        run: cd publish && zip -qr ../UpscalerManager-main-${{ matrix.rid }}.zip .
+
+      - name: Upload app (Linux)
+        if: github.event_name != 'pull_request' && runner.os != 'Windows'
+        uses: actions/upload-artifact@v6
+        with:
+          name: UpscalerManager-main-${{ matrix.rid }}-${{ github.sha }}
+          path: UpscalerManager-main-${{ matrix.rid }}.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload app (Windows)
+        if: github.event_name != 'pull_request' && runner.os == 'Windows'
+        uses: actions/upload-artifact@v6
+        with:
+          name: UpscalerManager-main-${{ matrix.rid }}-${{ github.sha }}
+          path: publish/
+          if-no-files-found: error
+          retention-days: 14

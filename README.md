@@ -161,7 +161,8 @@ dotnet publish src/UpscalerManager.App -c Release -r linux-x64 --self-contained
 ```
 
 CI builds and tests `linux-x64` and `win-x64`, and the omniloader, on every push to
-`main`; releases carry the omniloader inside the app. A release is cut
+`main`, and leaves both apps as downloads on the run (kept two weeks) for testing.
+Releases carry the omniloader inside the app. A release is cut
 by pushing a `v<version>` tag, or by pushing to `main` with `[release]` in the commit
 message.
 
