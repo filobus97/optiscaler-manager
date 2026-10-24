@@ -39,6 +39,14 @@ namespace UpscalerManager.Core.Services
         public bool HasAuthenticodeSignature { get; set; }
     }
 
+    /// <summary>The name strings of a version resource.</summary>
+    /// <param name="OriginalFilename">The name the DLL was built as, which a rename does not change.</param>
+    /// <param name="FileDescription">What the DLL says it is.</param>
+    public sealed record PeVersionStrings(string? OriginalFilename, string? FileDescription)
+    {
+        public static readonly PeVersionStrings None = new(null, null);
+    }
+
     /// <summary>
     /// Minimal, cross-platform PE header / version-resource reader.
     /// Works on Linux and macOS too (unlike FileVersionInfo, which only reads
@@ -113,6 +121,108 @@ namespace UpscalerManager.Core.Services
             (info.FileVersion, info.ProductVersion) = ScanForFixedFileInfo(fs);
 
             return info;
+        }
+
+        /// <summary>
+        /// The version resource's name strings, read from the resource section alone so it
+        /// stays cheap enough to run over every DLL in a game folder. Both are null when
+        /// the file is not a PE or carries no such string.
+        /// </summary>
+        public static PeVersionStrings ReadVersionStrings(string filePath)
+        {
+            try
+            {
+                using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                using var reader = new BinaryReader(fs);
+                if (fs.Length < 0x40 || reader.ReadUInt16() != MzSignature) return PeVersionStrings.None;
+
+                fs.Seek(0x3C, SeekOrigin.Begin);
+                uint pe = reader.ReadUInt32();
+                if (pe + 24 > fs.Length) return PeVersionStrings.None;
+                fs.Seek(pe, SeekOrigin.Begin);
+                if (reader.ReadUInt32() != PeSignature) return PeVersionStrings.None;
+
+                reader.ReadUInt16();                          // Machine
+                ushort sectionCount = reader.ReadUInt16();
+                fs.Seek(12, SeekOrigin.Current);              // TimeDateStamp, symbol table, symbol count
+                ushort optionalSize = reader.ReadUInt16();
+                reader.ReadUInt16();                          // Characteristics
+
+                long optional = fs.Position;
+                ushort magic = reader.ReadUInt16();
+                // Data directory 2 is the resource table.
+                long directory = optional + (magic == 0x20B ? 112 : 96) + 2 * 8;
+                if (directory + 8 > optional + optionalSize) return PeVersionStrings.None;
+                fs.Seek(directory, SeekOrigin.Begin);
+                uint resourceRva = reader.ReadUInt32();
+                if (resourceRva == 0) return PeVersionStrings.None;
+
+                fs.Seek(optional + optionalSize, SeekOrigin.Begin);
+                for (int i = 0; i < sectionCount; i++)
+                {
+                    fs.Seek(8, SeekOrigin.Current);           // Name
+                    uint virtualSize = reader.ReadUInt32();
+                    uint va = reader.ReadUInt32();
+                    uint rawSize = reader.ReadUInt32();
+                    uint raw = reader.ReadUInt32();
+                    fs.Seek(16, SeekOrigin.Current);          // relocations, line numbers, characteristics
+                    if (resourceRva < va || resourceRva >= va + Math.Max(virtualSize, rawSize)) continue;
+
+                    // Icons make a resource section big, so the version block is found by
+                    // walking the tree (type 16, first name, first language) rather than
+                    // by reading the section.
+                    long root = raw + (resourceRva - va);
+
+                    (uint Offset, bool IsDirectory)? First(uint directoryOffset, uint? id)
+                    {
+                        fs.Seek(root + directoryOffset + 12, SeekOrigin.Begin);
+                        int named = reader.ReadUInt16(), ids = reader.ReadUInt16();
+                        for (int n = 0; n < named + ids && n < 64; n++)
+                        {
+                            fs.Seek(root + directoryOffset + 16 + 8L * n, SeekOrigin.Begin);
+                            uint key = reader.ReadUInt32(), target = reader.ReadUInt32();
+                            if (id is null ? n == 0 : n >= named && key == id)
+                                return (target & 0x7FFFFFFF, (target & 0x80000000) != 0);
+                        }
+                        return null;
+                    }
+
+                    if (First(0, 16) is not { IsDirectory: true } type) return PeVersionStrings.None;
+                    if (First(type.Offset, null) is not { IsDirectory: true } name) return PeVersionStrings.None;
+                    if (First(name.Offset, null) is not { IsDirectory: false } leaf) return PeVersionStrings.None;
+
+                    fs.Seek(root + leaf.Offset, SeekOrigin.Begin);
+                    uint dataRva = reader.ReadUInt32(), size = reader.ReadUInt32();
+                    if (dataRva < va || size is 0 or > 1 << 16) return PeVersionStrings.None;
+
+                    var bytes = new byte[size];
+                    fs.Seek(raw + (dataRva - va), SeekOrigin.Begin);
+                    fs.ReadExactly(bytes, 0, bytes.Length);
+                    return new PeVersionStrings(
+                        StringValue(bytes, "OriginalFilename"), StringValue(bytes, "FileDescription"));
+                }
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            return PeVersionStrings.None;
+        }
+
+        /// <summary>
+        /// The value of a version-resource string. Key and value are both UTF-16 with
+        /// padding between them, which is skipped rather than computed.
+        /// </summary>
+        private static string? StringValue(byte[] resource, string key)
+        {
+            var needle = System.Text.Encoding.Unicode.GetBytes(key);
+            var at = resource.AsSpan().IndexOf(needle);
+            if (at < 0) return null;
+
+            var i = at + needle.Length;
+            while (i + 1 < resource.Length && resource[i] == 0 && resource[i + 1] == 0) i += 2;
+            var start = i;
+            while (i + 1 < resource.Length && (resource[i] != 0 || resource[i + 1] != 0)) i += 2;
+            var value = System.Text.Encoding.Unicode.GetString(resource, start, i - start).Trim();
+            return value.Length > 0 ? value : null;
         }
 
         private static (string? fileVersion, string? productVersion) ScanForFixedFileInfo(FileStream fs)

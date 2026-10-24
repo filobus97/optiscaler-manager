@@ -33,6 +33,25 @@
           </Grid>
         </Border>
 
+        <!-- Shown once the game has been read and only where it applies: a game that
+             ships FidelityFX files and has no OptiScaler, or one this app has set up. -->
+        <Border Name="Fsr4Card" Classes="Card" IsVisible="False">
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+              <TextBlock Text="FSR 4 in the game's own files" FontSize="{StaticResource SizeHeading}"
+ FontWeight="SemiBold"/>
+              <TextBlock Name="Fsr4StateText" TextWrapping="Wrap"
+ FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
+              <TextBlock Name="Fsr4WarningText" TextWrapping="Wrap" IsVisible="False"
+ FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrWarning}"/>
+            </StackPanel>
+            <Button Grid.Column="1" Name="Fsr4Button" Click="OnFsr4Click" VerticalAlignment="Center"
+                    ToolTip.Tip="Put an FSR 4 build in place of the FidelityFX files this game ships. OptiScaler is not involved."/>
+          </Grid>
+        </Border>
+
         <!-- One row per swappable library the game actually has, with what is in it
              now and the newest build this app can reach. -->
         <Border Classes="Card">

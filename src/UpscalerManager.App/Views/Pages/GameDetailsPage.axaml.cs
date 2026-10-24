@@ -74,6 +74,7 @@ public partial class GameDetailsPage : UserControl, IHostedPage
 
         _swappedFiles = SwappedFileNames();
         RenderOptiScaler();
+        RenderFsr4();
         RenderLibraries();
         RenderComponents();
         RenderConfig();
@@ -96,6 +97,89 @@ public partial class GameDetailsPage : UserControl, IHostedPage
 
         if (this.FindControl<Button>("RevertButton") is { } revert)
             revert.IsVisible = installed;
+    }
+
+    // ── FSR 4 without OptiScaler ────────────────────────────────────────────────
+
+    private ManagerService.Fsr4SwapOverview? _fsr4;
+    private int _fsr4Reads;
+
+    /// <summary>
+    /// Reads the game's FidelityFX files, then shows the card. Off the UI thread because
+    /// it opens every DLL in the folder; the card stays hidden until it has an answer.
+    /// </summary>
+    private async void RenderFsr4()
+    {
+        var card = this.FindControl<Border>("Fsr4Card");
+        if (card is null) return;
+
+        var read = ++_fsr4Reads;
+        ManagerService.Fsr4SwapOverview overview;
+        try { overview = await _manager.Fsr4SwapOverviewAsync(_row.Game); }
+        catch (Exception ex)
+        {
+            UpscalerManager.Core.Logging.Log.Write($"[Fsr4] Could not read {_row.Game.Name}: {ex.Message}");
+            return;
+        }
+        if (read != _fsr4Reads) return;
+
+        _fsr4 = overview;
+        card.IsVisible = overview.Offered || overview.Active is not null;
+        if (!card.IsVisible) return;
+
+        var state = this.FindControl<TextBlock>("Fsr4StateText")!;
+        var warning = this.FindControl<TextBlock>("Fsr4WarningText")!;
+        var button = this.FindControl<Button>("Fsr4Button")!;
+
+        if (overview.Active is not { } active)
+        {
+            state.Text = "Not set up";
+            warning.IsVisible = false;
+            button.Content = "FSR 4 without OptiScaler…";
+            return;
+        }
+
+        var standing = overview.Standing;
+        state.Text = $"{active.BuildLabel}{(active.BuildVersion.Length > 0 ? " " + active.BuildVersion : "")}"
+                     + $"  •  {active.Files.Count} {(active.Files.Count == 1 ? "file" : "files")} written"
+                     + (standing == DllSwapService.SwapStanding.Intact
+                         ? string.Empty
+                         : "  •  the game has replaced some of them since");
+        warning.IsVisible = active.LosesFrameGeneration;
+        warning.Text = "The game's own frame generation does not work with this setup. Undo puts the original back.";
+        button.Content = standing == DllSwapService.SwapStanding.Intact ? "Undo" : "Put back what is still ours";
+    }
+
+    private async void OnFsr4Click(object? sender, RoutedEventArgs e)
+    {
+        if (_fsr4 is not { } overview) return;
+        var state = this.FindControl<TextBlock>("Fsr4StateText")!;
+
+        if (overview.Active is null)
+        {
+            if (ShowPage is null) return;
+            var changed = await ShowPage(new Fsr4SwapPage(_manager, _row.Game, overview));
+            if (!changed) return;
+        }
+        else
+        {
+            try
+            {
+                if (overview.Standing == DllSwapService.SwapStanding.Intact)
+                    _manager.UndoFsr4Swap(_row.Game);
+                else
+                    _manager.ForgetFsr4Swap(_row.Game);
+            }
+            catch (Exception ex)
+            {
+                state.Text = ex.Message;
+                return;
+            }
+        }
+
+        // The files changed under the analyzer's folder-stamp cache, so the page is re-read whole.
+        _row.RefreshFromGame();
+        Render();
     }
 
     // ── Upscaler libraries ──────────────────────────────────────────────────────
