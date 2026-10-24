@@ -173,7 +173,7 @@ public static class Fsr4SwapPlanner
         if (losesFrameGeneration)
             warnings.Add(sources.Loader is null
                 ? "No SDK 2 loader was found, so the upscaler stands in for the old file on its own. FSR 4 "
-                  + "works, but the game's own frame generation will not: the upscaler carries none. Undo puts "
+                  + "works, but the game's own frame generation will not, because the upscaler carries none. Undo puts "
                   + "the original file back."
                 : "No SDK 2 frame generation module was found to go with the loader, so the game's own frame "
                   + "generation will not work. Undo puts the original file back.");

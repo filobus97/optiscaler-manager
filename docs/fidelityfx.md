@@ -88,12 +88,68 @@ from hardware this app cannot see.
 exists in OptiScaler — zero references anywhere in its source. It is written only when
 the release being installed still documents the key in its own ini.
 
-## Why FSR 4 is not reachable by swapping
+## Why FSR 4 is not reachable by swapping, and what is
 
-FSR 4 lives in `amd_fidelityfx_upscaler_dx12.dll`. Games older than SDK 2 do not ship
-that file, and a swap can only replace a file a game already has. The archive holds no
-FSR 4 either. OptiScaler brings its own upscaler instead, which is why FSR 4 is the
-install route's job and the swapper does not pretend to compete.
+FSR 4 lives in `amd_fidelityfx_upscaler_dx12.dll`. A single-file swap can only replace a
+file a game already has, most games older than SDK 2 do not ship that one, and the archive
+holds no FSR 4 either. So the swapper does not offer it, and the generation guard above
+stays exactly as strict as it was: a monolith is never swapped for a loader, nor a loader
+for a module, one file at a time.
+
+"FSR 4 without OptiScaler" on a game's page is a different operation. It is not a swap
+of one DLL but a **set**, always written consistently, recorded in its own file
+(`fsr4swap.json`, beside `swaps.json` in the per-game backup store), and undone as one
+unit. What it writes depends on what the game ships, read from the binaries and not from
+their names:
+
+- **A game on the SDK 2 split** has its own `amd_fidelityfx_upscaler_dx12.dll`. The FSR 4
+  build goes over it, under the name the game uses. The loader and the other modules stay.
+- **A game on the SDK 1 monolith** has one `amd_fidelityfx_dx12.dll` holding every
+  effect. AMD documents the SDK 2 loader as "interface- and behavior-compatible" with
+  that name (quoted above), so the loader goes in **under the old name**, the FSR 4
+  upscaler next to it as `amd_fidelityfx_upscaler_dx12.dll`, and the SDK 2 frame
+  generation module next to that as `amd_fidelityfx_framegeneration_dx12.dll` when the
+  source has one — so the game's frame generation has a module to run on. If the source
+  set has a loader but no frame generation module, the game's frame generation does not
+  work, and the page says so before the user confirms.
+- **Without any loader**, the upscaler itself is written over the old name. It exports the
+  same five functions (`ffxCreateContext`, `ffxDestroyContext`, `ffxConfigure`,
+  `ffxQuery`, `ffxDispatch`), so upscaling should work, but it carries no frame
+  generation: the game's own stops working. The page says this in a warning above the
+  file list, before confirm, and Undo puts the original back.
+- **A game that renamed these DLLs** is found by the version resource: `OriginalFilename`
+  first, then `FileDescription` together with the five exports, read out of the resource
+  section without walking the whole file (`PeFileInspector.ReadVersionStrings`).
+  `FidelityFxFiles.Identify` then settles the two ambiguous legacy names by version as
+  elsewhere. The renamed file keeps its name; only its contents change.
+- **A game with no FidelityFX files**, or only a loader and no upscaler, is not offered
+  it: there is nothing the game asks FSR for.
+
+Where the FSR 4 files come from, all already in the app and nothing new downloaded:
+
+| File | Source |
+| --- | --- |
+| Upscaler | OptiScaler's release, the faster 4.1.1 builds, an OptiScaler Client extras build, or a DLL the user imported. Classified by exports and version (`Omniloader.Classify`, then an FSR version table for any file under an unfamiliar name, since a loader exports the same five functions). |
+| Loader, frame generation | The OptiScaler release the upscaler came from, which ships them (its loader as `amd_fidelityfx_dx12.dll`, found by version: SDK 2 and no provider table), or the user's imported DLLs. |
+
+A build named `amdxcffx64.dll` is skipped: it hands OptiScaler a provider rather than
+being a module, so it needs OptiScaler to load it. AMD's driver files and any modified
+driver binary are not sources; this app never distributes a binary its owner does not.
+
+The safety rules match the single-file swap. Every file overwritten is copied to the
+external backup store and verified before anything is written; every file created is
+recorded; the record is saved before the first overwrite; a write that fails puts back
+what was written. It refuses while the game runs, while OptiScaler is installed in the
+game (OptiScaler brings its own FidelityFX files), and while a FidelityFX file is swapped
+through the other route. The other way round, the single-file list marks the set's files
+as part of it, and the OptiScaler install refuses while the set is in place. Undo refuses
+over a file a game patch has replaced, as the swap does, and offers to put back only
+what is still ours.
+
+What is not verified: none of this has been run against a real game. The route rests on
+AMD's statement that the loader is compatible with the old name, and on the loader
+finding the modules beside it. Whether a given SDK 1 game accepts an SDK 2 frame
+generation module in place of its own is the part most likely to differ from game to game.
 
 ## The faster FSR 4.1.1 builds
 

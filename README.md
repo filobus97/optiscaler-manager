@@ -46,6 +46,9 @@ with no upscaler at all. A card has one action: open the game.
 - **Upscaler libraries** — one row per swappable DLL the game has, reading
   `DLSS 310.1.0.0 → 310.9.1.0` with where the newer build comes from. **Update** opens
   every build this app can reach, newest first.
+- **FSR 4 without OptiScaler** — for a game that ships AMD's FidelityFX files: pick an
+  FSR 4 build, read the list of files it will write and which of the game's files each
+  replaces, confirm, and **Undo** puts everything back as one unit.
 - **Details**, collapsed: everything found next to the game, and what OptiScaler's ini
   is set to do.
 
@@ -58,10 +61,21 @@ Only the last needs the network, and it can be switched off.
 a loader plus one module per effect — and made the loader compatible with the old
 filename, so `amd_fidelityfx_dx12.dll` means two incompatible things. Both sides are
 read out of the binaries, and a swap across that line is refused rather than left to
-break the game silently. FSR 4 lives in a module most games do not ship at all, which
-is why it stays OptiScaler's job.
+break the game silently. FSR 4 lives in a module most games do not ship at all, so a
+swap cannot reach it; that is a separate, set-aware action (below), or OptiScaler's job.
 
 ![The generation guard refusing SDK 1 builds](docs/screenshots/swap-guard.png)
+
+**FSR 4 without OptiScaler.** A game on the SDK 2 split gets the FSR 4 upscaler under
+its own name. A game on the SDK 1 runtime gets AMD's SDK 2 loader under the old name,
+which AMD documents as compatible with it, with the FSR 4 upscaler and the frame
+generation module beside it; where no loader is at hand the upscaler stands in alone, and
+the page warns before you confirm that the game's own frame generation will not work. The
+builds come from the same sources as the omniloader's, less the driver-style ones, and
+the files are the ones the app already holds: the OptiScaler release's loader and
+frame generation module, or DLLs you imported. It is refused while OptiScaler is
+installed in the game, and OptiScaler is refused while it is in place. Not yet tried on a
+real game: see [docs/fidelityfx.md](docs/fidelityfx.md).
 
 **Installing shows the diff first.** Pick the release and the upscaler; everything else
 has a default and lives under *Advanced*. The preview lists the exact files that will be
