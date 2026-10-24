@@ -70,6 +70,37 @@ public sealed class ManagerService
     public IReadOnlyList<Game> ScannedGames => _scanned;
 
     // ── DLL swapping ────────────────────────────────────────────────────────
+    private readonly AmdDriverLibrary _amdDrivers = new();
+
+    // ── AMD driver files ─────────────────────────────────────────────────────
+    /// <summary>The imported AMD driver files, newest first. See <see cref="AmdDriverFiles"/>.</summary>
+    public IReadOnlyList<AmdDriverFile> AmdDriverFilesImported => _amdDrivers.List();
+
+    /// <summary>Imports AMD driver files from files, folders, archives or AMD's installer.</summary>
+    public Task<AmdDriverImport> ImportAmdDriverFilesAsync(IEnumerable<string> sources, IProgress<string>? status = null)
+        => _amdDrivers.ImportAsync(sources, status);
+
+    public void DeleteAmdDriverFile(AmdDriverFile file) => _amdDrivers.Delete(file);
+
+    /// <summary>
+    /// Whether an install should place driver files unless told otherwise: on Linux, where
+    /// there is no AMD driver store for OptiScaler to find them in. On Windows the installed
+    /// driver provides them, and a copy next to OptiScaler would pin an older version.
+    /// </summary>
+    public static bool DriverFilesNeeded => OperatingSystem.IsLinux();
+
+    /// <summary>What the release being installed understands about FSR 4 models and forcing.</summary>
+    public Fsr4IniSchema Fsr4Schema(string? optiscalerVersion) => Fsr4IniSchema.Of(ReleaseCache(optiscalerVersion));
+
+    private IReadOnlyList<IniKeyChange> Fsr4Keys(Fsr4Options fsr4, string? optiscalerVersion)
+        => Fsr4Models.IniKeys(Fsr4Schema(optiscalerVersion), fsr4.Model, fsr4.Force, GpuGeneration);
+
+    /// <summary>The preview's lines for driver files: where each goes and what it is.</summary>
+    private static IReadOnlyList<string> DriverPreviewLines(Fsr4Options fsr4) =>
+        fsr4.DriverFiles
+            .Select(f => $"{f.FileName}  (AMD driver {f.Version}, FSR 4 for {AmdDriverFiles.Describe(f.Api)} — next to OptiScaler)")
+            .ToList();
+
     private readonly DllSwapService _swaps = new();
     private readonly DllLibraryService _library = new();
     private readonly DllRepositoryService _repository;
@@ -548,17 +579,18 @@ public sealed class ManagerService
     /// </summary>
     public InstallPreview BuildInstallPreview(Game game, Fsr4Backend backend, UpscalerSelection selection,
         bool addFakenvapi = false, bool addNukemFg = false,
-        SpoofMethod spoofMethod = SpoofMethod.Off, bool forceInt8 = false, bool fsr4Watermark = false,
+        SpoofMethod spoofMethod = SpoofMethod.Off, Fsr4Options? fsr4 = null, bool fsr4Watermark = false,
         string? optiscalerVersion = null, FasterFsr4Kind fasterKind = FasterFsr4Kind.Exact,
         IReadOnlyList<OmniBuildOption>? omniBuilds = null)
         => ComponentRegistry.BuildInstallPreview(backend, selection, ComponentRegistry.DefaultInjectionDll, MenuShortcutKey,
             backend == Fsr4Backend.CustomMerged ? _components.GetCustomDlls().Select(d => d.Name).ToList() : null,
-            addFakenvapi, addNukemFg, spoofMethod, forceInt8, fsr4Watermark,
+            addFakenvapi, addNukemFg, spoofMethod, Fsr4Keys(fsr4 ?? Fsr4Options.None, optiscalerVersion), fsr4Watermark,
             legacyFsr4UpdateKey: GameInstallationService.IniDocumentsKey(
                 ReleaseCache(optiscalerVersion), "FSR", "Fsr4Update"),
             nukemKeys: GameInstallationService.NukemFrameGenerationKeys(ReleaseCache(optiscalerVersion)),
             fasterKind: fasterKind,
-            omniFiles: backend == Fsr4Backend.Omniloader ? OmniPreviewLines(omniBuilds ?? Array.Empty<OmniBuildOption>()) : null);
+            omniFiles: backend == Fsr4Backend.Omniloader ? OmniPreviewLines(omniBuilds ?? Array.Empty<OmniBuildOption>()) : null,
+            extraFiles: DriverPreviewLines(fsr4 ?? Fsr4Options.None));
 
     /// <summary>
     /// The downloaded release a preview should read: the version the user picked, or
@@ -595,11 +627,15 @@ public sealed class ManagerService
     public async Task InstallAsync(Game game, Fsr4Backend backend, string? int8Version, UpscalerSelection selection,
         OptiScalerProfile? iniProfile, IProgress<string>? status = null,
         bool addFakenvapi = false, bool addNukemFg = false,
-        SpoofMethod spoofMethod = SpoofMethod.Off, bool forceInt8 = false, bool fsr4Watermark = false,
+        SpoofMethod spoofMethod = SpoofMethod.Off, Fsr4Options? fsr4 = null, bool fsr4Watermark = false,
         string? optiscalerVersion = null, FasterFsr4Kind fasterKind = FasterFsr4Kind.Exact,
         IReadOnlyList<OmniBuildOption>? omniBuilds = null)
     {
         LastInstallNotes = Array.Empty<string>();
+        fsr4 ??= Fsr4Options.None;
+        foreach (var file in fsr4.DriverFiles)
+            if (!File.Exists(file.Path))
+                throw new InvalidOperationException($"The imported {file.FileName} {file.Version} is gone. Import it again in Settings.");
         if (backend == Fsr4Backend.FasterShaders && FasterFsr4Refusal() is { } refused)
             throw new InvalidOperationException(refused);
         if (!IsBackendAvailable(backend))
@@ -653,6 +689,7 @@ public sealed class ManagerService
         if (string.IsNullOrEmpty(gameDir))
             throw new InvalidOperationException("OptiScaler installed but the game directory could not be resolved.");
 
+        string? extrasPlaced = null;
         switch (backend)
         {
             case Fsr4Backend.CustomMerged:
@@ -662,7 +699,7 @@ public sealed class ManagerService
             }
             case Fsr4Backend.Int8Community:
             {
-                await InstallInt8CommunityAsync(game, gameDir, int8Version, status);
+                extrasPlaced = await InstallInt8CommunityAsync(game, gameDir, int8Version, status);
                 break;
             }
             case Fsr4Backend.FasterShaders:
@@ -686,10 +723,12 @@ public sealed class ManagerService
         if (spoofMethod == SpoofMethod.OptiPatcher)
             await InstallOptiPatcherAsync(gameDir, status);
 
+        PlaceDriverFiles(game, gameDir, fsr4, status, extrasPlaced);
+
         // Force ONLY the keys the Manager owns; everything else in the chosen ini
         // (default or custom) is left untouched. FSR 4 is always made *available*;
         // whether it is *selected* depends on selectFsr4.
-        ApplyForcedIniKeys(gameDir, selection, spoofMethod, forceInt8, fsr4Watermark);
+        ApplyForcedIniKeys(gameDir, selection, spoofMethod, Fsr4Keys(fsr4, version), fsr4Watermark);
 
         status?.Report("Done.");
     }
@@ -790,14 +829,15 @@ public sealed class ManagerService
     /// Writes the (and only the) OptiScaler.ini keys the Manager is responsible for:
     /// [Upscalers] Dx12/Dx11/VulkanUpscaler and [FSR] UpscalerIndex from the chosen
     /// upscaler, the legacy [FSR] Fsr4Update where a release still has it,
-    /// the opt-in [FSR] Fsr4ForceEnableInt8 / Fsr4EnableWatermark toggles,
+    /// the FSR 4 model and force keys (named per release, see <see cref="Fsr4Models"/>),
+    /// the opt-in [FSR] Fsr4EnableWatermark toggle,
     /// [Spoofing] Dxgi, and [Menu] ShortcutKey when a menu key is configured. Applied
     /// last, so it overrides anything the backend installers set. Off toggles leave the
     /// keys untouched (OptiScaler's auto behaviour).
     /// </summary>
     private void ApplyForcedIniKeys(string gameDir, UpscalerSelection selection,
         SpoofMethod spoofMethod = SpoofMethod.Off,
-        bool forceInt8 = false, bool fsr4Watermark = false)
+        IReadOnlyList<IniKeyChange>? fsr4Keys = null, bool fsr4Watermark = false)
     {
         // Only where the release still has the key; it is gone from current OptiScaler.
         GameInstallationService.SelectLegacyFsr4Update(gameDir);
@@ -820,8 +860,8 @@ public sealed class ManagerService
                 GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "UpscalerIndex", "auto");
         }
 
-        if (forceInt8)
-            GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4ForceEnableInt8", "true");
+        foreach (var key in fsr4Keys ?? Array.Empty<IniKeyChange>())
+            GameInstallationService.ModifyOptiScalerIniKey(gameDir, key.Section, key.Key, key.Value);
         if (fsr4Watermark)
             GameInstallationService.ModifyOptiScalerIniKey(gameDir, "FSR", "Fsr4EnableWatermark", "true");
         // Written on every install, including "auto": the ini is preserved across a
@@ -887,7 +927,8 @@ public sealed class ManagerService
     /// The FSR ini keys are forced centrally by <see cref="ApplyForcedIniKeys"/>.
     /// Revert removes the DLL via the known-artifact list in <see cref="GameInstallationService"/>.
     /// </summary>
-    private async Task InstallInt8CommunityAsync(Game game, string gameDir, string? int8Version, IProgress<string>? status)
+    /// <returns>The file name it installed under.</returns>
+    private async Task<string> InstallInt8CommunityAsync(Game game, string gameDir, string? int8Version, IProgress<string>? status)
     {
         var version = int8Version
             ?? _components.LatestExtrasVersion
@@ -900,13 +941,20 @@ public sealed class ManagerService
             throw new FileNotFoundException("The downloaded INT8 build is incomplete.", extrasDllPath);
 
         status?.Report($"Installing FSR 4 INT8 {version}…");
-        // Keep the name the release ships as — newer INT8 builds are amdxcffx64.dll,
-        // older ones amd_fidelityfx_upscaler_dx12.dll, and OptiScaler loads them by name.
+        // Under the name the release ships, where OptiScaler loads that name: the upscaler
+        // where it loads its upscaler, a build named like AMD's driver file next to
+        // OptiScaler. The game folder is neither once OptiScaler sits in a subfolder (0.9.5
+        // and later): an upscaler left there lost to the one OptiScaler ships, and
+        // OptiScaler 10 no longer looks there for the driver file at all.
         //
         // Recorded in the manifest like every other installed file: without it revert had
         // to fall back to the known-artifact list, and the details page could not tell
         // this app had put the DLL there.
-        _install.InstallTrackedFile(game, extrasDllPath, Path.GetFileName(extrasDllPath), gameDir,
+        var name = Path.GetFileName(extrasDllPath);
+        var target = AmdDriverFiles.ApiOf(name) is not null
+            ? Path.Combine(GameInstallationService.OptiScalerLibraryDirectory(gameDir), name)
+            : GameInstallationService.OptiScalerUpscalerPath(gameDir);
+        _install.InstallTrackedFile(game, extrasDllPath, Path.GetRelativePath(gameDir, target), gameDir,
             manifest =>
             {
                 manifest.IncludesExtras = true;
@@ -914,6 +962,7 @@ public sealed class ManagerService
             },
             logTag: "Fsr4Int8");
         game.Fsr4ExtraVersion = version;
+        return name;
     }
 
     /// <summary>
@@ -1021,9 +1070,16 @@ public sealed class ManagerService
         foreach (var custom in _components.GetCustomDlls())
         {
             var path = Path.Combine(_components.GetCustomDllsPath(), custom.Name);
-            if (File.Exists(path) && Omniloader.Classify(path) != OmniBuildKind.NotUpscaler)
+            if (File.Exists(path) && AmdDriverFiles.ApiOf(custom.Name) != AmdDriverApi.Vulkan
+                && Omniloader.Classify(path) != OmniBuildKind.NotUpscaler)
                 options.Add(new($"custom:{custom.Name}", $"Your {custom.Name}", "Imported in Settings."));
         }
+
+        // Each imported DirectX 12 driver file is a build of its own: AMD's FSR 4.1.2 and
+        // later carry every model and pick the one for the GPU.
+        foreach (var driver in _amdDrivers.List().Where(f => f.Api == AmdDriverApi.Dx12))
+            options.Add(new($"driver:{driver.Version}", $"AMD driver FSR 4 {driver.Version}",
+                "Your imported amdxcffx64.dll. It picks the FSR 4 model for this GPU itself."));
         return options;
     }
 
@@ -1031,21 +1087,18 @@ public sealed class ManagerService
     private IReadOnlyList<string> OmniPreviewLines(IReadOnlyList<OmniBuildOption> builds)
     {
         var lines = new List<string>();
-        var modules = new List<OmniBuildOption>();
-        foreach (var build in builds)
-        {
-            // Only a build already on disk can be read; the rest are assumed to be
-            // upscalers until the install downloads and checks them.
-            var known = OmniSourceIfCached(build);
-            if (known is not null && Omniloader.Classify(known) == OmniBuildKind.DriverStyle)
-                lines.Add($"{Path.GetFileName(known)}  ({build.Label} — driver-style, OptiScaler lists it itself)");
-            else
-                modules.Add(build);
-        }
 
-        var names = Omniloader.FileNamesFor(modules.Select(m => m.Label).ToList());
-        for (var i = 0; i < modules.Count; i++)
-            lines.Insert(i, $"{Omniloader.BuildsFolder}/{names[i]}  ({modules[i].Label}{(i == 0 ? " — runs first" : "")})");
+        // Only a build already on disk can be read; the rest are assumed to be ordinary
+        // upscalers until the install downloads and checks them.
+        var kinds = builds
+            .Select(b => OmniSourceIfCached(b) is { } known && File.Exists(known)
+                ? Omniloader.Classify(known) : OmniBuildKind.Module)
+            .ToList();
+        var names = Omniloader.FileNamesFor(builds.Select((b, i) => (b.Label, kinds[i])).ToList());
+        for (var i = 0; i < builds.Count; i++)
+            lines.Add($"{Omniloader.BuildsFolder}/{names[i]}  ({builds[i].Label}"
+                      + (kinds[i] == OmniBuildKind.DriverStyle ? ", AMD driver file" : "")
+                      + (i == 0 ? " — runs first" : "") + ")");
         if (builds.Count == 0)
             lines.Add("(no builds picked — tick at least one)");
         return lines;
@@ -1059,9 +1112,13 @@ public sealed class ManagerService
         {
             "extras" => Fsr4Int8Build.FindIn(_components.GetExtrasDllCachePath(value)),
             "custom" => Path.Combine(_components.GetCustomDllsPath(), value),
+            "driver" => ImportedDx12Driver(value)?.Path,
             _ => null,
         };
     }
+
+    private AmdDriverFile? ImportedDx12Driver(string version) =>
+        _amdDrivers.List().FirstOrDefault(f => f.Api == AmdDriverApi.Dx12 && f.Version == version);
 
     private static (string Source, string Value) SplitOmniId(string id)
     {
@@ -1106,15 +1163,9 @@ public sealed class ManagerService
             ? Array.Empty<string>()
             : skipped.Select(s => "Skipped " + s).ToList();
 
-        if (prepared.Count(p => p.Kind == OmniBuildKind.DriverStyle) > 1)
+        if (prepared.Count == 0)
             throw new InvalidOperationException(
-                "More than one of the picked builds is driver-style (amdxcffx64.dll), and OptiScaler loads only one. "
-                + "Keep one of them.");
-        if (!prepared.Any(p => p.Kind == OmniBuildKind.Module))
-            throw new InvalidOperationException(
-                (skipped.Count > 0 ? $"No build was left to install. {string.Join(" ", LastInstallNotes)}. " : "")
-                + "The omniloader needs at least one ordinary FSR upscaler (driver-style builds are loaded by "
-                + "OptiScaler itself), such as OptiScaler's own.");
+                $"No build was left to install. {string.Join(" ", LastInstallNotes)}.");
         return prepared;
     }
 
@@ -1136,6 +1187,8 @@ public sealed class ManagerService
                 value == "lossy" ? FasterFsr4Kind.Lossy : FasterFsr4Kind.Exact, status, replacesBundled: false),
             "extras" => await DownloadExtrasForOmniAsync(value, status),
             "custom" => Path.Combine(_components.GetCustomDllsPath(), value),
+            "driver" => ImportedDx12Driver(value)?.Path
+                ?? throw new InvalidOperationException("it is no longer imported"),
             _ => throw new InvalidOperationException($"Unknown build: {build.Label}"),
         };
         if (!File.Exists(path))
@@ -1144,6 +1197,9 @@ public sealed class ManagerService
         var kind = Omniloader.Classify(path);
         if (kind == OmniBuildKind.NotUpscaler)
             throw new InvalidOperationException("it is not an FSR upscaler, so the omniloader cannot load it");
+        if (kind == OmniBuildKind.DriverStyle && AmdDriverFiles.ApiOf(Path.GetFileName(path)) == AmdDriverApi.Vulkan)
+            throw new InvalidOperationException(
+                "it is the Vulkan driver file, and the omniloader stands in for the DirectX 12 upscaler only");
         return new PreparedOmniBuild(path, build.Label, kind);
     }
 
@@ -1156,7 +1212,7 @@ public sealed class ManagerService
     /// <summary>
     /// Puts the omniloader where OptiScaler loads its FSR upscaler, the builds in a
     /// folder beside it, and the list it reads — all tracked, so Remove takes them away.
-    /// A driver-style build goes in by its own name, where OptiScaler looks for it.
+    /// AMD driver files go in the same folder, named apart from the copy OptiScaler loads.
     /// </summary>
     private void PlaceOmniloader(Game game, string gameDir, IReadOnlyList<PreparedOmniBuild> builds, IProgress<string>? status)
     {
@@ -1164,8 +1220,8 @@ public sealed class ManagerService
         var libDir = Path.GetDirectoryName(target)!;
         string Rel(string path) => Path.GetRelativePath(gameDir, Path.Combine(libDir, path));
 
-        var modules = builds.Where(b => b.Kind == OmniBuildKind.Module).ToList();
-        var names = Omniloader.FileNamesFor(modules.Select(m => m.Label).ToList());
+        var modules = builds;
+        var names = Omniloader.FileNamesFor(modules.Select(m => (m.Label, m.Kind)).ToList());
         var buildsDir = Omniloader.BuildsFolder.Replace('/', Path.DirectorySeparatorChar);
         Directory.CreateDirectory(Path.Combine(libDir, buildsDir));
 
@@ -1181,8 +1237,6 @@ public sealed class ManagerService
             _install.InstallTrackedFile(game, modules[i].Path, Rel(Path.Combine(buildsDir, names[i])), gameDir,
                 MarkFolders, logTag: "Omniloader");
 
-        foreach (var driver in builds.Where(b => b.Kind == OmniBuildKind.DriverStyle))
-            _install.InstallTrackedFile(game, driver.Path, Path.GetFileName(driver.Path), gameDir, logTag: "Omniloader");
 
         var temp = Path.Combine(Path.GetTempPath(), "osm_omni_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(temp);
@@ -1204,6 +1258,30 @@ public sealed class ManagerService
             try { Directory.Delete(temp, true); } catch { }
         }
         Log.Write($"[Omniloader] Installed at {target} with {string.Join(", ", modules.Select(m => m.Label))}");
+    }
+
+    /// <summary>
+    /// Places the chosen AMD driver files next to OptiScaler, where it loads them before the
+    /// driver's own (and, on Linux, where it finds them at all). Tracked, so Remove takes them.
+    /// </summary>
+    /// <param name="placedByBackend">The file name the chosen FSR build put next to OptiScaler, if any.</param>
+    private void PlaceDriverFiles(Game game, string gameDir, Fsr4Options fsr4, IProgress<string>? status,
+        string? placedByBackend = null)
+    {
+        var lib = GameInstallationService.OptiScalerLibraryDirectory(gameDir);
+        foreach (var file in fsr4.DriverFiles)
+        {
+            var target = Path.Combine(lib, file.FileName);
+            // The driver file goes last and wins: it is the one picked for this purpose.
+            if (string.Equals(placedByBackend, file.FileName, StringComparison.OrdinalIgnoreCase))
+                LastInstallNotes = LastInstallNotes
+                    .Append($"Your AMD driver {file.FileName} {file.Version} replaced the INT8 build of the same name.")
+                    .ToList();
+
+            status?.Report($"Installing AMD driver {file.FileName} {file.Version}…");
+            _install.InstallTrackedFile(game, file.Path, Path.GetRelativePath(gameDir, target), gameDir, logTag: "AmdDriver");
+            Log.Write($"[AmdDriver] Installed {file.FileName} {file.Version} at {target}");
+        }
     }
 
     // ── Revert support ──────────────────────────────────────────────────────

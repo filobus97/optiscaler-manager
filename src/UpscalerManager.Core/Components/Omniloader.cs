@@ -12,9 +12,10 @@ public enum OmniBuildKind
     Module,
 
     /// <summary>
-    /// A driver-style build (amdxcffx64.dll), which hands OptiScaler a provider through
-    /// <c>UpdateFfxApiProvider</c> instead. OptiScaler loads one of those itself, beside
-    /// the omniloader's list, so it is installed by its own name.
+    /// AMD's driver file for DirectX 12 (amdxcffx64.dll), or a build made like it: it hands
+    /// FSR 4 out through <c>UpdateFfxApiProvider</c> instead of the FidelityFX API. The
+    /// omniloader hosts it like any build, under a name of its own (<see cref="Omniloader.DriverPrefix"/>).
+    /// The Vulkan file (amdvkffx64.dll) cannot be: the omniloader stands in for the DX12 upscaler.
     /// </summary>
     DriverStyle,
 
@@ -90,14 +91,30 @@ public static class Omniloader
     public const string BuildPrefix = "amd_fidelityfx_upscaler_dx12_";
 
     /// <summary>
+    /// What a hosted driver file's name starts with. It keeps "amdxcffx64" at the front,
+    /// which is what OptiScaler checks the callers of its GPU answers by, and never is
+    /// amdxcffx64.dll itself: OptiScaler loads its own copy by that name, and a second module
+    /// under it would be taken for that one.
+    /// </summary>
+    public const string DriverPrefix = "amdxcffx64_";
+
+    /// <summary>
     /// The file name each build gets in <see cref="BuildsFolder"/>, from its label:
     /// the builds mostly share one name, so they cannot keep theirs.
     /// </summary>
     public static IReadOnlyList<string> FileNamesFor(IReadOnlyList<string> labels)
+        => FileNamesFor(labels.Select(l => (l, OmniBuildKind.Module)).ToList());
+
+    /// <summary>
+    /// As <see cref="FileNamesFor(IReadOnlyList{string})"/>, with a driver file named by
+    /// <see cref="DriverPrefix"/> instead of <see cref="BuildPrefix"/>.
+    /// </summary>
+    public static IReadOnlyList<string> FileNamesFor(IReadOnlyList<(string Label, OmniBuildKind Kind)> builds)
     {
         var names = new List<string>();
-        foreach (var label in labels)
+        foreach (var (label, kind) in builds)
         {
+            var prefix = kind == OmniBuildKind.DriverStyle ? DriverPrefix : BuildPrefix;
             var slug = new StringBuilder();
             foreach (var c in label.ToLowerInvariant())
                 slug.Append(char.IsAsciiLetterOrDigit(c) || c == '.' ? c : '-');
@@ -105,9 +122,9 @@ public static class Omniloader
             if (stem.EndsWith(".dll", StringComparison.Ordinal)) stem = stem[..^4];
             if (stem.Length == 0) stem = "build";
 
-            var name = BuildPrefix + stem + ".dll";
+            var name = prefix + stem + ".dll";
             for (var n = 2; names.Contains(name, StringComparer.OrdinalIgnoreCase); n++)
-                name = $"{BuildPrefix}{stem}-{n}.dll";
+                name = $"{prefix}{stem}-{n}.dll";
             names.Add(name);
         }
         return names;

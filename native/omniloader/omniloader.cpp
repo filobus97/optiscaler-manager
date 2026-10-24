@@ -8,11 +8,16 @@
 // already switches live between the versions one DLL reports; with this in that DLL's
 // place it switches between builds too.
 //
+// It also hosts AMD driver DLLs (amdxcffx64.dll): those export no ffx* functions, only
+// UpdateFfxApiProvider, which hands out the driver's FSR 4 as a set of function pointers.
+// Such a provider is listed and routed like any other build.
+//
 // It reads <its own name>.omni.ini and writes <its own name>.omni.log, so the same binary
 // can stand in for any of those DLLs, side by side.
 
 #include <windows.h>
 
+#include <atomic>
 #include <cstdio>
 #include <cstring>
 #include <deque>
@@ -21,13 +26,15 @@
 #include <unordered_map>
 #include <vector>
 
+#include "driver_provider.h"
 #include "third_party/ffx_api.h"
 
 namespace
 {
 constexpr ffxReturnCode_t kNoProvider = FFX_API_RETURN_NO_PROVIDER;
 
-// One real upscaler DLL behind this one.
+// One real upscaler DLL behind this one: either an SDK build with the five ffx* exports, or
+// an AMD driver DLL whose provider functions fill the same five fields.
 struct Module
 {
     std::wstring path;
@@ -38,6 +45,14 @@ struct Module
     PfnFfxConfigure configure = nullptr;
     PfnFfxQuery query = nullptr;
     PfnFfxDispatch dispatch = nullptr;
+
+    // Driver providers only. A driver offers exactly one version, so there is nothing to ask
+    // it: its id and name were taken when it handed the provider out.
+    bool driver = false;
+    uint64_t providerId = 0;
+    std::string providerName; // copied: the driver reuses the buffer it formats this into
+    uint32_t structVersion = 0;
+    bool (*isSupported)(const void* backend) = nullptr;
 };
 
 // A version this DLL hands out: which module offers it, and that module's own id for it.
@@ -153,6 +168,213 @@ void ReadConfig()
     fclose(ini);
 }
 
+// ---- Hosting AMD driver DLLs ----
+//
+// A driver DLL hands out FSR 4 only when it finds signed FidelityFX SDK DLLs loaded in the
+// process. It looks them up by name (amd_fidelityfx_*.dll) with GetModuleHandleW. In a
+// process using this DLL, that name is this DLL, which is unsigned, so the driver would
+// refuse. The driver is signed by the same certificate as the SDK DLLs, so it is told its
+// own module is what it is looking for. That is done by replacing the driver's own import
+// of GetModuleHandleW/A; nothing else in the process is touched.
+
+constexpr size_t kMaxDrivers = 16;
+HMODULE gDriverHandles[kMaxDrivers]; // read by the hook without the lock, so only appended to
+std::atomic<size_t> gDriverCount { 0 };
+
+using PfnGetModuleHandleW = HMODULE(WINAPI*)(LPCWSTR);
+using PfnGetModuleHandleA = HMODULE(WINAPI*)(LPCSTR);
+PfnGetModuleHandleW gRealGetModuleHandleW = nullptr; // what the driver's import held before
+PfnGetModuleHandleA gRealGetModuleHandleA = nullptr;
+
+char LowerOf(char c) { return (c >= 'A' && c <= 'Z') ? static_cast<char>(c + 32) : c; }
+char LowerOf(wchar_t c) { return c < 128 ? LowerOf(static_cast<char>(c)) : '\x01'; }
+
+template <class C> bool StartsWithNoCase(const C* text, const char* prefix)
+{
+    for (; *prefix; ++text, ++prefix)
+        if (!*text || LowerOf(*text) != *prefix) return false;
+    return true;
+}
+
+template <class C> bool EqualsNoCase(const C* text, const char* word)
+{
+    return StartsWithNoCase(text, word) && text[strlen(word)] == 0;
+}
+
+// The names a driver may ask for and get itself: the SDK DLLs it checks for, and its own
+// name. The hosted file is renamed, so a lookup of its real name would find nothing.
+template <class C> bool IsNameForDriverItself(const C* name)
+{
+    if (StartsWithNoCase(name, "amd_fidelityfx_")) return true;
+    for (const char* own : { "amdxcffx64", "amdvkffx64" })
+    {
+        size_t n = strlen(own);
+        if (StartsWithNoCase(name, own) && (name[n] == 0 || EqualsNoCase(name + n, ".dll"))) return true;
+    }
+    return false;
+}
+
+// The driver the call came from, or null when it came from anywhere else.
+HMODULE CallingDriver(void* returnAddress)
+{
+    HMODULE caller = nullptr;
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            reinterpret_cast<LPCWSTR>(returnAddress), &caller))
+        return nullptr;
+    size_t count = gDriverCount.load();
+    for (size_t i = 0; i < count; ++i)
+        if (gDriverHandles[i] == caller) return caller;
+    return nullptr;
+}
+
+// No lock here: the driver calls these from inside UpdateFfxApiProvider, which runs with
+// the lock held.
+HMODULE WINAPI HookGetModuleHandleW(LPCWSTR name)
+{
+    if (name && IsNameForDriverItself(name))
+        if (HMODULE self = CallingDriver(__builtin_return_address(0))) return self;
+    return gRealGetModuleHandleW ? gRealGetModuleHandleW(name) : GetModuleHandleW(name);
+}
+
+HMODULE WINAPI HookGetModuleHandleA(LPCSTR name)
+{
+    if (name && IsNameForDriverItself(name))
+        if (HMODULE self = CallingDriver(__builtin_return_address(0))) return self;
+    return gRealGetModuleHandleA ? gRealGetModuleHandleA(name) : GetModuleHandleA(name);
+}
+
+// Points the driver's GetModuleHandleW/A imports at the hooks above, whichever DLL it
+// imports them from (kernel32, KERNELBASE, an api-ms-win-* set). Returns how many import
+// slots it changed.
+int RedirectModuleLookups(HMODULE module)
+{
+    auto* base = reinterpret_cast<BYTE*>(module);
+    auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(base);
+    if (dos->e_magic != IMAGE_DOS_SIGNATURE) return 0;
+    auto* nt = reinterpret_cast<IMAGE_NT_HEADERS*>(base + dos->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE) return 0;
+    const IMAGE_DATA_DIRECTORY& dir = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+    if (!dir.VirtualAddress) return 0;
+
+    // Where the real functions live, for a slot whose name table is missing or stripped.
+    std::vector<void*> realW, realA;
+    realW.push_back(reinterpret_cast<void*>(&GetModuleHandleW));
+    realA.push_back(reinterpret_cast<void*>(&GetModuleHandleA));
+    for (const wchar_t* dll : { L"kernel32.dll", L"kernelbase.dll" })
+        if (HMODULE h = GetModuleHandleW(dll))
+        {
+            realW.push_back(reinterpret_cast<void*>(GetProcAddress(h, "GetModuleHandleW")));
+            realA.push_back(reinterpret_cast<void*>(GetProcAddress(h, "GetModuleHandleA")));
+        }
+    auto isOneOf = [](const std::vector<void*>& list, void* p)
+    {
+        for (void* q : list)
+            if (q && q == p) return true;
+        return false;
+    };
+
+    int patched = 0;
+    for (auto* d = reinterpret_cast<IMAGE_IMPORT_DESCRIPTOR*>(base + dir.VirtualAddress); d->Name; ++d)
+    {
+        auto* addresses = reinterpret_cast<IMAGE_THUNK_DATA64*>(base + d->FirstThunk);
+        auto* names = reinterpret_cast<IMAGE_THUNK_DATA64*>(base + (d->OriginalFirstThunk ? d->OriginalFirstThunk : d->FirstThunk));
+        for (size_t i = 0; names[i].u1.AddressOfData; ++i)
+        {
+            void* current = reinterpret_cast<void*>(addresses[i].u1.Function);
+            int kind = 0; // 1 = GetModuleHandleW, 2 = GetModuleHandleA
+            if (d->OriginalFirstThunk && !IMAGE_SNAP_BY_ORDINAL64(names[i].u1.Ordinal))
+            {
+                auto* import = reinterpret_cast<IMAGE_IMPORT_BY_NAME*>(base + names[i].u1.AddressOfData);
+                if (strcmp(import->Name, "GetModuleHandleW") == 0) kind = 1;
+                else if (strcmp(import->Name, "GetModuleHandleA") == 0) kind = 2;
+            }
+            if (!kind && isOneOf(realW, current)) kind = 1;
+            if (!kind && isOneOf(realA, current)) kind = 2;
+            if (!kind) continue;
+
+            void* hook = kind == 1 ? reinterpret_cast<void*>(&HookGetModuleHandleW)
+                                   : reinterpret_cast<void*>(&HookGetModuleHandleA);
+            if (current == hook) continue;
+            if (kind == 1 && !gRealGetModuleHandleW) gRealGetModuleHandleW = reinterpret_cast<PfnGetModuleHandleW>(current);
+            if (kind == 2 && !gRealGetModuleHandleA) gRealGetModuleHandleA = reinterpret_cast<PfnGetModuleHandleA>(current);
+
+            DWORD old = 0;
+            if (!VirtualProtect(&addresses[i], sizeof(void*), PAGE_READWRITE, &old)) continue;
+            addresses[i].u1.Function = reinterpret_cast<ULONGLONG>(hook);
+            DWORD ignored = 0;
+            VirtualProtect(&addresses[i], sizeof(void*), old, &ignored);
+            ++patched;
+        }
+    }
+    return patched;
+}
+
+using PfnUpdateProvider = HRESULT(WINAPI*)(void*, uint32_t);
+
+// Asks the driver for its FSR upscaler, newest struct version first: a driver that does not
+// know a version answers S_OK and fills nothing.
+bool TakeProvider(Module& m, PfnUpdateProvider update)
+{
+    for (uint32_t version : { 3u, 2u, 1u })
+    {
+        DriverExternalProviderData data = {};
+        data.structVersion = version;
+        data.descType = kDriverUpscaleDescType;
+        HRESULT hr = update(&data, version >= 3 ? kDriverSizeV3 : kDriverSizeV1V2);
+        const DriverProviderInterface& p = data.provider;
+        Log("  UpdateFfxApiProvider struct v%u: 0x%08lx%s", version, static_cast<unsigned long>(hr),
+            SUCCEEDED(hr) && !p.createContext ? " (nothing filled in)" : "");
+        if (FAILED(hr) || !p.createContext) continue;
+        if (!p.destroyContext || !p.configure || !p.query || !p.dispatch)
+        {
+            Log("  the provider is incomplete (a function is missing)");
+            continue;
+        }
+
+        m.createContext = p.createContext;
+        m.destroyContext = p.destroyContext;
+        m.configure = p.configure;
+        m.query = p.query;
+        m.dispatch = p.dispatch;
+        m.providerId = p.versionId;
+        m.providerName = p.versionName ? p.versionName : "?"; // copied: the driver reuses that buffer
+        m.structVersion = version;
+        m.isSupported = version >= 3 ? data.isSupported : nullptr;
+        return true;
+    }
+    return false;
+}
+
+// Gets a driver DLL to hand out its provider. Its lookups are redirected first, and stay
+// redirected: the driver checks again whenever it is called.
+bool HostDriver(Module& m, PfnUpdateProvider update)
+{
+    size_t slot = gDriverCount.load();
+    if (slot >= kMaxDrivers)
+    {
+        Log("%s: too many driver DLLs; skipped", Narrow(m.path).c_str());
+        return false;
+    }
+    gDriverHandles[slot] = m.handle;
+    gDriverCount.store(slot + 1);
+
+    int redirected = RedirectModuleLookups(m.handle);
+    Log("%s is an AMD driver; redirected %d module lookup import(s)", Narrow(m.path).c_str(), redirected);
+    if (redirected == 0)
+        Log("  warning: it imports neither GetModuleHandleW nor GetModuleHandleA, so it may not accept this process");
+
+    if (TakeProvider(m, update))
+    {
+        m.driver = true;
+        return true;
+    }
+    Log("%s: the driver gave no FSR upscaler (it needs driver 26.10.1 or newer, or it refused this process); "
+        "skipped",
+        Narrow(m.path).c_str());
+    gDriverCount.store(slot);
+    return false;
+}
+
 void LoadModules()
 {
     for (auto it = gModules.begin(); it != gModules.end();)
@@ -176,17 +398,30 @@ void LoadModules()
 
         if (!m.createContext || !m.destroyContext || !m.configure || !m.query || !m.dispatch)
         {
-            // A driver-style build (amdxcffx64.dll) exports UpdateFfxApiProvider instead.
-            // OptiScaler loads those itself and lists them beside whatever this DLL lists.
-            bool driverStyle = GetProcAddress(m.handle, "UpdateFfxApiProvider") != nullptr;
-            Log("%s is not an upscaler DLL%s; skipped", Narrow(m.path).c_str(),
-                driverStyle ? " (it is driver-style: install it as amdxcffx64.dll beside OptiScaler)" : "");
-            FreeLibrary(m.handle);
-            it = gModules.erase(it);
-            continue;
+            // Not an SDK build. An AMD driver DLL (amdxcffx64.dll) exports UpdateFfxApiProvider
+            // instead, and the provider it hands out fills the same five functions.
+            auto update = (PfnUpdateProvider) (void*) GetProcAddress(m.handle, "UpdateFfxApiProvider");
+            if (!update)
+            {
+                Log("%s is not an upscaler DLL (it exports neither the ffx* functions nor UpdateFfxApiProvider); "
+                    "skipped",
+                    Narrow(m.path).c_str());
+                FreeLibrary(m.handle);
+                it = gModules.erase(it);
+                continue;
+            }
+            if (!HostDriver(m, update))
+            {
+                FreeLibrary(m.handle);
+                it = gModules.erase(it);
+                continue;
+            }
+            Log("Loaded %s as '%s' (AMD driver, provider '%s' 0x%016llx, struct v%u)", Narrow(m.path).c_str(),
+                m.label.c_str(), m.providerName.c_str(), static_cast<unsigned long long>(m.providerId),
+                m.structVersion);
         }
-
-        Log("Loaded %s as '%s'", Narrow(m.path).c_str(), m.label.c_str());
+        else
+            Log("Loaded %s as '%s'", Narrow(m.path).c_str(), m.label.c_str());
 
         // OptiScaler treats DLLs by file name. On Linux it answers FSR 4's GPU check only
         // for DLLs whose name starts with "amd", so a build named otherwise drops its FSR 4
@@ -194,13 +429,28 @@ void LoadModules()
         std::wstring file = m.path.substr(m.path.find_last_of(L"\\/") + 1);
         std::wstring lower;
         for (wchar_t c : file) lower += towlower(c);
-        const std::wstring amdName = L"amd_fidelityfx_upscaler_dx12.dll";
-        if (lower.rfind(L"amd", 0) != 0)
-            Log("  warning: its name does not start with 'amd', so on Linux it may not offer FSR 4; "
-                "name it amd_fidelityfx_upscaler_dx12_<something>.dll");
-        if (lower.size() >= amdName.size() && lower.compare(lower.size() - amdName.size(), amdName.size(), amdName) == 0)
-            Log("  warning: its name ends like AMD's upscaler, so OptiScaler may take it for the upscaler itself; "
-                "name it amd_fidelityfx_upscaler_dx12_<something>.dll");
+        if (m.driver)
+        {
+            // For a driver it also spoofs the GPU vendor, but only for names starting with
+            // "amdxcffx64". And OptiScaler loads its own copy as exactly amdxcffx64.dll.
+            if (lower.rfind(L"amdxcffx64", 0) != 0)
+                Log("  warning: its name does not start with 'amdxcffx64', so on Linux OptiScaler may not answer "
+                    "its GPU check; name it amdxcffx64_<something>.dll");
+            if (lower == L"amdxcffx64.dll")
+                Log("  warning: it is named exactly amdxcffx64.dll, which is the copy OptiScaler loads itself; "
+                    "name it amdxcffx64_<something>.dll");
+        }
+        else
+        {
+            const std::wstring amdName = L"amd_fidelityfx_upscaler_dx12.dll";
+            if (lower.rfind(L"amd", 0) != 0)
+                Log("  warning: its name does not start with 'amd', so on Linux it may not offer FSR 4; "
+                    "name it amd_fidelityfx_upscaler_dx12_<something>.dll");
+            if (lower.size() >= amdName.size() &&
+                lower.compare(lower.size() - amdName.size(), amdName.size(), amdName) == 0)
+                Log("  warning: its name ends like AMD's upscaler, so OptiScaler may take it for the upscaler itself; "
+                    "name it amd_fidelityfx_upscaler_dx12_<something>.dll");
+        }
         ++it;
     }
 }
@@ -245,6 +495,37 @@ struct Listed
     const char* name;
 };
 
+// What one module offers. A driver provider has one version and is never asked; an SDK
+// build is asked the way OptiScaler asks: count first, then fill.
+bool ModuleVersions(Module& module, const ffxQueryDescGetVersions& request, std::vector<uint64_t>& ids,
+                    std::vector<const char*>& names)
+{
+    if (module.driver)
+    {
+        ids.push_back(module.providerId);
+        names.push_back(module.providerName.c_str());
+        return true;
+    }
+
+    ffxQueryDescGetVersions q = request;
+    uint64_t count = 0;
+    q.header.pNext = nullptr;
+    q.outputCount = &count;
+    q.versionIds = nullptr;
+    q.versionNames = nullptr;
+    if (module.query(nullptr, &q.header) != FFX_API_RETURN_OK || count == 0) return false;
+
+    ids.resize(count);
+    names.resize(count);
+    q.versionIds = ids.data();
+    q.versionNames = names.data();
+    if (module.query(nullptr, &q.header) != FFX_API_RETURN_OK) return false;
+    count = *q.outputCount < count ? *q.outputCount : count;
+    ids.resize(count);
+    names.resize(count);
+    return count > 0;
+}
+
 // Every version every build offers for this device, as one list.
 //
 // The first build's list is kept whole. A later build adds what is new: a version with the
@@ -280,20 +561,10 @@ std::vector<Listed> ListVersions(const ffxQueryDescGetVersions& request)
 
     for (size_t m = 0; m < gModules.size(); ++m)
     {
-        ffxQueryDescGetVersions q = request;
-        uint64_t count = 0;
-        q.header.pNext = nullptr;
-        q.outputCount = &count;
-        q.versionIds = nullptr;
-        q.versionNames = nullptr;
-        if (gModules[m].query(nullptr, &q.header) != FFX_API_RETURN_OK || count == 0) continue;
-
-        std::vector<uint64_t> ids(count);
-        std::vector<const char*> names(count);
-        q.versionIds = ids.data();
-        q.versionNames = names.data();
-        if (gModules[m].query(nullptr, &q.header) != FFX_API_RETURN_OK) continue;
-        count = *q.outputCount < count ? *q.outputCount : count;
+        std::vector<uint64_t> ids;
+        std::vector<const char*> names;
+        if (!ModuleVersions(gModules[m], request, ids, names)) continue;
+        uint64_t count = ids.size();
 
         size_t before = listed.size();
         for (uint64_t i = 0; i < count; ++i)

@@ -84,14 +84,28 @@ graphics, with `lossy` in the name for the lossy build) when it is the one runni
 
 ![The faster FSR 4.1.1 option on an RX 7000](docs/screenshots/install-faster-fsr4.png)
 
+**FSR 4 on more GPUs, through AMD's own driver files.** Since driver 26.10.1, AMD's FSR 4
+(4.1.2) carries four models: FP8 for RX 9000, INT8 for RX 7000, an INT8 model for RX 6000,
+and a small INT8 Lite model for integrated graphics. The driver picks the one for the GPU.
+- **On Linux** there is no AMD driver for OptiScaler to find them in, so the install
+  screen places your imported driver files next to OptiScaler (on by default there).
+  On Windows your installed driver already provides them.
+- **The model** can be picked at install for OptiScaler 10 and newer (`[FSR] Fsr4Model`),
+  and changed later in OptiScaler's overlay.
+- **Forcing FSR 4** on a GPU OptiScaler does not list is written under the name each
+  release reads: `Fsr4GpuSupport` (10), `Fsr4ForceModel` (0.9.5) or
+  `Fsr4ForceEnableInt8` (older). With no model picked it forces the GPU's own model, or
+  INT8 Lite where FSR 4 has none, since Lite runs on any GPU.
+
 **Several FSR builds, switchable in-game.** Under *Advanced → Files to install*, tick
 any number of builds from every source that is on: OptiScaler's own, the faster 4.1.1
 builds, each OptiScaler Client extras release, the DLLs you imported. The
 [omniloader](native/omniloader/README.md) takes the place of OptiScaler's FSR upscaler,
 loads them all, and lists every version they offer in OptiScaler's overlay under
 *FFX Upscaler*, so you can compare them without restarting the game. The first build
-ticked is the one the game starts on. OptiScaler's FSR 4 model override does not reach
-builds behind it yet.
+ticked is the one the game starts on. AMD driver files can go behind it too, so two driver versions can be compared in
+one session. OptiScaler's FSR 4 model choice and preset fixes do not reach builds behind
+it yet.
 
 ![Several FSR builds behind the omniloader](docs/screenshots/install-omniloader.png)
 
@@ -105,9 +119,12 @@ libraries so they can ship inside games, and OptiScaler's releases bundle AMD's 
 FidelityFX DLLs on the same basis — those are fetched for you.
 
 A binary its owner does not distribute separately is **never** downloaded, bundled or
-linked. AMD's FSR 4 driver runtime is the example: it ships inside the Adrenalin driver
-package, so it is strictly bring-your-own — imported from a file, folder or archive you
-already have.
+linked. AMD's FSR 4 driver files are the example: `amdxcffx64.dll` (DirectX 12) and
+`amdvkffx64.dll` (Vulkan) ship only inside the Adrenalin driver package, so they are
+strictly bring-your-own. *Settings → Your own files → AMD driver FSR 4 files* takes them
+from AMD's installer, an unpacked driver folder or the files themselves, checks that each
+is AMD's driver file (it hands FSR 4 out through `UpdateFfxApiProvider`), and keeps one
+copy per version.
 
 Three third-party sources are listed by name under **Settings → Sources**, each with
 its own switch. None is mirrored here, and each is used only when you pick one of its

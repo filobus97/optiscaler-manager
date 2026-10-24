@@ -10,6 +10,10 @@ Any upscaler DLL that has the five FidelityFX API functions can go in the list: 
 official builds, OptiScaler Client extras (4.1.1b, the INT8 builds), the FSR 4 shader
 overrides (exact or lossy), or anything else built the same way.
 
+AMD driver files can go in the list too: `amdxcffx64.dll` from AMD driver 26.10.1 or
+newer. It carries every FSR 4 model, including the RX 6000 and Lite models. See
+[Driver files](#driver-files).
+
 ## With the app
 
 On the install screen, under **Advanced → Files to install**, pick **Several FSR builds,
@@ -17,7 +21,9 @@ switchable in-game** and tick the builds you want. The list holds every build th
 sources switched on in Settings offer: OptiScaler's own, the faster FSR 4.1.1 builds
 your GPU gets, each OptiScaler Client extras release, and the DLLs you imported. The app
 puts the omniloader, the builds and the list in place, and **Remove** takes them away.
-A driver-style build you tick is installed by its own name, beside the others.
+An AMD driver file you tick (imported in Settings) goes in the same folder as
+`amdxcffx64_<label>.dll`. The Vulkan driver file cannot go behind the omniloader; the
+install screen places it next to OptiScaler instead.
 
 ## Try it by hand
 
@@ -44,14 +50,38 @@ A driver-style build you tick is installed by its own name, beside the others.
    ```
    Paths are relative to the omniloader's folder; full paths work too. The text after
    `=` is a label. A version name only gets its label added when two builds report the
-   same name, for example `4.1.1 [Shader overrides]`. A driver-style build
-   (`amdxcffx64.dll`) does not go in this list; it stays beside OptiScaler under its own
-   name.
+   same name, for example `4.1.1 [Shader overrides]`.
 5. Start the game, open OptiScaler's overlay, and pick a version under FFX Upscaler.
 
 The omniloader reads the ini named after its own file. You can put a second copy in
 place of another FidelityFX DLL, such as `amd_fidelityfx_framegeneration_dx12.dll`, and
 give it its own `.omni.ini`.
+
+## Driver files
+
+An AMD driver DLL has no FidelityFX API functions. It exports `UpdateFfxApiProvider`, which
+hands out its FSR 4 as a set of functions. The omniloader asks for that and lists the one
+version it gets, then routes calls to it like any other build.
+
+Rename the file `amdxcffx64_<label>.dll` (for example `amdxcffx64_driver-26.10.1.dll`),
+put it in the same folder as the builds, and list it like them:
+
+```ini
+omni\upscaler\amdxcffx64_driver-26.10.1.dll = Driver 26.10.1
+```
+
+Keep the name starting with `amdxcffx64_`, and not exactly `amdxcffx64.dll`: OptiScaler
+loads its own copy under that name, and on Linux it only answers the driver's GPU check
+for names starting with `amdxcffx64`. The log warns about both.
+
+The driver hands out FSR 4 only when it sees signed FidelityFX DLLs in the process, and it
+looks for them by name. In a game using the omniloader, that name is the omniloader, which
+is unsigned. So the omniloader changes the driver's own lookups of `amd_fidelityfx_*` (and
+of its own name) to answer with the driver's file, which carries the same signature. No
+other DLL in the process is touched.
+
+Only the DirectX 12 file (`amdxcffx64`) can be hosted, because the omniloader stands in for
+the DirectX 12 upscaler. `amdvkffx64` (Vulkan) stays beside OptiScaler.
 
 ## What it writes
 
@@ -74,9 +104,16 @@ every later call for that upscaler to the same build.
 
 ## What does not work, or is untested
 
-- **Driver-style builds** (`amdxcffx64.dll`, which export `UpdateFfxApiProvider`) are not
-  hosted. They are skipped, with a note in the log. OptiScaler loads one of those itself,
-  and lists it beside the omniloader's list.
+- **Driver files are untested on hardware.** Hosting them is only tried against a mock
+  driver under Wine. Whether a real `amdxcffx64.dll` accepts the process this way, and
+  what it does after, is not known yet. If it gives no FSR 4, the log says so and the file
+  is skipped.
+- **Nvidia spoofing can hide the GPU from a hosted driver.** OptiScaler pauses its own
+  GPU spoofing while it asks its driver file for FSR 4; the omniloader cannot. With
+  OptiScaler's Nvidia override on, a hosted driver may see a GPU that is not AMD's and
+  give no FSR 4. The app leaves the override off unless asked.
+- **FSR 4 model selection does not reach driver builds.** OptiScaler's `Fsr4Model` setting
+  has no effect behind the omniloader, and the driver picks the model for the GPU itself.
 - **OptiScaler's FSR 4 preset fixes** find their place in the upscaler by scanning the DLL
   it loaded. Behind the omniloader they scan the omniloader instead, find nothing, and do
   nothing. The upscalers still run with their own defaults.

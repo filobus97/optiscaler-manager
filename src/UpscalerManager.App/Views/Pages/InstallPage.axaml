@@ -103,8 +103,29 @@
           <TextBlock Text="FSR 4" FontSize="{StaticResource SizeCaption}"
  Foreground="{StaticResource BrTextSecondary}"/>
           <StackPanel Spacing="6">
-            <CheckBox Name="ChkForceInt8" Content="Force the INT8 model on unsupported GPUs"
-                      ToolTip.Tip="FSR 4.1.1 supports only RDNA4 (FP8) and desktop RDNA3 (INT8); other GPUs fall back to FSR 3 silently. This forces the capability check to pass ([FSR] Fsr4ForceEnableInt8). It cannot make a GPU without INT8 work."/>
+            <StackPanel Name="Fsr4ModelPanel" Spacing="4">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Model" VerticalAlignment="Center"
+ Foreground="{StaticResource BrTextSecondary}"/>
+                <ComboBox Name="Fsr4ModelCombo" MinWidth="300"
+                          ToolTip.Tip="Which FSR 4 model OptiScaler asks for ([FSR] Fsr4Model). AMD's FSR 4.1.2 carries four: FP8 for RX 9000, INT8 for RX 7000, an INT8 model for RX 6000, and INT8 Lite for integrated graphics. You can change it in OptiScaler's overlay while the game runs."/>
+              </StackPanel>
+              <TextBlock Name="Fsr4ModelNoteText" TextWrapping="Wrap"
+ FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
+            </StackPanel>
+            <CheckBox Name="ChkForceFsr4" Content="Run FSR 4 even where OptiScaler says this GPU can't"
+                      ToolTip.Tip="Overrides the support OptiScaler detects for the GPU, under the name this OptiScaler release uses ([FSR] Fsr4GpuSupport, Fsr4ForceModel or Fsr4ForceEnableInt8). It cannot make a GPU run a model it lacks the hardware for; INT8 Lite is the one any GPU can run."/>
+            <StackPanel Spacing="4">
+              <CheckBox Name="ChkAmdDriver" Content="AMD driver FSR 4 files"
+                        ToolTip.Tip="Places your imported amdxcffx64.dll (DirectX 12) and amdvkffx64.dll (Vulkan) next to OptiScaler, which loads them before the driver's own. Needed on Linux, where there is no AMD driver to find them in; on Windows your installed driver already provides them. Import them in Settings from an AMD driver package — they are never downloaded."/>
+              <StackPanel Name="AmdDriverVersionPanel" Orientation="Horizontal" Spacing="8"
+ Margin="26,0,0,0" IsVisible="False">
+                <TextBlock Text="Version" VerticalAlignment="Center"
+ Foreground="{StaticResource BrTextSecondary}"/>
+                <ComboBox Name="AmdDriverVersionCombo" MinWidth="200"/>
+              </StackPanel>
+            </StackPanel>
             <CheckBox Name="ChkWatermark" Content="Show the FSR 4 watermark, to verify"
                       ToolTip.Tip="Draws a watermark reporting FSR4, FSR4-i8 or FSR3 — the reliable way to see whether FSR 4 is really running or fell back. Turn it off once verified."/>
           </StackPanel>

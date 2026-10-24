@@ -8,6 +8,8 @@
 #include <windows.h>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -111,6 +113,16 @@ MockContext Who(const Api& api, ffxContext context)
     api.query(&context, &q.header);
     return seen;
 }
+
+std::string ReadFile(const char* path)
+{
+    std::ifstream in(path, std::ios::binary);
+    std::stringstream text;
+    text << in.rdbuf();
+    return text.str();
+}
+
+bool Contains(const std::string& text, const char* part) { return text.find(part) != std::string::npos; }
 } // namespace
 
 int main(int argc, char** argv)
@@ -118,7 +130,7 @@ int main(int argc, char** argv)
     const char* dir = argc > 1 ? argv[1] : ".";
     SetCurrentDirectoryA(dir);
 
-    printf("--- one stand-in, four builds, one driver-style DLL, one missing file ---\n");
+    printf("--- one stand-in, four builds, three driver-style DLLs, one other DLL, one missing file ---\n");
     Api api = Load("amd_fidelityfx_upscaler_dx12.dll");
     Check("loads under the upscaler's own name, with all five functions",
           api.dll && api.create && api.destroy && api.configure && api.query && api.dispatch);
@@ -126,8 +138,8 @@ int main(int argc, char** argv)
 
     Versions v = List(api);
     std::string joined = Join(v.names);
-    Check("lists every build's versions as one list, shared ones once",
-          joined == "4.1.1 | 3.1.5 | 2.3.4 | 4.1.1-fast | 4.1.1 [Build C] | 4.1.1 [Build D]", joined);
+    Check("lists every build's versions as one list, shared ones once, the driver's after the builds before it",
+          joined == "4.1.1 | 3.1.5 | 2.3.4 | 4.1.1-fast | 4.1.2-driver | 4.1.1 [Build C] | 4.1.1 [Build D]", joined);
 
     bool unique = true;
     for (size_t i = 0; i < v.ids.size(); ++i)
@@ -139,9 +151,11 @@ int main(int argc, char** argv)
     Check("  and asking again gives the same ids", again.ids == v.ids);
 
     // Pick each entry the way OptiScaler's overlay does, and see which build answers.
-    const char* expectTag[] = { "A", "A", "A", "B", "C", "D" };
-    const uint64_t expectId[] = { 0x4011, 0x3015, 0x2034, 0x4011, 0x4011, 0x4012 };
-    for (size_t i = 0; i < v.ids.size() && i < 6; ++i)
+    // The driver's entry is created in the driver, with the driver's own id (bit 31 set).
+    const char* expectTag[] = { "A", "A", "A", "B", "DRV", "C", "D" };
+    const uint64_t expectId[] = { 0x4011, 0x3015, 0x2034, 0x4011, 0x80004110, 0x4011, 0x4012 };
+    Check("seven entries are listed", v.ids.size() == 7);
+    for (size_t i = 0; i < v.ids.size() && i < 7; ++i)
     {
         ffxReturnCode_t result;
         uint64_t after = 0;
@@ -166,6 +180,69 @@ int main(int argc, char** argv)
         Check("  its provider id comes back as the id that was picked", pv.versionId == v.ids[i]);
 
         Check("  and destroying it goes to that build", api.destroy(&c, nullptr) == FFX_API_RETURN_OK && c == nullptr);
+    }
+
+    printf("--- the driver DLL ---\n");
+    {
+        // The name the driver hands out lives in a buffer it overwrites on every call. Keep
+        // the pointer the omniloader returned, use the driver, and read it again.
+        ffxQueryDescGetVersions q {};
+        q.header.type = FFX_API_QUERY_DESC_TYPE_GET_VERSIONS;
+        uint64_t count = 8;
+        uint64_t ids[8];
+        const char* names[8];
+        q.outputCount = &count;
+        q.versionIds = ids;
+        q.versionNames = names;
+        api.query(nullptr, &q.header);
+        const char* kept = count > 4 ? names[4] : "";
+
+        ffxReturnCode_t result;
+        ffxContext c = Create(api, v.ids[4], true, &result);
+        api.configure(&c, nullptr);
+        api.dispatch(&c, nullptr);
+        api.destroy(&c, nullptr);
+
+        Check("the driver's version name is a copy, not the driver's buffer, so it is not overwritten",
+              strcmp(kept, "4.1.2-driver") == 0, kept);
+        Check("  and later list queries still show it", Join(List(api).names) == joined);
+
+        // Created with no override, the first build answers, not the driver.
+        ffxContext first = Create(api, 0, false, &result);
+        Check("a context created without an override is not the driver's",
+              result == FFX_API_RETURN_OK && strcmp(Who(api, first).tag, "A") == 0);
+        api.destroy(&first, nullptr);
+
+        // A driver id that is not one of ours is passed through unchanged, as for any build.
+        ffxContext raw = Create(api, 0x80004110, true, &result);
+        Check("an override with the driver's raw id reaches the first build, which rejects it",
+              result != FFX_API_RETURN_OK && raw == nullptr);
+
+        HMODULE drv = GetModuleHandleA("amdxcffx64_driver-test.dll");
+        auto forwarded = drv ? (int (*)()) (void*) GetProcAddress(drv, "MockDriverGetVersionsCalls") : nullptr;
+        Check("the omniloader never forwards a version-list query to the driver",
+              forwarded && forwarded() == 0);
+        Check("the driver DLL stayed loaded under its renamed file",
+              drv != nullptr && GetModuleHandleA("amdxcffx64.dll") == nullptr);
+    }
+
+    {
+        std::string log = ReadFile("amd_fidelityfx_upscaler_dx12.omni.log");
+        Check("the log says the driver was hosted, with provider name, id and struct version",
+              Contains(log, "amdxcffx64_driver-test.dll as 'Test driver' (AMD driver, provider '4.1.2-driver' "
+                            "0x0000000080004110, struct v2)"));
+        Check("  and that struct version 3 was tried first",
+              Contains(log, "struct v3: 0x00000000") && Contains(log, "(nothing filled in)"));
+        Check("a driver that gives no upscaler is skipped, with the reason",
+              Contains(log, "amdxcffx64_driver-refusing.dll: the driver gave no FSR upscaler") &&
+                  Contains(log, "26.10.1"));
+        Check("a DLL that is neither SDK build nor driver is skipped",
+              Contains(log, "not-an-upscaler.dll is not an upscaler DLL"));
+        Check("a missing file is skipped", Contains(log, "missing.dll (error"));
+        Check("the old 'install it beside OptiScaler' advice is gone", !Contains(log, "install it as amdxcffx64.dll"));
+        Check("a driver named amdxcffx64_… draws no name warning",
+              !Contains(log, "does not start with 'amdxcffx64'") && !Contains(log, "named exactly amdxcffx64.dll"));
+        Check("the refused and non-upscaler DLLs offer no versions", Join(v.names).find("Refusing") == std::string::npos);
     }
 
     // Two contexts alive at once in different builds: each keeps its own route.

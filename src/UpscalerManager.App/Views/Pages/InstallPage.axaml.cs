@@ -52,8 +52,8 @@ public partial class InstallPage : UserControl, IHostedPage
     /// <summary>The OptiScaler release version to install (null = latest).</summary>
     public string? SelectedOptiScalerVersion { get; private set; }
 
-    /// <summary>Force [FSR] Fsr4ForceEnableInt8=true.</summary>
-    public bool ForceInt8 { get; private set; }
+    /// <summary>The FSR 4 model, force and AMD driver files the user confirmed.</summary>
+    public Fsr4Options SelectedFsr4 { get; private set; } = Fsr4Options.None;
 
     /// <summary>Force [FSR] Fsr4EnableWatermark=true.</summary>
     public bool Fsr4Watermark { get; private set; }
@@ -134,7 +134,7 @@ public partial class InstallPage : UserControl, IHostedPage
         // Step 2 radios drive the [Upscalers] selection in the preview.
 
         // Step 2 toggles + Step 3 add-ons all feed the live preview.
-        this.FindControl<CheckBox>("ChkForceInt8")!.IsCheckedChanged += OnOptionChanged;
+        SetupFsr4Options();
         this.FindControl<CheckBox>("ChkWatermark")!.IsCheckedChanged += OnOptionChanged;
         this.FindControl<CheckBox>("ChkFakenvapi")!.IsCheckedChanged += OnOptionChanged;
 
@@ -387,6 +387,77 @@ public partial class InstallPage : UserControl, IHostedPage
             .Select(c => (ManagerService.OmniBuildOption)c.Tag!)
             .ToList();
 
+    /// <summary>
+    /// The FSR 4 model picker, the force switch and the AMD driver files. The picker is shown
+    /// only for a release that takes [FSR] Fsr4Model (OptiScaler 10 and newer).
+    /// </summary>
+    private void SetupFsr4Options()
+    {
+        var model = this.FindControl<ComboBox>("Fsr4ModelCombo")!;
+        model.ItemsSource = Fsr4Models.All
+            .Select(m => new ComboBoxItem { Content = Fsr4Models.Label(m), Tag = m })
+            .ToList();
+        model.SelectedIndex = 0;
+        model.SelectionChanged += OnOptionChanged;
+        this.FindControl<CheckBox>("ChkForceFsr4")!.IsCheckedChanged += OnOptionChanged;
+
+        var driver = this.FindControl<CheckBox>("ChkAmdDriver")!;
+        var versions = this.FindControl<ComboBox>("AmdDriverVersionCombo")!;
+        var imported = _manager.AmdDriverFilesImported
+            .GroupBy(f => f.Version)
+            .Select(g => new ComboBoxItem
+            {
+                Content = $"{g.Key}  ({string.Join(" + ", g.Select(f => AmdDriverFiles.Describe(f.Api)))})",
+                Tag = g.ToList(),
+            })
+            .ToList();
+
+        if (imported.Count == 0)
+        {
+            driver.IsEnabled = false;
+            driver.Content = "AMD driver FSR 4 files — none imported (Settings)";
+        }
+        else
+        {
+            versions.ItemsSource = imported;
+            versions.SelectedIndex = 0;
+            versions.SelectionChanged += OnOptionChanged;
+            // On by default where nothing else provides them.
+            driver.IsChecked = ManagerService.DriverFilesNeeded;
+        }
+        driver.IsCheckedChanged += (s, e) => { RefreshDriverRow(); OnOptionChanged(s, e); };
+        RefreshDriverRow();
+    }
+
+    private void RefreshDriverRow()
+    {
+        var versions = this.FindControl<ComboBox>("AmdDriverVersionCombo")!;
+        this.FindControl<StackPanel>("AmdDriverVersionPanel")!.IsVisible =
+            IsChecked("ChkAmdDriver") && versions.ItemCount > 1;
+    }
+
+    /// <summary>Shows the model picker where the release takes it, with what "for this GPU" means here.</summary>
+    private void RefreshFsr4Rows()
+    {
+        var schema = _manager.Fsr4Schema(CurrentOptiScalerVersion());
+        this.FindControl<StackPanel>("Fsr4ModelPanel")!.IsVisible = schema.HasModelKey;
+        var note = Fsr4Models.DescribeFor(_manager.GpuGeneration);
+        if (CurrentBackend() == Fsr4Backend.Omniloader)
+            note += " Builds behind the omniloader run the model their own file picks: OptiScaler's model choice reaches only the DLL it loads itself.";
+        this.FindControl<TextBlock>("Fsr4ModelNoteText")!.Text = note;
+    }
+
+    private Fsr4Options CurrentFsr4()
+    {
+        var model = (this.FindControl<ComboBox>("Fsr4ModelCombo")!.SelectedItem as ComboBoxItem)?.Tag as Fsr4ModelChoice?
+            ?? Fsr4ModelChoice.Auto;
+        if (!_manager.Fsr4Schema(CurrentOptiScalerVersion()).HasModelKey) model = Fsr4ModelChoice.Auto;
+        var driverFiles = IsChecked("ChkAmdDriver")
+            ? (this.FindControl<ComboBox>("AmdDriverVersionCombo")!.SelectedItem as ComboBoxItem)?.Tag as List<AmdDriverFile>
+            : null;
+        return new Fsr4Options(model, IsChecked("ChkForceFsr4"), (IReadOnlyList<AmdDriverFile>?)driverFiles ?? Array.Empty<AmdDriverFile>());
+    }
+
     private FasterFsr4Kind CurrentFasterKind() =>
         this.FindControl<ComboBox>("FasterKindCombo")!.SelectedIndex == 1 ? FasterFsr4Kind.Lossy : FasterFsr4Kind.Exact;
 
@@ -396,11 +467,16 @@ public partial class InstallPage : UserControl, IHostedPage
         if (this.FindControl<TextBlock>("FasterNoteText") is not { } note) return;
         var generation = _manager.GpuGeneration;
         var label = Fsr4ShaderOverrides.OverlayLabel(generation, CurrentFasterKind());
+        // These builds are cut from the RX 7000 model; since driver 26.10.1 AMD has one of
+        // its own for RX 6000, and which is better there is not settled.
+        var rx6000 = generation == RadeonGeneration.Rdna2
+            ? " AMD's own RX 6000 model (driver 26.10.1) may suit this card better: compare them with \u201cSeveral FSR builds\u201d."
+            : "";
         note.Text = CurrentFasterKind() == FasterFsr4Kind.Lossy
             ? $"The build for {RadeonGenerations.Describe(generation)}. Changes the image: softer, and frame "
-              + $"times alternate between short and long. OptiScaler's overlay names it {label} when it is the one running."
+              + $"times alternate between short and long. OptiScaler's overlay names it {label} when it is the one running." + rx6000
             : $"The build for {RadeonGenerations.Describe(generation)}, with AMD's image unchanged. "
-              + $"OptiScaler's overlay names it {label} when it is the one running.";
+              + $"OptiScaler's overlay names it {label} when it is the one running." + rx6000;
     }
 
     private Fsr4Backend CurrentBackend()
@@ -536,9 +612,10 @@ public partial class InstallPage : UserControl, IHostedPage
     {
         if (!_ready) return;
         RefreshUpscalerRows();
+        RefreshFsr4Rows();
         var preview = _manager.BuildInstallPreview(_game, CurrentBackend(), CurrentUpscaler(),
             addFakenvapi: IsChecked("ChkFakenvapi"), addNukemFg: IsChecked("ChkNukemFg"),
-            spoofMethod: CurrentSpoofMethod(), forceInt8: IsChecked("ChkForceInt8"),
+            spoofMethod: CurrentSpoofMethod(), fsr4: CurrentFsr4(),
             fsr4Watermark: IsChecked("ChkWatermark"),
             optiscalerVersion: CurrentOptiScalerVersion(), fasterKind: CurrentFasterKind(),
             omniBuilds: CurrentOmniBuilds());
@@ -589,7 +666,7 @@ public partial class InstallPage : UserControl, IHostedPage
         AddFakenvapi = IsChecked("ChkFakenvapi");
         AddNukemFg = IsChecked("ChkNukemFg");
         SelectedSpoofMethod = CurrentSpoofMethod();
-        ForceInt8 = IsChecked("ChkForceInt8");
+        SelectedFsr4 = CurrentFsr4();
         Fsr4Watermark = IsChecked("ChkWatermark");
         SelectedOptiScalerVersion = CurrentOptiScalerVersion();
         SelectedFasterKind = CurrentFasterKind();

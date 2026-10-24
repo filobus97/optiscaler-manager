@@ -43,7 +43,11 @@ mkdir -p "$t/omni/upscaler"
 for v in 1 2 3 4; do
   "$CXX" "${FLAGS[@]}" -shared -DMOCK_VARIANT=$v -o "$t/omni/upscaler/amd_fidelityfx_upscaler_dx12_build-$v.dll" "$here/tests/mock_module.cpp"
 done
-"$CXX" "${FLAGS[@]}" -shared -o "$t/omni/upscaler/amdxcffx64.dll" "$here/tests/driver_style.cpp"
+# Driver files are renamed on disk, as an install does, so they never collide with the copy
+# OptiScaler loads by the name amdxcffx64.dll.
+"$CXX" "${FLAGS[@]}" -shared -o "$t/omni/upscaler/amdxcffx64_driver-test.dll" "$here/tests/driver_style.cpp"
+"$CXX" "${FLAGS[@]}" -shared -o "$t/omni/upscaler/amdxcffx64_driver-refusing.dll" "$here/tests/driver_refusing.cpp"
+"$CXX" "${FLAGS[@]}" -shared -o "$t/omni/upscaler/not-an-upscaler.dll" "$here/tests/not_upscaler.cpp"
 "$CXX" "${FLAGS[@]}" -o "$t/test_omniloader.exe" "$here/tests/test_omniloader.cpp"
 
 # The same binary under two FidelityFX names, each with its own list.
@@ -54,7 +58,9 @@ cat > "$t/amd_fidelityfx_upscaler_dx12.omni.ini" <<'INI'
 [Modules]
 omni\upscaler\amd_fidelityfx_upscaler_dx12_build-1.dll = Build A
 omni\upscaler\amd_fidelityfx_upscaler_dx12_build-2.dll = Build B
-omni\upscaler\amdxcffx64.dll = Driver-style
+omni\upscaler\amdxcffx64_driver-test.dll = Test driver
+omni\upscaler\amdxcffx64_driver-refusing.dll = Refusing driver
+omni\upscaler\not-an-upscaler.dll = Not an upscaler
 omni\upscaler\missing.dll = Missing
 omni\upscaler\amd_fidelityfx_upscaler_dx12_build-3.dll = Build C
 omni\upscaler\amd_fidelityfx_upscaler_dx12_build-4.dll = Build D
@@ -69,5 +75,5 @@ status=0
 WINE=${WINE:-$(command -v wine64 || echo /usr/lib/wine/wine64)}
 "$WINE" "$t/test_omniloader.exe" "Z:${t//\//\\}" || status=$?
 echo "--- what the stand-in logged ---"
-cat "$t/amd_fidelityfx_upscaler_dx12.omni.log" | sed -n '1,12p'
+cat "$t/amd_fidelityfx_upscaler_dx12.omni.log" | sed -n '1,30p'
 exit $status

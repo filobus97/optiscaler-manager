@@ -99,6 +99,21 @@
         <Border Name="OwnFilesPanel" Classes="Card" IsVisible="False">
           <StackPanel Spacing="10">
 
+            <TextBlock Text="AMD driver FSR 4 files" FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"/>
+            <TextBlock TextWrapping="Wrap" FontSize="{StaticResource SizeCaption}"
+ Foreground="{StaticResource BrTextSecondary}"
+ Text="AMD ships FSR 4 in its driver: amdxcffx64.dll for DirectX 12 and amdvkffx64.dll for Vulkan. Driver 26.10.1 and newer carry every model, the RX 6000 and integrated-graphics ones included. They are AMD's files and are never downloaded here: point this at AMD's driver installer, an unpacked driver, or the files themselves. Linux needs them; on Windows your installed driver already has them."/>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Name="ImportAmdDriverButton" Content="Installer or files…" Click="OnImportAmdDriverFiles"
+                      ToolTip.Tip="Pick AMD's driver installer (.exe), an archive, or amdxcffx64.dll / amdvkffx64.dll themselves. Only those two files are taken; each is checked to be AMD's driver file."/>
+              <Button Content="Unpacked driver folder…" Click="OnImportAmdDriverFolder"
+                      ToolTip.Tip="Pick a folder an AMD driver was unpacked into. It is searched all the way down."/>
+            </StackPanel>
+            <StackPanel Name="AmdDriverList" Spacing="4"/>
+
+            <Border Height="1" Background="{StaticResource BrBorderSubtle}" Margin="0,2"/>
+
             <TextBlock Text="Nukem DLSSG-to-FSR3" FontSize="{StaticResource SizeCaption}"
  Foreground="{StaticResource BrTextSecondary}"/>
             <StackPanel Orientation="Horizontal" Spacing="8">

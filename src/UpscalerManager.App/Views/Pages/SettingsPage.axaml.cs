@@ -9,6 +9,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using UpscalerManager.App.Services;
+using UpscalerManager.Core.Components;
 
 namespace UpscalerManager.App.Views.Pages;
 
@@ -361,6 +362,96 @@ public partial class SettingsPage : UserControl, IHostedPage
             : "Custom DLLs: none imported";
 
         RefreshCustomDlls();
+        RefreshAmdDriverFiles();
+    }
+
+    private void RefreshAmdDriverFiles()
+    {
+        var list = this.FindControl<StackPanel>("AmdDriverList");
+        if (list is null) return;
+        list.Children.Clear();
+
+        var files = _manager.AmdDriverFilesImported;
+        if (files.Count == 0)
+        {
+            list.Children.Add(new TextBlock
+            {
+                Text = "None imported.",
+                FontSize = 12.5,
+                Foreground = Brush("BrTextSecondary"),
+            });
+            return;
+        }
+
+        foreach (var file in files)
+        {
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            row.Children.Add(new TextBlock
+            {
+                Text = $"{file.FileName}   {file.Version}   {AmdDriverFiles.Describe(file.Api)}"
+                       + (file.Signed ? "" : "   (unsigned — not as AMD ships it)"),
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                Foreground = Brush(file.Signed ? "BrTextPrimary" : "BrWarning"),
+            });
+            var del = new Button { Content = "Delete", Classes = { "BtnDanger" }, FontSize = 11, Padding = new Avalonia.Thickness(10, 4) };
+            Grid.SetColumn(del, 1);
+            var captured = file;
+            del.Click += (_, _) =>
+            {
+                _manager.DeleteAmdDriverFile(captured);
+                SetResult($"Removed {captured.FileName} {captured.Version}.");
+                RefreshAmdDriverFiles();
+            };
+            row.Children.Add(del);
+            list.Children.Add(row);
+        }
+    }
+
+    private async void OnImportAmdDriverFiles(object? sender, RoutedEventArgs e)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Select AMD's driver installer, an archive, or the driver files",
+            AllowMultiple = true,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType("AMD driver installer, archive or DLL")
+                    { Patterns = new[] { "*.exe", "*.zip", "*.7z", "*.rar", "*.dll" } },
+            }
+        });
+        if (files is null || files.Count == 0) return;
+        await ImportAmdDriver(files.Select(f => f.Path.LocalPath));
+    }
+
+    private async void OnImportAmdDriverFolder(object? sender, RoutedEventArgs e)
+    {
+        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "Select a folder an AMD driver was unpacked into",
+            AllowMultiple = false,
+        });
+        if (folders is null || folders.Count == 0) return;
+        await ImportAmdDriver(new[] { folders[0].Path.LocalPath });
+    }
+
+    private async Task ImportAmdDriver(IEnumerable<string> sources)
+    {
+        try
+        {
+            // A driver installer is over a gigabyte, and reading through it takes a while.
+            SetResult("Looking for the FSR 4 files… a driver installer takes a minute or two.");
+            var result = await _manager.ImportAmdDriverFilesAsync(sources);
+            var added = result.Added.Count == 0
+                ? "No new driver file imported."
+                : "Imported " + string.Join(", ", result.Added.Select(a => $"{a.FileName} {a.Version}")) + ".";
+            SetResult(result.Notes.Count == 0 ? added : $"{added} {string.Join(" ", result.Notes)}",
+                error: result.Added.Count == 0);
+        }
+        catch (Exception ex)
+        {
+            SetResult($"Import failed: {ex.Message}", error: true);
+        }
+        RefreshAmdDriverFiles();
     }
 
     private void RefreshCustomDlls()

@@ -165,7 +165,7 @@ public static class ComponentRegistry
     /// ForceDxgi/ForceOff write true/false, OptiPatcher adds plugins/OptiPatcher.asi and
     /// forces [Plugins] LoadAsiPlugins=true.
     /// </param>
-    /// <param name="forceInt8">Force [FSR] Fsr4ForceEnableInt8=true (INT8 model on unsupported GPUs).</param>
+    /// <param name="fsr4Keys">The FSR 4 model and force keys, from <see cref="Fsr4Models.IniKeys"/>.</param>
     /// <param name="fsr4Watermark">Force [FSR] Fsr4EnableWatermark=true (on-screen FSR4/FSR4-i8/FSR3 verification).</param>
     /// <summary>
     /// What the preview shows for one <c>[Upscalers]</c> key. Both spellings are named
@@ -196,9 +196,10 @@ public static class ComponentRegistry
         Fsr4Backend backend, UpscalerSelection selection, string? injectionDll = null, string? menuKeyVk = null,
         IReadOnlyList<string>? customDlls = null,
         bool addFakenvapi = false, bool addNukemFg = false,
-        SpoofMethod spoofMethod = SpoofMethod.Off, bool forceInt8 = false, bool fsr4Watermark = false,
+        SpoofMethod spoofMethod = SpoofMethod.Off, IReadOnlyList<IniKeyChange>? fsr4Keys = null, bool fsr4Watermark = false,
         bool legacyFsr4UpdateKey = false, IReadOnlyList<IniKeyChange>? nukemKeys = null,
-        FasterFsr4Kind fasterKind = FasterFsr4Kind.Exact, IReadOnlyList<string>? omniFiles = null)
+        FasterFsr4Kind fasterKind = FasterFsr4Kind.Exact, IReadOnlyList<string>? omniFiles = null,
+        IReadOnlyList<string>? extraFiles = null)
     {
         var ids = new List<string> { ComponentIds.OptiScaler };
         ids.AddRange(ComponentIdsFor(backend));
@@ -252,6 +253,10 @@ public static class ComponentRegistry
             preview = preview with { Files = files };
         }
 
+        // Files outside any component, such as AMD driver files, said where they come from.
+        if (extraFiles is { Count: > 0 })
+            preview = preview with { Files = preview.Files.Concat(extraFiles).ToList() };
+
         // The forced keys are the ONLY ini keys the Manager writes, and this list has to
         // match what the install really does — the screen's whole claim is that nothing
         // happens until you confirm and that this is what will happen.
@@ -270,8 +275,7 @@ public static class ComponentRegistry
             iniKeys.Add(new IniKeyChange("FSR", "UpscalerIndex",
                 index == 0 ? "0  (the newest the module offers)" : index.ToString(CultureInfo.InvariantCulture)));
 
-        if (forceInt8)
-            iniKeys.Add(new IniKeyChange("FSR", "Fsr4ForceEnableInt8", "true"));
+        iniKeys.AddRange(fsr4Keys ?? Array.Empty<IniKeyChange>());
         if (fsr4Watermark)
             iniKeys.Add(new IniKeyChange("FSR", "Fsr4EnableWatermark", "true"));
         if (addNukemFg)

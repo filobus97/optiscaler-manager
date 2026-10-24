@@ -132,3 +132,39 @@ alone). It is slightly faster than the DLL. It is not offered here: its prebuilt
 files are matched to one Proton translation on RX 7000, and gave an RX 6000 tester a
 wrong image. Checking that fit takes a shader dump, which an installer cannot do for
 the player.
+
+## AMD's driver files, and FSR 4.1.2
+
+AMD's driver carries FSR 4 in two files of its own: `amdxcffx64.dll` for DirectX 12 and
+`amdvkffx64.dll` for Vulkan. They are not FidelityFX modules: they export
+`UpdateFfxApiProvider`, which hands a FidelityFX SDK module a provider (a version id, a
+name and five functions) for the effect it asks for. Since driver 26.10.1 they carry four
+upscaler models, and the driver picks one by the GPU's family:
+
+| Model | Meant for | Provider class in the DLL |
+| --- | --- | --- |
+| FP8 | RX 9000 | `ffxProvider_FSR4` |
+| INT8 | RX 7000, Strix Halo | `ffxProvider_FSR4_Int8` |
+| INT8 RDNA2 | RX 6000 | `ffxProvider_FSR4_Int8_Navi2` |
+| INT8 Lite | Steam Deck, Strix Point; OptiScaler adds Phoenix, Hawk Point, Krackan | `ffxProvider_FSR4Lite_Int8` |
+
+The class names are the ones OptiScaler 10 finds the models by. Lite uses only standard
+shader features, so OptiScaler can run it on any GPU when told to.
+
+Three things follow for this app:
+
+- **Where the files go.** OptiScaler loads a copy next to `OptiScaler.dll` before the
+  driver's own, then looks in the Windows driver store. OptiScaler 10 no longer falls back
+  to the game folder. So driver files, and community builds named like them, are installed
+  into OptiScaler's own folder. On Linux that copy is the only one there is.
+- **Signed company.** The driver only hands out providers when it sees signed FidelityFX
+  SDK DLLs loaded. OptiScaler answers the driver's lookups of those DLLs with the driver
+  DLL itself, which AMD signs with the same certificate. The omniloader does the same for
+  the driver files it hosts, since it is itself an unsigned file named like the SDK
+  upscaler. That stand-in is tested against a mock driver under Wine, not yet against
+  AMD's file.
+- **Renamed keys.** The setting that forces FSR 4 on a GPU OptiScaler does not list was
+  `Fsr4ForceEnableInt8` (true/false), then `Fsr4ForceModel` (0.9.5: 1 FP8, 2 INT8), and is
+  `Fsr4GpuSupport` in OptiScaler 10 (1 FP8, 2 INT8, 3 INT8 RDNA2, 4 INT8 Lite). OptiScaler
+  10 adds `Fsr4Model` (0 FP8, 1 INT8, 2 INT8 RDNA2, 3 INT8 Lite) to pick the model. The app
+  reads which of them a release's own `OptiScaler.ini` documents and writes only those.

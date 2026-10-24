@@ -41,9 +41,8 @@ public static class OptiScalerConfigReader
                 "[Upscalers] Dx12Upscaler"),
             new("FSR version requested", DescribeProviderIndex(Get("FSR", "UpscalerIndex")),
                 "[FSR] UpscalerIndex"),
-            new("Force FSR 4 on unsupported GPUs", OnOffAuto(Get("FSR", "Fsr4ForceEnableInt8"),
-                    on: "Yes (INT8 mode)", off: "No", auto: "No"),
-                "[FSR] Fsr4ForceEnableInt8"),
+            DescribeForce(ini, Get),
+            new("FSR 4 model", DescribeModel(Get("FSR", "Fsr4Model")), "[FSR] Fsr4Model"),
             new("Frame generation", DescribeFrameGen(Get("FrameGen", "FGInput"), Get("FrameGen", "FGNvngxReplacement")),
                 "[FrameGen] FGInput"),
             new("Nvidia override", DescribeSpoof(Get("Spoofing", "Dxgi"), Get("Plugins", "LoadAsiPlugins")),
@@ -131,6 +130,45 @@ public static class OptiScalerConfigReader
             _ => value,
         };
     }
+
+    /// <summary>
+    /// Whether FSR 4 is forced on a GPU OptiScaler does not list, from whichever key this
+    /// release uses: it was renamed twice (Fsr4ForceEnableInt8, Fsr4ForceModel, Fsr4GpuSupport).
+    /// </summary>
+    private static ConfigFact DescribeForce(
+        Dictionary<string, Dictionary<string, string>> ini, Func<string, string, string> get)
+    {
+        bool Has(string key) => ini.TryGetValue("FSR", out var s) && s.ContainsKey(key);
+
+        if (Has("Fsr4GpuSupport"))
+            return new("Force FSR 4 on unsupported GPUs", get("FSR", "Fsr4GpuSupport").Trim() switch
+            {
+                "1" => "Yes, as FP8",
+                "2" => "Yes, as INT8",
+                "3" => "Yes, as INT8 RDNA2",
+                "4" => "Yes, as INT8 Lite",
+                _ => "No",
+            }, "[FSR] Fsr4GpuSupport");
+        if (Has("Fsr4ForceModel"))
+            return new("Force FSR 4 on unsupported GPUs", get("FSR", "Fsr4ForceModel").Trim() switch
+            {
+                "1" => "Yes, as FP8",
+                "2" => "Yes, as INT8",
+                _ => "No",
+            }, "[FSR] Fsr4ForceModel");
+        return new("Force FSR 4 on unsupported GPUs", OnOffAuto(get("FSR", "Fsr4ForceEnableInt8"),
+            on: "Yes (INT8 mode)", off: "No", auto: "No"), "[FSR] Fsr4ForceEnableInt8");
+    }
+
+    /// <summary>What <c>[FSR] Fsr4Model</c> picks, on OptiScaler 10 and newer.</summary>
+    private static string DescribeModel(string value) => value.Trim() switch
+    {
+        "0" => "FP8, the full model",
+        "1" => "INT8, the RX 7000 model",
+        "2" => "INT8 RDNA2, the RX 6000 model",
+        "3" => "INT8 Lite, the small model",
+        _ => "The one for this GPU",
+    };
 
     private static string OnOffAuto(string value, string on, string off, string auto)
     {

@@ -247,7 +247,8 @@ namespace UpscalerManager.Core.Tests
         public void InstallPreview_Fsr4Toggles_ForceIniKeys()
         {
             var preview = ComponentRegistry.BuildInstallPreview(Fsr4Backend.Default, selection: UpscalerSelection.NewestFsr,
-                forceInt8: true, fsr4Watermark: true);
+                fsr4Keys: Fsr4Models.IniKeys(new Fsr4IniSchema(false, Fsr4ForceKey.LegacyEnableInt8),
+                    Fsr4ModelChoice.Auto, force: true, RadeonGeneration.Rdna2), fsr4Watermark: true);
             Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "Fsr4ForceEnableInt8" && k.Value == "true");
             Assert.Contains(preview.IniKeys, k => k.Section == "FSR" && k.Key == "Fsr4EnableWatermark" && k.Value == "true");
         }

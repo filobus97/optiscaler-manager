@@ -64,6 +64,7 @@ public sealed class StorageInventoryService
         ("OptiPatcher", "OptiPatcher"),
         ("Fakenvapi", "fakenvapi"),
         ("NukemFG", "Nukem frame generation"),
+        ("AmdDriverFiles", "AMD driver FSR 4 files"),
     };
 
     /// <summary>Subdirectories of Cache/OptiScaler that are not versions.</summary>

@@ -3,6 +3,7 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace UpscalerManager.Core.Tests
@@ -183,6 +184,28 @@ namespace UpscalerManager.Core.Tests
                 w.Write((byte)0);
             }
             while (ms.Position < Raw + Size) w.Write((byte)0);
+            return ms.ToArray();
+        }
+
+        /// <summary>
+        /// A minimal 64-bit DLL with both an export directory and a version, as AMD's driver
+        /// files have. The version block is appended after the section, where the inspector's
+        /// signature scan finds it.
+        /// </summary>
+        public static byte[] BuildVersionedPeExporting(string fileVersion, params string[] exports)
+        {
+            var pe = BuildPeExporting(exports);
+            var parts = fileVersion.Split('.').Select(ushort.Parse).Concat(new ushort[] { 0, 0, 0, 0 }).ToArray();
+            using var ms = new MemoryStream();
+            using var w = new BinaryWriter(ms);
+            w.Write(pe);
+            w.Write(0xFEEF04BDu);
+            w.Write(0x00010000u);
+            w.Write(((uint)parts[0] << 16) | parts[1]);
+            w.Write(((uint)parts[2] << 16) | parts[3]);
+            w.Write(((uint)parts[0] << 16) | parts[1]);
+            w.Write(((uint)parts[2] << 16) | parts[3]);
+            for (var i = 0; i < 7; i++) w.Write(0u);
             return ms.ToArray();
         }
 
